@@ -124,27 +124,24 @@ namespace CrowdRunner.Meta
         public static int BestOf(string code) { var r = Record(code); return r == null ? 0 : r.best; }
         public static bool Cleared(string code) => GradeOf(code) > 0;
 
-        /// <summary>그 도시에서 **연속으로** 깬 마지막 판 번호. 해금이 이 수를 본다</summary>
-        public static int ClearedUpTo(int chapter)
+        /// <summary>그 도시의 ☣ 를 번호 순 배열로. 셈은 `Core/Grade` 가 한다</summary>
+        public static int[] Grades(int chapter)
         {
-            int n = 0;
-            for (int i = 1; i <= 10; i++)
-            {
-                if (!Cleared(chapter + "-" + i)) break;
-                n = i;
-            }
-            return n;
+            var g = new int[10];
+            for (int i = 1; i <= 10; i++) g[i - 1] = GradeOf(chapter + "-" + i);
+            return g;
         }
+
+        /// <summary>
+        /// 그 도시에서 **연속으로** 깬 마지막 판 번호. 해금이 이 수를 본다.
+        /// 셈 자체는 `Grade.ClearedUpTo` 에 있다 — 여기 두면 Unity 없이 확인할 수 없다.
+        /// </summary>
+        public static int ClearedUpTo(int chapter) => Grade.ClearedUpTo(Grades(chapter));
 
         public static bool Unlocked(int chapter, int index) => Grade.Unlocked(index, ClearedUpTo(chapter));
 
         /// <summary>그 도시 정복도 0~1 (월드맵의 "부산 72 %")</summary>
-        public static float Conquest(int chapter)
-        {
-            var g = new int[10];
-            for (int i = 1; i <= 10; i++) g[i - 1] = GradeOf(chapter + "-" + i);
-            return Grade.Conquest(g, 10);
-        }
+        public static float Conquest(int chapter) => Grade.Conquest(Grades(chapter), 10);
 
         // ── 쓰기 ────────────────────────────────────────────────────────────────
         /// <summary>
@@ -164,9 +161,11 @@ namespace CrowdRunner.Meta
                 d.levels = arr;
             }
             r.plays++;
-            int g = Grade.Of(won, remaining, rating);
-            if (g > r.grade) r.grade = g;
-            if (won && remaining > r.best) r.best = remaining;
+            // 합치는 규칙은 `Core/Grade.Merge` 다 — 여기 쓰면 "기록이 사라진다" 를
+            // Unity 없이 확인할 수 없다
+            int grade = r.grade, best = r.best;
+            Grade.Merge(ref grade, ref best, won, remaining, rating);
+            r.grade = grade; r.best = best;
             Save();
         }
 

@@ -30,7 +30,12 @@ namespace CrowdRunner.Tools
             if (files.Length == 0) { Console.WriteLine("레벨이 하나도 없다: " + dir); return 1; }
 
             int bad = 0;
-            var rows = new List<(LevelData level, List<(string path, Run r)> paths)>();
+
+            // **먼저 다 읽고 판 번호로 세운다.** 파일 이름 순은 `1-1, 1-10, 1-2 …` 라서
+            // 그 순서로 진행을 흉내 내면 1-1 다음에 1-10 이 와서 *"앞 판을 다 깼는데 잠겨
+            // 있다"* 가 난다 — 실제로 났고, **결함은 레벨이 아니라 검사 쪽**이었다.
+            // 사람이 읽는 순서도 같이 고쳐진다.
+            var levels = new List<LevelData>();
             foreach (var f in files)
             {
                 string err;
@@ -43,6 +48,13 @@ namespace CrowdRunner.Tools
                     bad++;
                     continue;
                 }
+                levels.Add(level);
+            }
+            levels.Sort((a, b) => a.chapter != b.chapter ? a.chapter - b.chapter : a.index - b.index);
+
+            var rows = new List<(LevelData level, List<(string path, Run r)> paths)>();
+            foreach (var level in levels)
+            {
                 var chapterRow = Report(level, out int rc);
                 if (rc != 0) bad++;
                 rows.Add((level, chapterRow));
@@ -50,6 +62,7 @@ namespace CrowdRunner.Tools
             }
 
             if (JudgeChapter(rows) != 0) bad++;
+            if (JudgeProgress(rows) != 0) bad++;
 
             Console.WriteLine(bad == 0
                 ? $"레벨 {files.Length} 개 — 전부 통과"
@@ -127,6 +140,85 @@ namespace CrowdRunner.Tools
             Console.WriteLine();
             return fails;
         }
+
+        /// <summary>
+        /// **진행의 셈을 돌려 본다** — 해금 · 정복도 · "기록은 내려가지 않는다".
+        ///
+        /// 이 셈이 틀리면 **진행이 막히거나 공짜로 열리거나 플레이어의 기록이 사라진다.**
+        /// 그런데 화면(`Meta/MetaFlow`)과 저장(`Meta/MetaSave`)은 `UnityEngine` 을 쓰므로
+        /// Unity 를 띄우지 않으면 아무도 안 본다 — 그리고 지금 에디터를 띄우는 것은
+        /// 규칙으로 막혀 있다 (오너 2026-10-08). 그래서 셈을 `Core/Grade` 로 내리고
+        /// 여기서 돌린다. **아무도 안 보는 셈은 틀린 셈이다.**
+        /// </summary>
+        static int JudgeProgress(List<(LevelData level, List<(string path, Run r)> paths)> rows)
+        {
+            if (rows.Count == 0) return 0;
+            Console.WriteLine("## 진행 — 해금 · 정복도 · 기록");
+
+            var fail = new List<string>();
+            int n = rows.Count;
+            // **판 번호로 색인한다** (`index - 1`). 줄 순서로 색인하면 번호와 어긋나고,
+            // 그 어긋남은 "앞 판을 깼는데 잠겨 있다" 로만 나타난다
+            var grades = new int[n];
+            var bests = new int[n];
+
+            // ① 아무것도 안 깼을 때: 1 번만 열려 있어야 한다
+            if (!Grade.Unlocked(1, Grade.ClearedUpTo(grades))) fail.Add("처음부터 1 번 판이 잠겨 있다");
+            for (int i = 2; i <= n; i++)
+                if (Grade.Unlocked(i, Grade.ClearedUpTo(grades))) { fail.Add($"아무것도 안 깼는데 {i} 번 판이 열려 있다"); break; }
+
+            // ② 순서대로 **최선의 경로**로 깨 나간다
+            for (int i = 0; i < n; i++)
+            {
+                var (level, paths) = rows[i];
+                if (!Grade.Unlocked(level.index, Grade.ClearedUpTo(grades)))
+                { fail.Add($"{level.Code} 가 앞 판을 다 깼는데도 잠겨 있다"); break; }
+
+                int best = 0;
+                foreach (var (_, r) in paths) if (r.won && r.units > best) best = r.units;
+                if (best == 0) { fail.Add($"{level.Code} 는 어떤 경로로도 못 깬다 — 진행이 여기서 막힌다"); break; }
+
+                int slot = level.index - 1;
+                if (slot < 0 || slot >= n) { fail.Add($"{level.Code} 의 번호가 1~{n} 밖이다"); break; }
+                Grade.Merge(ref grades[slot], ref bests[slot], true, best, level.rating);
+                if (grades[slot] <= 0) fail.Add($"{level.Code} 를 최선의 경로로 깼는데 ☣ 가 0 이다");
+
+                // 한 칸 앞까지만 열려야 한다
+                int upTo = Grade.ClearedUpTo(grades);
+                if (i + 2 <= n && !Grade.Unlocked(i + 2, upTo)) fail.Add($"{level.Code} 를 깼는데 다음 판이 안 열렸다");
+                if (i + 3 <= n && Grade.Unlocked(i + 3, upTo)) fail.Add($"{level.Code} 를 깼는데 두 칸 앞이 열렸다");
+            }
+
+            // ③ **다시 해서 더 못해도 내려가지 않는다**
+            if (n > 0)
+            {
+                int g = grades[0], b = bests[0];
+                Grade.Merge(ref g, ref b, true, 1, rows[0].level.rating);
+                if (g < grades[0] || b < bests[0]) fail.Add("더 못한 플레이가 기록을 깎았다 — 다시 하기가 무서워진다");
+                // 지고 돌아와도 깎이지 않는다
+                Grade.Merge(ref g, ref b, false, 0, rows[0].level.rating);
+                if (g < grades[0] || b < bests[0]) fail.Add("패배가 기록을 깎았다");
+                if (g != grades[0] || b != bests[0]) fail.Add($"기록이 바뀌었다 ({grades[0]}/{bests[0]} → {g}/{b})");
+            }
+
+            // ④ 중간을 비우고 뒤를 깨도 **앞이 열리지 않는다** (연속이어야 한다)
+            var holey = new int[n];
+            if (n >= 4) { holey[2] = 3; if (Grade.Unlocked(4, Grade.ClearedUpTo(holey))) fail.Add("중간이 빈 채로 뒤 판이 열린다 — 가르치는 순서가 무너진다"); }
+
+            // ⑤ 정복도: 전부 ☣☣☣ 면 100 %, 깨기만 하면 33 %
+            float full = Grade.Conquest(Fill(n, Grade.Max), n);
+            float min = Grade.Conquest(Fill(n, 1), n);
+            if (System.Math.Abs(full - 1f) > 0.001f) fail.Add($"전부 ☣☣☣ 인데 정복도가 {full * 100f:0}% 다");
+            if (System.Math.Abs(min - 1f / Grade.Max) > 0.01f) fail.Add($"깨기만 했는데 정복도가 {min * 100f:0}% 다");
+
+            int earned = 0; foreach (var g in grades) earned += g;
+            Console.WriteLine($"   순서대로 최선으로 깼을 때: ☣ {earned}/{n * Grade.Max} · 정복도 {Grade.Conquest(grades, n) * 100f:0}%");
+            foreach (var f in fail) Console.WriteLine("   ** 실패: " + f + " **");
+            Console.WriteLine();
+            return fail.Count > 0 ? 1 : 0;
+        }
+
+        static int[] Fill(int n, int v) { var a = new int[n]; for (int i = 0; i < n; i++) a[i] = v; return a; }
 
         struct Run { public bool won; public int units, peak; public float lost, zone, killed, k, time; }
 

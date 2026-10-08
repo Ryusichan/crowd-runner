@@ -32,6 +32,41 @@ namespace CrowdRunner.Core
         }
 
         /// <summary>
+        /// **다시 한 결과를 합친다 — 내려가지 않는다.** 다시 해서 더 못했어도 ☣ 와 최고 기록은
+        /// 유지된다. 내려가면 플레이어가 **다시 하기를 두려워하고**, 그러면 ☣ 가 "다시 할 이유" 를
+        /// 못 한다.
+        ///
+        /// 저장 쪽이 아니라 여기 있는 이유: 이 규칙이 틀리면 **플레이어의 기록이 사라진다.**
+        /// `UnityEngine` 을 끌어들이지 않으므로 `tools/sim` 이 Unity 없이 돌려 본다.
+        /// </summary>
+        /// <param name="grade">지금까지의 ☣ (0~3)</param>
+        /// <param name="best">지금까지의 최고 잔여</param>
+        public static void Merge(ref int grade, ref int best, bool won, int remaining, int[] rating)
+        {
+            int g = Of(won, remaining, rating);
+            if (g > grade) grade = g;
+            if (won && remaining > best) best = remaining;
+        }
+
+        /// <summary>
+        /// 그 도시에서 **연속으로** 깬 마지막 판 번호. `grades[i]` 는 i+1 번 판의 ☣ 수다.
+        ///
+        /// **연속**인 것이 중요하다. 합계나 개수로 세면 뒤 판을 어쩌다 깼을 때 **중간이 빈 채로
+        /// 앞이 열린다** — 그러면 가르치는 순서(기획서 §6.2)가 무너진다.
+        /// </summary>
+        public static int ClearedUpTo(int[] grades)
+        {
+            if (grades == null) return 0;
+            int n = 0;
+            for (int i = 0; i < grades.Length; i++)
+            {
+                if (grades[i] <= 0) break;
+                n = i + 1;
+            }
+            return n;
+        }
+
+        /// <summary>
         /// 그 판이 열렸는가. **1 번은 늘 열려 있고**, 나머지는 **바로 앞 판을 깼으면** 열린다.
         ///
         /// 앞 판의 ☣ 수를 조건으로 걸지 않는다 — 걸면 ☣ 를 못 채운 사람이 **진행 자체를
