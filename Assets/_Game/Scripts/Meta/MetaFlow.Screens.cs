@@ -50,10 +50,15 @@ namespace CrowdRunner.Meta
             UiKit.SetRadius(barBg, 11f, 22f);
 
             var barFill = UiKit.Panel("BarFill", barBg.rectTransform, UiKit.Purple);
+            // ⚠ **앵커가 이미 왼쪽 끝이다.** 처음에 `anchoredPosition` 을 -380 으로 줬는데,
+            // `UiKit.Place` 가 `pivot = anchor` 로 두는 것과 겹쳐 막대가 **부모 왼쪽에서 다시
+            // 380 px 밖으로** 나갔다. 0 % 라 폭이 0 이어서 화면에는 안 보이는데, 사각형은
+            // 거기 있으므로 **레이아웃 폭이 1250 px 로 잡혔다** (세션 B 가 쟀다).
+            // 안 보이는 것이 자리를 차지한다.
             barFill.rectTransform.anchorMin = new Vector2(0f, 0.5f);
             barFill.rectTransform.anchorMax = new Vector2(0f, 0.5f);
             barFill.rectTransform.pivot = new Vector2(0f, 0.5f);
-            barFill.rectTransform.anchoredPosition = new Vector2(-380f, 0f);
+            barFill.rectTransform.anchoredPosition = Vector2.zero;
             barFill.rectTransform.sizeDelta = new Vector2(760f * Mathf.Clamp01(conquest), 22f);
             UiKit.SetRadius(barFill, 11f, 22f);
 
@@ -67,7 +72,9 @@ namespace CrowdRunner.Meta
             var route = UiKit.Rect("Route", root);
             UiKit.Place(route, new Vector2(0.5f, 0f), new Vector2(0f, 60f), new Vector2(980f, 1480f));
 
-            const float step = 140f, swing = 190f;
+            // 노드 폭 470 · 흔들림 ±110 → 가로 195~885 (1080 안, 양옆 195 여유).
+            // 세로는 70 + 9×140 = 1330 이 1480 안에 든다 — 세션 B 가 그림에서 쟀다
+            const float step = 140f, swing = 220f;
             var pos = new Vector2[levels.Count];
             for (int i = 0; i < levels.Count; i++)
                 pos[i] = new Vector2((i % 2 == 0 ? -1f : 1f) * swing * 0.5f, 70f + i * step);
@@ -110,18 +117,21 @@ namespace CrowdRunner.Meta
         {
             var card = UiKit.Capsule("Node" + lv.index,
                                      parent,
-                                     open ? UiKit.Hex(0x3b2f4d) : UiKit.Hex(0x272034),
-                                     next ? UiKit.Yellow : UiKit.Hex(0x4b3d60),
-                                     next ? 4f : 2f);
-            UiKit.Place(card.rectTransform, new Vector2(0.5f, 0f), at, new Vector2(430f, 112f));
+                                     next ? UiKit.Hex(0x5a4578) : open ? UiKit.Hex(0x3b2f4d) : UiKit.Hex(0x2f2740),
+                                     next ? UiKit.Yellow : open ? UiKit.Hex(0x6b5a85) : UiKit.Hex(0x4b3d60),
+                                     next ? 6f : 2f);
+            UiKit.Place(card.rectTransform, new Vector2(0.5f, 0f), at, new Vector2(470f, 112f));
 
             var code = UiKit.Label("Code", card.rectTransform, lv.Code, UiKit.Value,
                                    open ? UiKit.Yellow : UiKit.Dim, TextAnchor.MiddleLeft, true);
             UiKit.Place(code.rectTransform, new Vector2(0f, 1f), new Vector2(22f, -14f), new Vector2(120f, 36f));
 
-            var nm = UiKit.Label("Name", card.rectTransform, open ? lv.name : "- - -", UiKit.LabelPt,
-                                 open ? UiKit.Text : UiKit.Hex(0x5b4e70), TextAnchor.MiddleLeft);
-            UiKit.Place(nm.rectTransform, new Vector2(0f, 1f), new Vector2(22f, -52f), new Vector2(290f, 34f));
+            // **잠긴 판도 이름을 보여 준다.** `- - -` 로 가렸더니 열 칸 중 아홉이 빈 줄이 되어
+            // 첫 화면이 거의 빈 화면이었다 (세션 B). 이름은 **스포일러가 아니라 지도**다 —
+            // 어디로 가는지 보이는 것이 정복 지도의 값이다
+            var nm = UiKit.Label("Name", card.rectTransform, lv.name, UiKit.LabelPt,
+                                 open ? UiKit.Text : UiKit.Hex(0x8a7aa6), TextAnchor.MiddleLeft);
+            UiKit.Place(nm.rectTransform, new Vector2(0f, 1f), new Vector2(22f, -52f), new Vector2(330f, 34f));
 
             // ☣ 셋 — 받은 것만 채운다
             for (int i = 0; i < Grade.Max; i++)
@@ -131,9 +141,17 @@ namespace CrowdRunner.Meta
                 UiKit.Place(dot.rectTransform, new Vector2(1f, 1f), new Vector2(-24f - (2 - i) * 34f, -26f), new Vector2(24f, 24f));
             }
 
+            // **다음에 할 판에 표를 붙인다.** 색만으로는 "다음" 이 안 읽힌다 — 한 화면에
+            // 열 칸이 있으면 눈이 먼저 갈 곳이 있어야 한다
+            if (next)
+            {
+                var mark = UiKit.Label("Next", card.rectTransform, "▶", UiKit.Value, UiKit.Yellow, TextAnchor.MiddleCenter, true);
+                UiKit.Place(mark.rectTransform, new Vector2(0f, 0.5f), new Vector2(-34f, 0f), new Vector2(56f, 56f));
+            }
+
             if (!open)
             {
-                var lock0 = UiKit.Label("Lock", card.rectTransform, "잠김", UiKit.Micro, UiKit.Hex(0x5b4e70), TextAnchor.MiddleRight);
+                var lock0 = UiKit.Label("Lock", card.rectTransform, "잠김", UiKit.Micro, UiKit.Hex(0x7a6b93), TextAnchor.MiddleRight);
                 UiKit.Place(lock0.rectTransform, new Vector2(1f, 0f), new Vector2(-24f, 26f), new Vector2(160f, 26f));
                 return;
             }
@@ -151,7 +169,7 @@ namespace CrowdRunner.Meta
             btn.onClick.AddListener(delegate { OpenCard(captured); });
 
             // **"짜잔" 이 있어야 한다** (오너 2026-09-26) — 아래에서부터 차례로 뜬다
-            UiAnim.PopIn(card.rectTransform, Mathf.Min(order, UiAnim.CascadeMax) * UiAnim.CascadeStep);
+            if (!Instant) UiAnim.PopIn(card.rectTransform, Mathf.Min(order, UiAnim.CascadeMax) * UiAnim.CascadeStep);
         }
 
         // ── 스테이지 카드 ────────────────────────────────────────────────────────
@@ -208,7 +226,9 @@ namespace CrowdRunner.Meta
                 string need = lv.rating != null && lv.rating.Length == 3 ? lv.rating[i] + " 이상" : "-";
                 var txt = UiKit.Label("Need", row, Bio(i + 1) + "   " + need, UiKit.Body,
                                       i < mine ? UiKit.Text : UiKit.Dim, TextAnchor.MiddleLeft);
-                UiKit.Place(txt.rectTransform, new Vector2(0f, 0.5f), new Vector2(240f, 0f), new Vector2(520f, 40f));
+                // 동그라미는 x=16, 글자는 x=240 이었다 — 한 줄인데 **224 px 떨어져** 둘로
+                // 읽혔다 (세션 B 가 그림에서 봤다). 붙인다
+                UiKit.Place(txt.rectTransform, new Vector2(0f, 0.5f), new Vector2(62f, 0f), new Vector2(680f, 40f));
             }
 
             if (MetaSave.BestOf(lv.Code) > 0)
@@ -225,7 +245,7 @@ namespace CrowdRunner.Meta
                                        delegate { Show(MetaScreen.WorldMap); });
             UiKit.Place((RectTransform)backBtn.transform, new Vector2(0.5f, 0f), new Vector2(0f, 62f), new Vector2(620f, 64f));
 
-            UiAnim.ModalIn(scrim, card);
+            if (!Instant) UiAnim.ModalIn(scrim, card);
         }
 
         void Chip(RectTransform card, int i, string label, string value)
@@ -237,36 +257,43 @@ namespace CrowdRunner.Meta
             var v = UiKit.Label("V", chip.rectTransform, value, UiKit.Value, UiKit.Text, TextAnchor.UpperCenter, true);
             UiKit.Place(v.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -16f), new Vector2(230f, 40f));
 
-            var l = UiKit.Label("L", chip.rectTransform, label, UiKit.Micro, UiKit.Dim, TextAnchor.UpperCenter);
-            UiKit.Place(l.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -62f), new Vector2(230f, 30f));
+            // Micro 로 뒀더니 그림에서 **안 읽혔다**. 숫자만 셋 떠 있으면 무슨 숫자인지 모른다
+            var l = UiKit.Label("L", chip.rectTransform, label, UiKit.Caption, UiKit.Hex(0xb9b0cf), TextAnchor.UpperCenter);
+            UiKit.Place(l.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -60f), new Vector2(230f, 34f));
         }
 
         // ── 결과 ─────────────────────────────────────────────────────────────────
+        //
+        // ⚠ 처음에는 내용을 **위에**, 단추를 **아래에** 붙였더니 가운데가 950 px 비었다
+        // (세션 B 의 그림). 두 덩어리가 한 화면으로 안 읽히고 *"뭔가 안 떴나"* 로 보인다.
+        // 내용은 **화면 가운데 기준**으로 모으고 단추만 아래에 둔다.
         void BuildResult()
         {
             var lv = current;
             var bg = UiKit.Panel("Bg", root, UiKit.Hex(0x1b1426));
             UiKit.Stretch(bg.rectTransform);
 
-            var head = UiKit.Label("Head", root, resultWon ? "구역 정복" : "군단 소멸", UiKit.Display,
-                                   resultWon ? UiKit.Green : UiKit.Red, TextAnchor.UpperCenter, true);
-            UiKit.Place(head.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -280f), new Vector2(900f, 70f));
+            var mid = new Vector2(0.5f, 0.5f);
 
-            var where = UiKit.Label("Where", root, lv != null ? lv.Code + "  " + lv.name : "", UiKit.Caption, UiKit.Dim, TextAnchor.UpperCenter);
-            UiKit.Place(where.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -352f), new Vector2(900f, 34f));
+            var head = UiKit.Label("Head", root, resultWon ? "구역 정복" : "군단 소멸", UiKit.Display,
+                                   resultWon ? UiKit.Green : UiKit.Red, TextAnchor.MiddleCenter, true);
+            UiKit.Place(head.rectTransform, mid, new Vector2(0f, 330f), new Vector2(900f, 72f));
+
+            var where = UiKit.Label("Where", root, lv != null ? lv.Code + "  " + lv.name : "", UiKit.Body, UiKit.Dim, TextAnchor.MiddleCenter);
+            UiKit.Place(where.rectTransform, mid, new Vector2(0f, 262f), new Vector2(900f, 40f));
 
             // ☣ — 받은 것이 **터지듯** 뜬다 ("얻었다" 가 보여야 한다)
             for (int i = 0; i < Grade.Max; i++)
             {
                 var dot = UiKit.Panel("Bio" + i, root, i < resultGrade ? UiKit.Green : UiKit.Hex(0x3f3450));
                 dot.sprite = UiKit.Circle;
-                UiKit.Place(dot.rectTransform, new Vector2(0.5f, 1f), new Vector2((i - 1) * 110f, -470f), new Vector2(86f, 86f));
-                if (i < resultGrade) UiAnim.Burst(dot.rectTransform, 0.12f + i * 0.14f);
+                UiKit.Place(dot.rectTransform, mid, new Vector2((i - 1) * 118f, 140f), new Vector2(92f, 92f));
+                if (i < resultGrade && !Instant) UiAnim.Burst(dot.rectTransform, 0.12f + i * 0.14f);
             }
 
             var left = UiKit.Label("Left", root, resultWon ? "남은 병력 " + resultRemaining : "최종 방어선을 넘지 못했다",
-                                   UiKit.Body, UiKit.Text, TextAnchor.UpperCenter);
-            UiKit.Place(left.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -600f), new Vector2(900f, 44f));
+                                   UiKit.Title, UiKit.Text, TextAnchor.MiddleCenter, true);
+            UiKit.Place(left.rectTransform, mid, new Vector2(0f, 10f), new Vector2(900f, 52f));
 
             // **다음 등급까지 몇 명 부족한지 말해 준다.** 말해 주지 않으면 플레이어는
             // *"더 잘할 수 있었다"* 는 것만 알고 **얼마나** 인지 모른다 — 그러면 다시 하기가
@@ -277,8 +304,8 @@ namespace CrowdRunner.Meta
                 string more = resultWon && need > 0
                     ? Bio(resultGrade + 1) + " 까지 " + need + " 명"
                     : Bio(resultGrade + 1) + " 기준 " + lv.rating[resultGrade] + " 명";
-                var hint = UiKit.Label("Hint", root, more, UiKit.Caption, UiKit.Yellow, TextAnchor.UpperCenter);
-                UiKit.Place(hint.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -652f), new Vector2(900f, 34f));
+                var hint = UiKit.Label("Hint", root, more, UiKit.Body, UiKit.Yellow, TextAnchor.MiddleCenter);
+                UiKit.Place(hint.rectTransform, mid, new Vector2(0f, -56f), new Vector2(900f, 40f));
             }
 
             var next = NextLevel();
@@ -288,18 +315,18 @@ namespace CrowdRunner.Meta
             {
                 var nb = UiKit.Button("Next", root, "다음 구역  " + next.Code, UiKit.Body, UiKit.Purple, UiKit.Hex(0x1b1426),
                                       delegate { OpenCard(next); });
-                UiKit.Place((RectTransform)nb.transform, new Vector2(0.5f, 0f), new Vector2(0f, 330f), new Vector2(620f, 112f));
+                UiKit.Place((RectTransform)nb.transform, new Vector2(0.5f, 0f), new Vector2(0f, 420f), new Vector2(620f, 112f));
             }
 
             var rb = UiKit.Button("Retry", root, "다시 하기", UiKit.Body,
                                   resultWon ? UiKit.Hex(0x3b2f4d) : UiKit.Purple,
                                   resultWon ? UiKit.Text : UiKit.Hex(0x1b1426),
                                   delegate { if (lv != null) StartLevel(lv); });
-            UiKit.Place((RectTransform)rb.transform, new Vector2(0.5f, 0f), new Vector2(0f, 208f), new Vector2(620f, 96f));
+            UiKit.Place((RectTransform)rb.transform, new Vector2(0.5f, 0f), new Vector2(0f, 292f), new Vector2(620f, 104f));
 
             var mb = UiKit.Button("Map", root, CityName(City) + " 지도", UiKit.Caption, UiKit.Hex(0x2a2138), UiKit.Dim,
                                   delegate { Show(MetaScreen.WorldMap); });
-            UiKit.Place((RectTransform)mb.transform, new Vector2(0.5f, 0f), new Vector2(0f, 120f), new Vector2(620f, 68f));
+            UiKit.Place((RectTransform)mb.transform, new Vector2(0.5f, 0f), new Vector2(0f, 190f), new Vector2(620f, 76f));
         }
 
         // ── 처음 한 번: 조작 안내 ────────────────────────────────────────────────
@@ -337,7 +364,7 @@ namespace CrowdRunner.Meta
                 var txt = UiKit.Label("T", row.rectTransform, lines[i], UiKit.Body, UiKit.Text, TextAnchor.MiddleLeft);
                 UiKit.Place(txt.rectTransform, new Vector2(0f, 0.5f), new Vector2(120f, 0f), new Vector2(700f, 80f));
 
-                UiAnim.PopIn(row.rectTransform, i * UiAnim.CascadeStep * 2f);
+                if (!Instant) UiAnim.PopIn(row.rectTransform, i * UiAnim.CascadeStep * 2f);
             }
 
             var go = UiKit.Button("Go", root, "시작", UiKit.Body, UiKit.Purple, UiKit.Hex(0x1b1426), delegate
@@ -393,7 +420,7 @@ namespace CrowdRunner.Meta
                                     delegate { Show(MetaScreen.WorldMap); });
             UiKit.Place((RectTransform)quit.transform, new Vector2(0.5f, 0f), new Vector2(0f, 64f), new Vector2(620f, 76f));
 
-            UiAnim.ModalIn(scrim, card);
+            if (!Instant) UiAnim.ModalIn(scrim, card);
         }
 
         // ── 레벨을 하나도 못 읽었을 때 ───────────────────────────────────────────

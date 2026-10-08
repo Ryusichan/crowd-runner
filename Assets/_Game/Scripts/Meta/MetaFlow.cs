@@ -64,6 +64,19 @@ namespace CrowdRunner.Meta
         int resultRemaining;
         int resultGrade;
 
+        /// <summary>
+        /// **등장 애니메이션을 건너뛴다** — 화면을 찍을 때.
+        ///
+        /// 세션 B 의 첫 월드맵 스크린샷이 **온 화면 알파 10 %** 로 나왔다. 제목 "부산" 의
+        /// 화소가 배경과 **같았다**(27,28,37 vs 25,28,36). 색이 틀린 것이 아니라 `ScreenIn`
+        /// 이 띄우는 **중간 프레임**을 찍은 것이다 — 그 그림으로는 대비를 판단할 수 없는데,
+        /// 보는 사람은 *"디자인이 어둡다"* 로 읽는다. **잴 수 없는 것으로 판단하게 만드는
+        /// 그림이 가장 비싸다.**
+        ///
+        /// 그래서 끄는 스위치를 둔다. 게임에는 영향이 없다 (기본 false).
+        /// </summary>
+        public static bool Instant;
+
         /// <summary>지금 보고 있는 도시 (1 = 부산). 도시가 늘면 월드맵에 탭이 붙는다</summary>
         public int City = 1;
 
@@ -122,7 +135,7 @@ namespace CrowdRunner.Meta
             }
             // **화면 전환은 각 화면이 아니라 이 길목에서 건다.** 화면마다 손으로 넣으면
             // 새 화면을 만든 사람이 빠뜨리고, 그게 오너가 "끊어진다" 고 한 자리다
-            UiAnim.ScreenIn(root);
+            if (!Instant) UiAnim.ScreenIn(root);
         }
 
         /// <summary>스테이지 카드를 띄운다 (월드맵에서 탭)</summary>
