@@ -62,10 +62,16 @@ namespace CrowdRunner.Tools
             for (int mask = 0; mask < (1 << gates); mask++)
                 results.Add((PathName(mask, gates), RunOne(level, mask)));
 
-            Console.WriteLine("| 경로 | 결과 | 잔여 | 최대 | 전투 | 지역 | 처치 | k | 시간 |");
-            Console.WriteLine("|---|---|---|---|---|---|---|---|---|");
+            Console.WriteLine("| 경로 | 결과 | ☣ | 잔여 | 최대 | 전투 | 지역 | 처치 | k | 시간 |");
+            Console.WriteLine("|---|---|---|---|---|---|---|---|---|---|");
             foreach (var (path, r) in results)
-                Console.WriteLine($"| {path} | {(r.won ? "클리어" : "실패")} | {r.units} | {r.peak} | {r.lost:0} | {r.zone:0} | {r.killed:0} | {r.k:0.00} | {r.time:0.0}s |");
+            {
+                // **등급도 같이 찍는다.** `Core/Grade` 의 셈이 레벨의 잰 수와 맞물리는지 보는
+                // 유일한 자리다 — 화면 없이 확인된다
+                int g = Grade.Of(r.won, r.units, level.rating);
+                string bio = g == 0 ? "–" : new string('*', g);
+                Console.WriteLine($"| {path} | {(r.won ? "클리어" : "실패")} | {bio} | {r.units} | {r.peak} | {r.lost:0} | {r.zone:0} | {r.killed:0} | {r.k:0.00} | {r.time:0.0}s |");
+            }
 
             return Judge(level, results, gates);
         }
