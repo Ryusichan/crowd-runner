@@ -36,6 +36,7 @@ namespace CrowdRunner.View
         Transform[] gates = new Transform[0];
         Transform[] zones = new Transform[0];
         TextMesh countLabel;
+        CasualtyFx fx;
         Camera cam;
         float wallHp0;
 
@@ -48,6 +49,8 @@ namespace CrowdRunner.View
             foeView = new VatCrowd("_lo");
             allyView.Init(renderCap); foeView.Init(renderCap);
             allyView.SetActive(true); foeView.SetActive(true);
+            fx = new CasualtyFx(); fx.Init();
+            runner.OnTick += OnTick;
             BuildScene();
             // **늦게 붙었을 수도 있다.** `LevelRunner.Awake` 가 먼저 돌면 그때 뷰가 없어서
             // `OnLevelLoaded` 를 놓친다 — 이미 떠 있는 판이 있으면 여기서 받아 간다
@@ -157,12 +160,27 @@ namespace CrowdRunner.View
                 divider.position = new Vector3(0f, 0.7f, sim.Z + 28f);
             }
 
+            fx.Tick(Time.deltaTime);
+            fx.Draw();
+
             countLabel.text = sim.Units.ToString();
             countLabel.transform.position = new Vector3(sim.X, 3.4f, sim.Z + 1.5f);
             countLabel.transform.rotation = cam.transform.rotation;
             countLabel.color = sim.State == SimState.Lost ? new Color(0.8f, 0.3f, 0.3f) : Color.white;
 
             cam.transform.position = new Vector3(0f, 19f, sim.Z - 26f);
+        }
+
+        /// <summary>
+        /// 틱마다 온다 (`LevelRunner.OnTick`). 여기서 쓰러지는 몸을 띄운다 — **틱마다** 받아야
+        /// 프레임이 긴 기기에서도 손실이 같은 양으로 보인다.
+        /// </summary>
+        void OnTick(Sim.Tick t)
+        {
+            var sim = runner.Sim;
+            if (sim == null) return;
+            // 전투사는 **막은 것이 서 있는 z**(앞줄)에서, 지역사는 군중 가운데에서
+            fx.Take(t, sim.X, sim.Z, sim.RoadWidth, sim.BlockingZ > 0.1f ? sim.BlockingZ : sim.Z + 2f);
         }
 
         /// <summary>갇힘이 끝나는 z — 시뮬이 공개하지 않으므로 레벨에서 읽는다 (게이트가 들고 있다)</summary>

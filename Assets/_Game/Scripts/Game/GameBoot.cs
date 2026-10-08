@@ -23,6 +23,20 @@ namespace CrowdRunner
         /// <summary>바깥(테스트·메타 화면)이 이 하나를 들고 판을 바꾼다</summary>
         public static LevelRunner Runner { get; private set; }
 
+        /// <summary>
+        /// **메타 화면이 붙을 캔버스** — 월드맵·스테이지 카드·결과가 여기 자식으로 들어온다.
+        ///
+        /// 세션 A 가 *"메타가 자기 캔버스를 들어도 되나"* 라고 물었는데, **여기서 든다.**
+        /// 이유는 둘이다. ① 장면을 세우는 일이 한 곳이어야 한다 (차선 규칙이자 `DESIGN.md` §0:
+        /// 씬에 직렬화된 값을 두지 않는다). ② 캔버스가 둘이면 **정렬 순서와 안전 영역이 두 벌**이
+        /// 되고, 그 둘이 어긋나면 *"어떤 기기에서만 버튼이 노치에 가린다"* 로만 보인다 —
+        /// 좀비퀸에서 한 번 치른 값이다.
+        ///
+        /// `sortingOrder 100` 은 게임 위다. 메타가 떠 있는 동안 게임은 멈추는 것이 아니라
+        /// **가려진다** — 멈추는 것은 `LevelRunner` 쪽 결정이고 표현이 정할 일이 아니다.
+        /// </summary>
+        public static Canvas Overlay { get; private set; }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Boot()
         {
@@ -45,6 +59,7 @@ namespace CrowdRunner
             // 부르므로 그때 뷰가 있어야 게이트·벽이 세워진다 — `AddComponent` 가 즉시
             // `Awake` 를 돌리기 때문에 순서가 결과를 바꾼다
             go.AddComponent<LevelView>();
+            Overlay = BuildOverlay(go.transform);
             Runner = runner;
             if (runner.Sim == null)
                 Debug.LogError("[CR] 판을 못 띄웠다: " + runner.Error);
@@ -52,6 +67,23 @@ namespace CrowdRunner
                 Debug.Log($"[CR] level={level} units={runner.Sim.Units} road={runner.Sim.RoadWidth:F1}m " +
                           $"events={runner.Level.events.Count}");
             return runner;
+        }
+
+        static Canvas BuildOverlay(Transform parent)
+        {
+            var go = new GameObject("Overlay");
+            go.transform.SetParent(parent, false);
+            var c = go.AddComponent<Canvas>();
+            c.renderMode = RenderMode.ScreenSpaceOverlay;
+            c.sortingOrder = 100;
+            var sc = go.AddComponent<UnityEngine.UI.CanvasScaler>();
+            // 세로형 기준 해상도. **높이로 맞춘다**: 세로 게임에서 폭은 기기마다 크게 다르고
+            // (18:9 ~ 20:9) 높이를 기준으로 하면 위아래 배치가 기기마다 안 움직인다
+            sc.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            sc.referenceResolution = new Vector2(1080f, 1920f);
+            sc.matchWidthOrHeight = 1f;
+            go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+            return c;
         }
     }
 }

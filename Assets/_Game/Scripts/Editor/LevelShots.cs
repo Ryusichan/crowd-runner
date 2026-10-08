@@ -1,5 +1,6 @@
 using System.IO;
 using CrowdRunner.Core;
+using CrowdRunner.View;
 using UnityEditor;
 using UnityEngine;
 
@@ -60,12 +61,16 @@ namespace CrowdRunner.EditorTools
                 // 왼쪽 고정도 같이 재는 이유: 한쪽만 이기면 *"기본값이 정답"* 이고 둘 다 이기면
                 // **난이도가 아예 없다.** 그 둘은 뜻이 다르고 고치는 자리도 다르다.
                 var (sR, stR) = Run(level, +1f);
-                var (sL, stL) = Run(level, -1f);
+                // 왼쪽 주행에는 **쓰러지는 효과를 물려** 손실만큼 띄우는지 센다.
+                // 그리지는 않는다 (배치 모드라 화면이 없다) — 세는 것만 한다
+                var fx = new CasualtyFx();
+                var (sL, stL) = Run(level, -1f, fx);
 
                 Debug.Log($"[CR] {name,-5} 시작 {level.initialUnits,3} · 길 {level.roadWidth,4:F1}m · " +
                           $"사건 {level.events.Count,2} (게이트 {gates} 적 {enemies} 벽 {walls} 지역 {zonesN}) · " +
                           $"가만히(오른쪽) {sR.State} 잔여 {sR.Units,3} 최고 {sR.PeakUnits,3} {stR / 60f:F0}s · " +
-                          $"왼쪽고정 {sL.State} 잔여 {sL.Units,3} 최고 {sL.PeakUnits,3} {stL / 60f:F0}s");
+                          $"왼쪽고정 {sL.State} 잔여 {sL.Units,3} 최고 {sL.PeakUnits,3} {stL / 60f:F0}s · " +
+                          $"쓰러짐 전투 {fx.SpawnedCombat,3}/{sL.AlliesLost - sL.ZoneLost:F0} 지역 {fx.SpawnedZone,3}/{sL.ZoneLost:F0}");
                 if (sR.State == SimState.Won) wonR++;
                 if (sL.State == SimState.Won) wonL++;
                 ok++;
@@ -88,7 +93,9 @@ namespace CrowdRunner.EditorTools
         }
 
         /// <summary>한 판을 끝까지 돌린다. `dir` 은 손가락을 그쪽 끝으로 붙여 둔 것 (−1 왼쪽 · +1 오른쪽)</summary>
-        static (Sim, int) Run(LevelData level, float dir)
+        static (Sim, int) Run(LevelData level, float dir) { return Run(level, dir, null); }
+
+        static (Sim, int) Run(LevelData level, float dir, CasualtyFx fx)
         {
             var sim = new Sim(level);
             int steps = 0;
@@ -96,6 +103,8 @@ namespace CrowdRunner.EditorTools
             {
                 // 길 폭의 절반까지 — 시뮬이 알아서 자른다 (갇힌 구간에서는 반쪽으로)
                 sim.Step(dir * level.roadWidth);
+                // **틱마다** 넘긴다 (`Sim.Last` 는 한 틱만 유효) — 게임의 `LevelRunner` 와 같은 자리
+                if (fx != null) fx.Take(sim.Last, sim.X, sim.Z, level.roadWidth, sim.BlockingZ);
                 steps++;
             }
             return (sim, steps);

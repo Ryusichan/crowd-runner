@@ -139,8 +139,16 @@ namespace CrowdRunner.Game
         /// 비워 두지 않고 찍는 이유: 연결이 끊겨 있으면 *"아무 일도 안 일어난다"* 로만 보이고,
         /// 사건이 **나긴 났는지**를 확인할 길이 없다.
         /// </summary>
+        /// <summary>
+        /// 보이는 쪽에 틱 사건을 넘긴다. **`Sim.Last` 는 한 틱만 유효**하므로 여기서 넘겨야 한다 —
+        /// 프레임 끝에 한 번만 읽으면 그 프레임의 **앞 틱 사건이 사라지고**, 그러면 빠른 기기에서
+        /// 손실이 덜 보인다 (느린 기기와 **다른 게임**이 된다).
+        /// </summary>
+        public System.Action<Sim.Tick> OnTick;
+
         void Consume(Sim.Tick t)
         {
+            OnTick?.Invoke(t);
             if (t.gateFired) Debug.Log($"[CR] 게이트 {(t.gateLane < 0 ? "L" : "R")} · {t.gateBefore:0} → {t.gateAfter:0}");
             if (t.fightBegan) Debug.Log($"[CR] 전투 시작 · 적 {Sim.BlockingEnemies:0}");
             if (t.fightEnded) Debug.Log($"[CR] 전투 끝 · 남은 병력 {Sim.Units}");
