@@ -30,7 +30,7 @@ namespace Game.Crowd
     /// </summary>
     public sealed class M0Bench : MonoBehaviour
     {
-        public enum Method { AnimatorPerUnit, InstancedVat }
+        public enum Method { AnimatorPerUnit, InstancedVat, InstancedVatLo }
 
         struct Seg
         {
@@ -46,7 +46,7 @@ namespace Game.Crowd
         static readonly Seg[] Plan =
         {
             new Seg(Method.AnimatorPerUnit,  250,  600, "warmup(버림)"),
-            new Seg(Method.InstancedVat,    1000,  600, "baseline(빈 장면)"),
+            new Seg(Method.InstancedVat,       0,  600, "baseline(아무것도 안 그림)"),
             // **절편을 가른다.** 4 차에서 `A-100` 의 GPU 가 벌써 14.1 ms 였는데 빈 장면은 0.72 다 —
             // 100 개(정점 15 만)로 14 ms 는 Mali-G78 에서 말이 안 되는 수다. 그러면 **개체 수와
             // 무관한 고정 비용**이 섞여 있다는 뜻이고, 그걸 안 가르면 *"몇을 그릴 수 있나"* 에
@@ -59,6 +59,18 @@ namespace Game.Crowd
             new Seg(Method.AnimatorPerUnit,  500,  600, "A-500"),
             new Seg(Method.AnimatorPerUnit, 1000,  600, "A-1000"),
             new Seg(Method.AnimatorPerUnit, 1000,  600, "A-1000(재측정)"),
+            // **B 를 A 와 같은 점에서 잰다.** 다른 점에서 재면 비교가 아니라 두 개의 수가 된다.
+            // 그리고 2,000 을 하나 더 둔다 — 부산 10 판의 최대 병력이 30~150 이지만 아군+적이고
+            // 증식이 있으니, **상한이 어디인지**를 알아야 레벨 설계에 여유를 줄 수 있다
+            new Seg(Method.InstancedVat,     100,  600, "B-100"),
+            new Seg(Method.InstancedVat,     500,  600, "B-500"),
+            new Seg(Method.InstancedVat,    1000,  600, "B-1000"),
+            new Seg(Method.InstancedVat,    1000,  600, "B-1000(재측정)"),
+            // **같은 방식, 정점만 1/5.** 이 둘의 차이가 곧 *아트에 줄 수 있는 폴리 예산*이다 —
+            // 차이가 크면 답은 "인스턴싱 + 저폴리" 이고, 작으면 정점이 병목이 아니었다는 뜻이다
+            new Seg(Method.InstancedVatLo,   500,  600, "B저폴리-500"),
+            new Seg(Method.InstancedVatLo,  1000,  600, "B저폴리-1000"),
+            new Seg(Method.InstancedVatLo,  2000,  600, "B저폴리-2000"),
         };
 
         const float Dt = 1f / 60f;
@@ -95,11 +107,12 @@ namespace Game.Crowd
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             FrameTimingManager.CaptureFrameTimings();
 
-            field = new CrowdField(1000, 20261008);
-            renderers = new ICrowdRenderer[2];
+            field = new CrowdField(2000, 20261008);
+            renderers = new ICrowdRenderer[3];
             renderers[(int)Method.AnimatorPerUnit] = new AnimatorCrowd();
             renderers[(int)Method.InstancedVat] = new VatCrowd();
-            foreach (var r in renderers) r.Init(1000);
+            renderers[(int)Method.InstancedVatLo] = new VatCrowd("_lo");
+            foreach (var r in renderers) r.Init(2000);
 
             // **측정 조건을 같이 찍는다.** 특히 새로고침률과 절전 — 폰이 절전 모드면 클럭이
             // 제한되고, 그걸 모른 채 읽은 수는 *기기의 한계* 가 아니라 *그때 설정* 이다
@@ -163,6 +176,7 @@ namespace Game.Crowd
             field.Step(Dt, Speed, Lane);
             dummySink += field.NearestOpponentPass(8f);
             renderers[(int)method].Sync(field);
+            renderers[(int)method].Draw();
 
             if (--burstIn <= 0)
             {
@@ -216,6 +230,11 @@ namespace Game.Crowd
         void Sync(CrowdField f);
         /// <summary>증식 봉우리 — `n` 개를 끄고 같은 프레임에 다시 켠다 (**수는 안 바뀐다**)</summary>
         void Churn(CrowdField f, int n);
+        /// <summary>
+        /// 매 프레임 그린다. **방식 A 는 할 일이 없다** — `GameObject` 가 알아서 그려진다.
+        /// 방식 B 는 `RenderMeshInstanced` 가 그 프레임만 유효한 즉시 호출이라 여기서 부른다.
+        /// </summary>
+        void Draw();
         int DrawCalls { get; }
     }
 }

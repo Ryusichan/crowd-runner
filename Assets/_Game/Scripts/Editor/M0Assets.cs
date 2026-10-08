@@ -33,20 +33,28 @@ namespace Game.EditorTools
         const string Dir = "Assets/_Game/Resources/M0";
 
         [MenuItem("M0/Bake Stand-in Character")]
-        public static void Bake()
+        public static void Bake() { Bake(Verts, ""); }
+
+        /// <summary>
+        /// **정점 수를 인자로 받는다** — 방식 B 측정이 *정점 수가 병목*이라고 말했기 때문이다.
+        /// 1,000 개체 × 1,500 정점 = 150 만 정점이고, VAT 는 본 평가와 드로우 콜만 없애지
+        /// **정점을 줄이지 않는다.** 그래서 저폴리 한 벌을 같이 구워 나란히 잰다.
+        /// `suffix` 가 자산 이름을 가른다 (빈 문자열 = 기본 1,500).
+        /// </summary>
+        public static void Bake(int verts, string suffix)
         {
             Directory.CreateDirectory(Dir);
 
-            var mesh = BuildSkinnedMesh(out var boneNames, out var binds);
-            AssetDatabase.CreateAsset(mesh, Dir + "/standin.asset");
+            var mesh = BuildSkinnedMesh(verts, out var boneNames, out var binds);
+            AssetDatabase.CreateAsset(mesh, Dir + "/standin" + suffix + ".asset");
 
             var clip = BuildRunClip(boneNames);
-            AssetDatabase.CreateAsset(clip, Dir + "/standin_run.anim");
+            AssetDatabase.CreateAsset(clip, Dir + "/standin_run" + suffix + ".anim");
 
-            var ctrl = AnimatorController.CreateAnimatorControllerAtPathWithClip(Dir + "/standin.controller", clip);
+            var ctrl = AnimatorController.CreateAnimatorControllerAtPathWithClip(Dir + "/standin" + suffix + ".controller", clip);
 
-            var prefab = BuildPrefab(mesh, binds, boneNames, ctrl);
-            PrefabUtility.SaveAsPrefabAsset(prefab, Dir + "/StandIn.prefab");
+            var prefab = BuildPrefab(mesh, binds, boneNames, ctrl, suffix);
+            PrefabUtility.SaveAsPrefabAsset(prefab, Dir + "/StandIn" + suffix + ".prefab");
             Object.DestroyImmediate(prefab);
 
             AssetDatabase.SaveAssets();
@@ -60,9 +68,9 @@ namespace Game.EditorTools
         /// 가장 싼 쪽이다. 즉 이 측정은 **실제보다 유리하다**: 출하 아트가 정점당 2~4 가중치를 쓰면
         /// 더 비싸진다. 그래서 §4 의 통과선에 여유(절반 예산)를 둔 것이고, 그 여유의 일부가 이것이다.
         /// </summary>
-        static Mesh BuildSkinnedMesh(out string[] boneNames, out Matrix4x4[] binds)
+        static Mesh BuildSkinnedMesh(int want, out string[] boneNames, out Matrix4x4[] binds)
         {
-            int ring = Mathf.Max(3, Verts / Bones);          // 층마다 정점 수
+            int ring = Mathf.Max(3, want / Bones);          // 층마다 정점 수
             int rows = Bones;
             var verts = new Vector3[ring * rows];
             var norms = new Vector3[verts.Length];
@@ -146,7 +154,7 @@ namespace Game.EditorTools
             return sb.ToString();
         }
 
-        static GameObject BuildPrefab(Mesh mesh, Matrix4x4[] binds, string[] boneNames, AnimatorController ctrl)
+        static GameObject BuildPrefab(Mesh mesh, Matrix4x4[] binds, string[] boneNames, AnimatorController ctrl, string suffix)
         {
             var root = new GameObject("StandIn");
             var bones = new Transform[boneNames.Length];
@@ -164,7 +172,7 @@ namespace Game.EditorTools
             smr.sharedMesh = mesh;
             smr.bones = bones;
             smr.rootBone = bones[0];
-            smr.sharedMaterial = Material();
+            smr.sharedMaterial = Material(suffix);
             // **품질을 1 가중치로 못 박는다** — 프로젝트 설정이 4 로 되어 있으면 측정이 설정에 끌려간다
             smr.quality = SkinQuality.Bone1;
             smr.updateWhenOffscreen = false;
@@ -176,14 +184,14 @@ namespace Game.EditorTools
             return root;
         }
 
-        static Material Material()
+        static Material Material(string suffix)
         {
             // **내장 파이프라인의 가장 싼 조명 셰이더.** URP 를 안 쓰는 이유는 `M0_CROWD.md` §2b:
             // 반쯤 설정된 URP 로 재는 것이 내장으로 재는 것보다 나쁘다. M0 가 묻는 것은
             // **A 대 B 의 비율**이고, 파이프라인은 양쪽을 같은 방향으로 움직인다
             var sh = Shader.Find("Mobile/Diffuse") ?? Shader.Find("Legacy Shaders/Diffuse") ?? Shader.Find("Standard");
             var m = new Material(sh) { name = "standin" };
-            AssetDatabase.CreateAsset(m, Dir + "/standin.mat");
+            AssetDatabase.CreateAsset(m, Dir + "/standin" + suffix + ".mat");
             return m;
         }
     }

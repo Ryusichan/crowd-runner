@@ -28,6 +28,14 @@ namespace Game.EditorTools
         public static void Android()
         {
             M0Assets.Bake();
+            // **저폴리 한 벌을 더 굽는다.** 방식 B 측정이 *병목은 방식이 아니라 정점 수* 라고
+            // 말했다 — 1,000 × 1,500 = 150 만 정점이고 VAT 는 정점을 줄이지 않는다.
+            // 300 정점짜리를 나란히 재면 **아트에 줄 수 있는 폴리 예산**이 수로 나온다
+            M0Assets.Bake(300, "_lo");
+            VatBaker.Bake("_lo");
+            // **대역을 구운 직후에 VAT 를 굽는다** — VAT 는 그 대역의 클립을 샘플링하므로
+            // 순서가 거꾸로면 지난 빌드의 대역을 굽는다. 한 호출 안에 둔 이유가 그것이다
+            VatBaker.Bake();
             EnsureScene();
 
             PlayerSettings.companyName = "Ryusichan";

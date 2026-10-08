@@ -93,26 +93,10 @@ namespace Game.Crowd
             for (int i = 0; i < k; i++) units[i].gameObject.SetActive(true);
         }
 
+        /// <summary>방식 A 는 할 일이 없다 — `GameObject` 가 알아서 그려진다</summary>
+        public void Draw() { }
+
         static readonly Quaternion IdentityFwd = Quaternion.identity;
         static readonly Quaternion IdentityBack = Quaternion.Euler(0f, 180f, 0f);
-    }
-
-    /// <summary>
-    /// **방식 B — 인스턴싱 + 정점 애니메이션 텍스처.** 아직 **안 만들었다.**
-    ///
-    /// 비어 있는 구현이 `0 ms` 를 돌려주면 **"B 는 공짜" 로 읽힌다** — 그것이 이 자리에서 가능한
-    /// 가장 나쁜 결과다. 그래서 켜질 때마다 "무효" 를 로그에 남기고, 아무것도 그리지 않는다.
-    /// (`M0_CROWD.md` §2: A 가 통과하면 B 를 만들 이유가 없으니, **A 를 먼저 재고** 결과를 보고 짠다.)
-    /// </summary>
-    public sealed class VatCrowd : ICrowdRenderer
-    {
-        public int DrawCalls => -1;
-        public void Init(int cap) { }
-        public void SetActive(bool on)
-        {
-            if (on) Debug.LogWarning("[M0] 방식 B(VAT) 미구현 — 이 구간의 수는 **무효**다 (0 을 '공짜' 로 읽지 말 것)");
-        }
-        public void Sync(CrowdField f) { }
-        public void Churn(CrowdField f, int n) { }
     }
 }
