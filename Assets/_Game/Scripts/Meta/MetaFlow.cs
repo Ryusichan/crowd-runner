@@ -111,30 +111,37 @@ namespace CrowdRunner.Meta
         void OnDestroy() { if (I == this) I = null; }
 
         /// <summary>
-        /// ⚠ **`UiKit` 의 글자 크기는 좀비퀸의 캔버스(420×900) 기준이다.**
+        /// 캔버스 기준이 달라서 글자를 키우는 배율. `F(UiKit.Body)` 처럼 쓴다.
+        /// </summary>
+        static float fontK = 1f;
+
+        /// <summary>
+        /// ⚠ **`UiKit` 의 글자 크기는 좀비퀸의 캔버스(420×900) 기준이다.** 이 프로젝트의
+        /// 캔버스는 **1080×1920** 이라 같은 상수가 **2.13 배 작게** 뜬다. 스크린샷에서
+        /// 글자의 가장 밝은 화소가 지정색의 20 % 에서 멈춘 것이 그 결과였다 — **글자가
+        /// 제 색으로 그려진 적이 없다.**
         ///
-        /// 이 프로젝트의 캔버스는 **1080×1920** 이라(세션 B 가 `GameBoot` 에서 세웠다) 같은
-        /// 상수가 **2.13 배 작게** 뜬다. 그 결과가 스크린샷에 이렇게 나왔다: 열린 1-1 의
-        /// 이름에서 **가장 밝은 화소가 `#716d7e`** 였다 — 내가 넣은 색은 `#f2f4ff` 인데
-        /// **글자가 제 색에 한 번도 도달하지 못한다.** 너무 작아서 안티에일리어싱이 꽉 찬
-        /// 화소를 못 만드는 것이다.
+        /// ⚠⚠ **처음엔 `UiKit.FontScale` 을 올렸는데 아무 일도 안 일어났다.**
+        /// `Px(n) = round(n / FontScale)` 이고 `Label` 이 다시 `× FontScale` 한다 —
+        /// **서로 지운다.** 배율을 어떻게 두든 최종 크기는 문서의 수 그대로다(그게 그 설계의
+        /// 뜻이다). 내 로그가 찍은 *"본문 6px"* 이 바로 그 증거였는데, 나는 그것을 읽지 않고
+        /// 세션 B 가 읽었다. **주석을 믿고 구현을 안 봤다.**
         ///
-        /// 그래서 세션 B 가 잰 "대비 1.6" 은 **색 문제로 보이지만 크기 문제**였다. 색을 올렸으면
-        /// 흐릿한 글자가 조금 밝아졌을 뿐 **여전히 안 읽혔을 것**이다.
-        ///
-        /// **숫자를 박지 않는다.** 캔버스에서 읽어 계산한다 — 박아 두면 캔버스 기준이 바뀌는
-        /// 날 조용히 다시 틀어지고, 그 증상이 또 "대비가 낮다" 로 나타난다.
+        /// 그래서 **곱해지는 자리**에 넣는다: `Label`/`Button` 에 넘기는 크기 자체를 키운다.
+        /// 숫자는 박지 않고 캔버스에서 읽는다 — 박아 두면 캔버스가 바뀌는 날 조용히 틀어진다.
         /// </summary>
         static void MatchFontsToCanvas()
         {
             const float ZqRefHeight = 900f;     // 좀비퀸 `GameFlow.REF_H`
-            const float ZqFontScale = 1.25f;    // 좀비퀸에서 쓰던 배율
 
             var scaler = GameBoot.Overlay != null ? GameBoot.Overlay.GetComponent<CanvasScaler>() : null;
             float refH = scaler != null && scaler.referenceResolution.y > 0f ? scaler.referenceResolution.y : ZqRefHeight;
-            UiKit.FontScale = ZqFontScale * (refH / ZqRefHeight);
-            Debug.Log($"[CR] 캔버스 기준 높이 {refH:0} → UiKit.FontScale {UiKit.FontScale:0.00} (본문 {UiKit.Body}px)");
+            fontK = refH / ZqRefHeight;
+            Debug.Log($"[CR] 캔버스 기준 높이 {refH:0} → 글자 배율 {fontK:0.00} · 본문이 화면에서 {UiKit.Body * UiKit.FontScale * fontK:0} px 로 그려진다");
         }
+
+        /// <summary>`UiKit` 의 크기를 이 캔버스에 맞춰 키운다. **화면 코드는 이것만 쓴다**</summary>
+        static int F(int uiKitSize) => Mathf.Max(1, Mathf.RoundToInt(uiKitSize * fontK));
 
         // ── 화면 전환 ────────────────────────────────────────────────────────────
         public void Show(MetaScreen s)
