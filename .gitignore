@@ -11,3 +11,5 @@ UserSettings/
 !tools/*.csproj
 *.sln
 __pycache__/
+bin/
+obj/

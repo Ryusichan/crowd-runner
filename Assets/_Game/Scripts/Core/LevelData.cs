@@ -22,7 +22,7 @@ namespace CrowdRunner.Core
         public GateOption(int lane, GateOp op, int value) { this.lane = lane; this.op = op; this.value = value; }
     }
 
-    public enum EventKind { Gate, Enemy, Wall }
+    public enum EventKind { Gate, Enemy, Wall, Zone }
 
     /// <summary>
     /// 길 위의 한 사건. **`z` 하나로 줄 세운다** — 이 게임은 선형이고, 그래서 위치는 전진 거리다.
@@ -33,9 +33,28 @@ namespace CrowdRunner.Core
         /// <summary>출발선에서 몇 m</summary>
         public float z;
 
+        /// <summary>
+        /// **어느 쪽 길에 있는가** — 0 이면 길 전체를 막고, −1/+1 이면 그쪽에 선 군단만 만난다.
+        ///
+        /// 이게 있어야 게이트가 **선택**이 된다. 없으면 어느 쪽을 골라도 뒤에 오는 것이 같아서
+        /// *"큰 숫자를 고른다"* 가 늘 정답이고, 기획서 §3.4 가 금지한 상태가 된다
+        /// (`docs/DESIGN.md` §3c 에서 시뮬이 그걸 찍었다).
+        /// </summary>
+        public int lane;
+
         // ---- Gate ----
         /// <summary>한 짝(보통 둘). **리더 중심**이 어느 쪽에 있느냐로 하나만 고른다</summary>
         public GateOption[] options;
+        /// <summary>
+        /// **고른 길에 갇히는 지점**(이 z 까지). 광고의 그림처럼 두 길이 **칸막이로 갈려** 있다가
+        /// 여기서 다시 합쳐진다.
+        ///
+        /// 없으면 게이트 선택에 **결과가 안 붙는다** — 첫 주행에서 실제로 그랬다: 오른쪽 게이트를
+        /// 고른 뒤 **곧바로 왼쪽으로 비켜서** 오른쪽 길의 지역을 안 밟고 지나갔다. 선택은 했는데
+        /// 대가는 안 치른 것이고, 그러면 *"큰 쪽을 고르고 피한다"* 가 늘 정답이 된다
+        /// (`docs/DESIGN.md` §3c 가 고치려던 그 상태로 되돌아간다).
+        /// </summary>
+        public float commitUntilZ;
 
         // ---- Enemy ----
         public int enemyCount;
@@ -46,14 +65,30 @@ namespace CrowdRunner.Core
         /// <summary>장애물 체력. 병력이 때려서 0 으로 만들면 지나간다</summary>
         public float wallHp;
 
-        public static LevelEvent Gate(float z, params GateOption[] options)
-            => new LevelEvent { kind = EventKind.Gate, z = z, options = options };
+        // ---- Zone ----
+        /// <summary>
+        /// **병력 하나당** 초당 피해. 이 게임에서 **큰 군단에 처음으로 대가가 붙는 자리**다.
+        ///
+        /// 전투는 전선 폭에 막혀 *"많아도 덜 죽지 않고 버틸 뿐"* 이라 병력이 많은 것에 손해가 없다
+        /// (§3c). 지역 피해는 **머릿수에 비례**하므로 — 100 명이 지나면 100 명분이 깎인다 —
+        /// 처음으로 *"지금 더 받는 것"* 에 값이 생긴다.
+        /// </summary>
+        public float dps;
+        /// <summary>구간 길이(m). 지나는 **시간**이 곧 비용이라, 느릴수록·길수록 비싸다</summary>
+        public float zoneLength;
 
-        public static LevelEvent Enemy(float z, int count, bool isFinal = false)
-            => new LevelEvent { kind = EventKind.Enemy, z = z, enemyCount = count, isFinal = isFinal };
+        public static LevelEvent Gate(float z, float commitUntilZ, params GateOption[] options)
+            => new LevelEvent { kind = EventKind.Gate, z = z, commitUntilZ = commitUntilZ, options = options };
 
-        public static LevelEvent Wall(float z, float hp)
-            => new LevelEvent { kind = EventKind.Wall, z = z, wallHp = hp };
+        public static LevelEvent Enemy(float z, int count, bool isFinal = false, int lane = 0)
+            => new LevelEvent { kind = EventKind.Enemy, z = z, enemyCount = count, isFinal = isFinal, lane = lane };
+
+        public static LevelEvent Wall(float z, float hp, int lane = 0)
+            => new LevelEvent { kind = EventKind.Wall, z = z, wallHp = hp, lane = lane };
+
+        /// <summary>지속 피해 지역 (기획서 §5). `lane` 을 주면 그쪽 길에만 깔린다</summary>
+        public static LevelEvent Zone(float z, float dps, float length, int lane = 0)
+            => new LevelEvent { kind = EventKind.Zone, z = z, dps = dps, zoneLength = length, lane = lane };
     }
 
     /// <summary>
@@ -106,6 +141,8 @@ namespace CrowdRunner.Core
                     if (e.options == null || e.options.Length < 2)
                         return "게이트 #" + i + " 에 선택지가 " + (e.options?.Length ?? 0) + " 개다 — 고를 것이 없으면 게이트가 아니다";
                     // 같은 lane 에 둘을 두면 **어느 쪽을 골라도 같은 것**이 되어 선택이 사라진다
+                    if (e.commitUntilZ > 0f && e.commitUntilZ <= e.z)
+                        return "게이트 #" + i + " 의 합류 지점이 게이트보다 앞이다 — 고르자마자 풀린다";
                     for (int a = 0; a < e.options.Length; a++)
                         for (int b = a + 1; b < e.options.Length; b++)
                             if (e.options[a].lane == e.options[b].lane)
@@ -115,6 +152,13 @@ namespace CrowdRunner.Core
                     return "적 #" + i + " 의 수가 " + e.enemyCount + " 다";
                 else if (e.kind == EventKind.Wall && e.wallHp <= 0f)
                     return "벽 #" + i + " 의 체력이 " + e.wallHp + " 다";
+                else if (e.kind == EventKind.Zone && (e.dps <= 0f || e.zoneLength <= 0f))
+                    return "지역 #" + i + " 의 dps/길이가 " + e.dps + "/" + e.zoneLength + " 다";
+
+                if (e.lane < -1 || e.lane > 1) return "사건 #" + i + " 의 lane 이 " + e.lane + " 다 (−1/0/+1)";
+                // **최종 방어선을 한쪽에만 두면 반대쪽은 그냥 지나간다** — 이기는 조건이 사라진다
+                if (e.kind == EventKind.Enemy && e.isFinal && e.lane != 0)
+                    return "최종 방어선 #" + i + " 이 한쪽 길(lane " + e.lane + ")에만 있다 — 반대로 가면 그냥 통과한다";
             }
 
             bool hasFinal = false;

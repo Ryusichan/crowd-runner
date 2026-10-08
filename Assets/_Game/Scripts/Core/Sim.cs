@@ -51,6 +51,10 @@ namespace CrowdRunner.Core
         public float EnemiesKilled { get; private set; }
 
         readonly bool[] fired;
+        /// <summary>지금 밟고 있는 지속 피해 지역들 (겹칠 수 있다)</summary>
+        readonly List<int> zones = new List<int>();
+        /// <summary>지역에서 녹은 누계 — 전투 손실과 **따로** 센다. 섞으면 어느 쪽이 비쌌는지 못 본다</summary>
+        public float ZoneLost { get; private set; }
 
         public Sim(LevelData level)
         {
@@ -75,6 +79,17 @@ namespace CrowdRunner.Core
             if (desiredX > half) desiredX = half;
             if (desiredX < -half) desiredX = -half;
             X = desiredX;
+            // 갇혀 있으면 **그 길 안에서만** 움직인다 — 칸막이 너머로는 못 간다
+            if (Z < commitUntil)
+            {
+                float lo = commitLane < 0 ? -half : 0f, hi = commitLane < 0 ? 0f : half;
+                if (X < lo) X = lo;
+                if (X > hi) X = hi;
+            }
+
+            // **막혀 있어도 돈다.** 지역 안에서 벽을 때리고 있으면 그동안 계속 녹는 것이 맞다 —
+            // 그 자리가 이 게임에서 제일 비싼 자리이고, 레벨이 그걸 노리고 짜일 수 있어야 한다
+            if (zones.Count > 0) { TickZones(dt); if (State == SimState.Lost) return; }
 
             if (BlockingIndex >= 0) { TickBlocking(dt); return; }
 
@@ -88,11 +103,41 @@ namespace CrowdRunner.Core
                 var e = level.events[i];
                 if (Z < e.z) break;          // z 오름차순이 보장돼 있다 (`LevelData.Validate`)
                 fired[i] = true;
+                // **그쪽 길에 선 군단만 만난다.** 반대쪽으로 갔으면 그냥 지나간다 —
+                // 이것이 게이트 선택에 뒤따르는 결과를 만든다 (`LevelEvent.lane`)
+                if (e.lane != 0 && Side != e.lane) continue;
                 Enter(i, e);
                 if (BlockingIndex >= 0) return;
             }
 
             if (Z >= level.length) Finish();
+        }
+
+        /// <summary>
+        /// 리더가 선 쪽 (−1 왼쪽 / +1 오른쪽). **갇혀 있는 동안은 고른 쪽으로 고정된다** —
+        /// 두 길이 칸막이로 갈려 있기 때문이고, 그래야 게이트 선택에 결과가 붙는다.
+        /// </summary>
+        public int Side => Z < commitUntil ? commitLane : (X < 0f ? -1 : +1);
+
+        float commitUntil = -1f;
+        int commitLane;
+
+        /// <summary>
+        /// 밟고 있는 지역이 **머릿수에 비례해** 깎는다. 전투와 달리 전선 폭에 안 막히므로,
+        /// **병력이 많을수록 더 잃는다** — 이 게임에서 큰 군단에 붙는 유일한 대가다 (§3c).
+        /// </summary>
+        void TickZones(float dt)
+        {
+            for (int k = zones.Count - 1; k >= 0; k--)
+            {
+                var z = level.events[zones[k]];
+                if (Z > z.z + z.zoneLength) { zones.RemoveAt(k); continue; }
+                float before = Allies;
+                Allies -= Allies * (z.dps / ally.hp) * dt;
+                if (Allies < 0f) Allies = 0f;
+                ZoneLost += before - Allies;
+            }
+            if (Allies <= 0f) State = SimState.Lost;
         }
 
         void Enter(int i, LevelEvent e)
@@ -113,6 +158,7 @@ namespace CrowdRunner.Core
                     }
                     var pick = e.options[best];
                     ChosenLanes.Add(pick.lane);
+                    if (e.commitUntilZ > Z) { commitUntil = e.commitUntilZ; commitLane = pick.lane; }
                     Allies = Apply(Allies, pick.op, pick.value);
                     if (Allies <= 0f) { State = SimState.Lost; }
                     break;
@@ -126,6 +172,10 @@ namespace CrowdRunner.Core
                     BlockingIndex = i;
                     blockingWallHp = e.wallHp;
                     State = SimState.Breaking;
+                    break;
+                case EventKind.Zone:
+                    // 막지 않는다 — **지나가면서** 깎인다. 그래서 전진이 멈추는 전투·벽과 다르다
+                    zones.Add(i);
                     break;
             }
         }

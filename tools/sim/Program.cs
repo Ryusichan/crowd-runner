@@ -32,10 +32,10 @@ namespace CrowdRunner.Tools
             for (int mask = 0; mask < (1 << gates); mask++)
                 results.Add((PathName(mask, gates), RunOne(level, mask)));
 
-            Console.WriteLine("| 경로 | 결과 | 잔여 | 전사 | 적 처치 | k | 시간 |");
-            Console.WriteLine("|---|---|---|---|---|---|---|");
+            Console.WriteLine("| 경로 | 결과 | 잔여 | 전투 전사 | 지역에서 녹음 | 적 처치 | k | 시간 |");
+            Console.WriteLine("|---|---|---|---|---|---|---|---|");
             foreach (var (path, r) in results)
-                Console.WriteLine($"| {path} | {(r.won ? "클리어" : "실패")} | {r.units} | {r.lost:0} | {r.killed:0} | {r.k:0.00} | {r.time:0.0}s |");
+                Console.WriteLine($"| {path} | {(r.won ? "클리어" : "실패")} | {r.units} | {r.lost:0} | {r.zone:0} | {r.killed:0} | {r.k:0.00} | {r.time:0.0}s |");
 
             // **세 경로가 다 있어야 레벨이다** (기획서 §6.3). 전부 클리어면 선택이 없는 것이고,
             // 전부 실패면 못 깨는 판이다 — 둘 다 "레벨을 안 만든 것" 과 같다
@@ -48,7 +48,7 @@ namespace CrowdRunner.Tools
             return 0;
         }
 
-        struct Run { public bool won; public int units; public float lost, killed, k, time; }
+        struct Run { public bool won; public int units; public float lost, zone, killed, k, time; }
 
         /// <summary>
         /// 경로 하나. `mask` 의 비트가 게이트마다 **왼쪽(0) / 오른쪽(1)** 을 정한다 —
@@ -78,6 +78,7 @@ namespace CrowdRunner.Tools
                 won = sim.State == SimState.Won,
                 units = sim.Units,
                 lost = sim.AlliesLost,
+                zone = sim.ZoneLost,
                 killed = sim.EnemiesKilled,
                 k = sim.LossCoefficient,
                 time = sim.Time,
@@ -111,16 +112,31 @@ namespace CrowdRunner.Tools
         /// </summary>
         static LevelData Sample()
         {
-            var l = new LevelData { chapter = 1, index = 1, initialUnits = 10, roadWidth = 7f, length = 160f };
-            l.events.Add(LevelEvent.Gate(20f,
+            // **대가를 다른 축에 둔다** (세션 B 지적 2026-10-08). *"많이 주지만 적도 많다"* 는
+            // 여전히 수 대 수라 **산수 한 번이면 끝**이고, 한 번 풀면 매번 같은 답이다.
+            //
+            // 그래서 오른쪽(×3)은 **지속 피해 지역 + 벽**을 지나게 한다. 둘 다 전선 폭에 안 막힌다:
+            //  · 지역은 **머릿수에 비례**해 깎으므로 많이 받을수록 많이 녹는다
+            //  · 벽은 **시간**을 먹는데, 그 시간 동안 지역이 계속 깎는다
+            // 왼쪽(+30)은 적게 받지만 **깨끗하다.** 어느 쪽이 나은지는 *지금 병력이 얼마인가*에
+            // 달리고, 그래서 매 판 다시 판단한다.
+            var l = new LevelData { chapter = 1, index = 1, initialUnits = 10, roadWidth = 7f, length = 170f };
+
+            l.events.Add(LevelEvent.Gate(20f, commitUntilZ: 90f,
                 new GateOption(-1, GateOp.Add, 30),
                 new GateOption(+1, GateOp.Multiply, 3)));
-            l.events.Add(LevelEvent.Enemy(50f, 20));
-            l.events.Add(LevelEvent.Wall(90f, 400f));
-            l.events.Add(LevelEvent.Gate(115f,
-                new GateOption(-1, GateOp.Add, 50),
+
+            // 오른쪽만: 녹는 길 + 그 안의 벽
+            l.events.Add(LevelEvent.Zone(30f, dps: 1.2f, length: 40f, lane: +1));
+            l.events.Add(LevelEvent.Wall(55f, 600f, lane: +1));
+            // 왼쪽만: 작은 적 떼
+            l.events.Add(LevelEvent.Enemy(60f, 15, lane: -1));
+
+            l.events.Add(LevelEvent.Gate(95f, commitUntilZ: 0f,
+                new GateOption(-1, GateOp.Add, 40),
                 new GateOption(+1, GateOp.Multiply, 2)));
-            l.events.Add(LevelEvent.Enemy(150f, 80, isFinal: true));
+
+            l.events.Add(LevelEvent.Enemy(160f, 70, isFinal: true));
             return l;
         }
     }
