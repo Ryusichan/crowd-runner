@@ -41,7 +41,7 @@ namespace CrowdRunner.Meta
             var city = UiKit.Label("City", head, CityName(City), F(UiKit.Display), UiKit.Text, TextAnchor.UpperCenter, true);
             UiKit.Place(city.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(980f, 96f));
 
-            var sub = UiKit.Label("Sub", head, "좀비화된 도시를 쓸어 간다", F(UiKit.Caption), UiKit.Dim, TextAnchor.UpperCenter);
+            var sub = UiKit.Label("Sub", head, "좀비화된 도시를 쓸어 간다", F(UiKit.Body), UiKit.Dim, TextAnchor.UpperCenter);
             UiKit.Place(sub.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -100f), new Vector2(980f, 44f));
 
             // 정복도 — **☣ 를 다 모아야 100 %** 다 (`Grade.Conquest`). 깨기만 하면 33 %
@@ -62,7 +62,7 @@ namespace CrowdRunner.Meta
             barFill.rectTransform.sizeDelta = new Vector2(760f * Mathf.Clamp01(conquest), 22f);
             UiKit.SetRadius(barFill, 11f, 22f);
 
-            var pct = UiKit.Label("Pct", head, Mathf.RoundToInt(conquest * 100f) + " % 정복", F(UiKit.Caption), UiKit.Dim, TextAnchor.UpperCenter);
+            var pct = UiKit.Label("Pct", head, Mathf.RoundToInt(conquest * 100f) + " % 정복", F(UiKit.Body), UiKit.Dim, TextAnchor.UpperCenter);
             UiKit.Place(pct.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -186f), new Vector2(760f, 44f));
 
             // ── 정복 경로: 아래(1-1) 에서 위(1-10) 로 꺾여 올라간다 ──
@@ -132,8 +132,14 @@ namespace CrowdRunner.Meta
             // **잠긴 판도 이름을 보여 준다.** `- - -` 로 가렸더니 열 칸 중 아홉이 빈 줄이 되어
             // 첫 화면이 거의 빈 화면이었다 (세션 B). 이름은 **스포일러가 아니라 지도**다 —
             // 어디로 가는지 보이는 것이 정복 지도의 값이다
-            var nm = UiKit.Label("Name", card.rectTransform, lv.name, F(UiKit.LabelPt),
-                                 open ? UiKit.Text : UiKit.Hex(0x8a7aa6), TextAnchor.MiddleLeft);
+            // ⚠ **읽혀야 하는 글자는 `Body` 아래로 내리지 않는다.**
+            // `UiKit.Legible` 이 밝은 글자에 **1.2 px 어두운 외곽선**을 붙이는데, 작은 한글은
+            // 획이 2 px 쯤이라 양쪽에서 먹히면 **획 속이 안 남는다**. 스크린샷에서 잰 도달률이
+            // 그 모양 그대로였다: 제목 91 px **100 %** · 코드 53 px 굵게 **92 %** ·
+            // 획 굵은 `0 %` 26 px **94 %** · 가는 한글 26 px **56 %** · 이름 37 px **51 %**.
+            // 색 공간 문제가 아니다 — 제목이 정확히 `#f2f4ff` 로 찍혔다.
+            var nm = UiKit.Label("Name", card.rectTransform, lv.name, F(UiKit.Body),
+                                 open ? UiKit.Text : UiKit.Hex(0x9a8bb4), TextAnchor.MiddleLeft, open);
             UiKit.Place(nm.rectTransform, new Vector2(0f, 1f), new Vector2(22f, -64f), new Vector2(330f, 42f));
 
             // ☣ 셋 — 받은 것만 채운다
@@ -154,14 +160,14 @@ namespace CrowdRunner.Meta
 
             if (!open)
             {
-                var lock0 = UiKit.Label("Lock", card.rectTransform, "잠김", F(UiKit.Micro), UiKit.Hex(0x7a6b93), TextAnchor.MiddleRight);
+                var lock0 = UiKit.Label("Lock", card.rectTransform, "잠김", F(UiKit.Caption), UiKit.Hex(0x8a7aa6), TextAnchor.MiddleRight);
                 UiKit.Place(lock0.rectTransform, new Vector2(1f, 0f), new Vector2(-24f, 24f), new Vector2(200f, 36f));
                 return;
             }
 
             if (MetaSave.BestOf(lv.Code) > 0)
             {
-                var best = UiKit.Label("Best", card.rectTransform, "최고 " + MetaSave.BestOf(lv.Code), F(UiKit.Micro), UiKit.Dim, TextAnchor.MiddleRight);
+                var best = UiKit.Label("Best", card.rectTransform, "최고 " + MetaSave.BestOf(lv.Code), F(UiKit.Caption), UiKit.Dim, TextAnchor.MiddleRight);
                 UiKit.Place(best.rectTransform, new Vector2(1f, 0f), new Vector2(-24f, 24f), new Vector2(240f, 36f));
             }
 
@@ -192,7 +198,7 @@ namespace CrowdRunner.Meta
             UiKit.Place(card, new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(900f, 1060f));
             UiKit.SetRadius(cardImg, 28f);
 
-            var code = UiKit.Label("Code", card, lv.Code, F(UiKit.Caption), UiKit.Yellow, TextAnchor.UpperCenter, true);
+            var code = UiKit.Label("Code", card, lv.Code, F(UiKit.Body), UiKit.Yellow, TextAnchor.UpperCenter, true);
             UiKit.Place(code.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(820f, 34f));
 
             var nm = UiKit.Label("Name", card, lv.name, F(UiKit.Title), UiKit.Text, TextAnchor.UpperCenter, true);
@@ -261,7 +267,7 @@ namespace CrowdRunner.Meta
             UiKit.Place(v.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -16f), new Vector2(230f, 40f));
 
             // Micro 로 뒀더니 그림에서 **안 읽혔다**. 숫자만 셋 떠 있으면 무슨 숫자인지 모른다
-            var l = UiKit.Label("L", chip.rectTransform, label, F(UiKit.Caption), UiKit.Hex(0xb9b0cf), TextAnchor.UpperCenter);
+            var l = UiKit.Label("L", chip.rectTransform, label, F(UiKit.Body), UiKit.Hex(0xb9b0cf), TextAnchor.UpperCenter);
             UiKit.Place(l.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -60f), new Vector2(230f, 34f));
         }
 
@@ -307,7 +313,7 @@ namespace CrowdRunner.Meta
                 string more = resultWon && need > 0
                     ? Bio(resultGrade + 1) + " 까지 " + need + " 명"
                     : Bio(resultGrade + 1) + " 기준 " + lv.rating[resultGrade] + " 명";
-                var hint = UiKit.Label("Hint", root, more, F(UiKit.Body), UiKit.Yellow, TextAnchor.MiddleCenter);
+                var hint = UiKit.Label("Hint", root, more, F(UiKit.Body), UiKit.Yellow, TextAnchor.MiddleCenter, true);
                 UiKit.Place(hint.rectTransform, mid, new Vector2(0f, -104f), new Vector2(900f, 52f));
             }
 
