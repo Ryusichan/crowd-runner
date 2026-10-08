@@ -79,6 +79,16 @@ namespace CrowdRunner.Core
         /// <summary>지역에서 녹은 누계 — 전투 손실과 **따로** 센다. 섞으면 어느 쪽이 비쌌는지 못 본다</summary>
         public float ZoneLost { get; private set; }
 
+        /// <summary>
+        /// 이 판에서 **동시에 존재한 최대 병력**. 레벨 검증이 이 수로 *"그릴 수 있는 레벨인가"* 를 본다.
+        ///
+        /// 왜 로직이 이걸 세나: 렌더링 예산은 **평균이 아니라 최악**에 걸린다 — 한 번이라도 넘으면
+        /// 그 순간 프레임이 무너지고, 그 순간이 보통 **증식 직후**라 가장 보여 주고 싶은 장면이다.
+        /// M0 측정(2026-10-08)에서 방식 A 가 **60~70 개체**에서 8 ms 예산을 다 썼다 — 즉 이 수가
+        /// 레벨 설계의 **실제 상한**이고, 그 상한이 정해지기 전에 레벨을 많이 만들면 다시 짜게 된다.
+        /// </summary>
+        public int PeakUnits { get; private set; }
+
         public Sim(LevelData level)
         {
             this.level = level;
@@ -93,6 +103,7 @@ namespace CrowdRunner.Core
         /// </param>
         public void Step(float desiredX)
         {
+            if (Units > PeakUnits) PeakUnits = Units;
             Last = default;   // 매 틱 비운다 — 안 비우면 지난 틱 연출이 계속 다시 난다
             if (State == SimState.Won || State == SimState.Lost) return;
             float dt = FixedStep;
@@ -187,6 +198,9 @@ namespace CrowdRunner.Core
                     if (e.commitUntilZ > Z) { commitUntil = e.commitUntilZ; commitLane = pick.lane; }
                     Allies = Apply(Allies, pick.op, pick.value);
                     Last.gateAfter = Allies;
+                    // **게이트 직후에 바로 잰다.** 다음 틱까지 기다리면 그 사이 전투가 깎아서
+                    // 최고점을 놓친다 — 그런데 화면에는 그 최고점이 **실제로 한 번 그려진다**
+                    if (Units > PeakUnits) PeakUnits = Units;
                     if (Allies <= 0f) { State = SimState.Lost; }
                     break;
                 }
