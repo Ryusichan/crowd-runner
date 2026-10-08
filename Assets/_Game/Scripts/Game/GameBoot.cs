@@ -52,7 +52,10 @@ namespace CrowdRunner
         public static LevelRunner Go(string level)
         {
             var go = new GameObject("CrowdRunner");
-            Object.DontDestroyOnLoad(go);
+            // **편집 모드에서는 부르지 않는다.** `DontDestroyOnLoad` 는 플레이 모드 전용이고
+            // 에디터 스크립트에서 부르면 예외가 난다 — 화면 찍는 기계(`MetaShots`)가 바로
+            // 그 자리에서 죽었다. 플레이 중에는 장면이 바뀌어도 살아야 하므로 조건으로 둔다
+            if (Application.isPlaying) Object.DontDestroyOnLoad(go);
             var runner = go.AddComponent<LevelRunner>();
             runner.levelName = level;
             // **`LevelView` 를 `LevelRunner` 뒤에 붙인다.** `LevelRunner.Awake` 가 `Load` 를
@@ -60,6 +63,7 @@ namespace CrowdRunner
             // `Awake` 를 돌리기 때문에 순서가 결과를 바꾼다
             go.AddComponent<LevelView>();
             Overlay = BuildOverlay(go.transform);
+            EnsureEventSystem(go.transform);
             Runner = runner;
             if (runner.Sim == null)
                 Debug.LogError("[CR] 판을 못 띄웠다: " + runner.Error);
@@ -67,6 +71,22 @@ namespace CrowdRunner
                 Debug.Log($"[CR] level={level} units={runner.Sim.Units} road={runner.Sim.RoadWidth:F1}m " +
                           $"events={runner.Level.events.Count}");
             return runner;
+        }
+
+        /// <summary>
+        /// **클릭을 받는 장치.** 없으면 uGUI 가 입력을 하나도 안 받고, 버튼이 **보이는데 안 눌린다** —
+        /// 그 증상은 "버튼이 안 먹는다" 로만 보여서 원인을 찾기 어렵다.
+        ///
+        /// 세션 A 가 `MetaFlow` 쪽에 임시로 두었던 것을 여기로 옮겼다 (장면 세우는 일은 한 곳).
+        /// **둘이 서면 Unity 가 경고한다** — 그래서 `MetaFlow.EnsureEventSystem` 은 지웠다.
+        /// </summary>
+        static void EnsureEventSystem(Transform parent)
+        {
+            if (UnityEngine.EventSystems.EventSystem.current != null) return;
+            var go = new GameObject("EventSystem");
+            go.transform.SetParent(parent, false);
+            go.AddComponent<UnityEngine.EventSystems.EventSystem>();
+            go.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
         }
 
         static Canvas BuildOverlay(Transform parent)

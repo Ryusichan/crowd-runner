@@ -11,10 +11,11 @@
     <Nullable>disable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <NoWarn>CS0649;CS0414;CS1591</NoWarn>
-    <DefineConstants>UNITY_EDITOR;UNITY_2023_1_OR_NEWER</DefineConstants>
+    <DefineConstants>UNITY_EDITOR;UNITY_2023_1_OR_NEWER;UNITY_INCLUDE_TESTS</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)..\Assets\_Game\Scripts\**\*.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Assets\Tests\**\*.cs" />
   </ItemGroup>
   <!-- ⚠ **이 목록이 프로젝트의 패키지와 같아야 한다.**
        2026-10-09: `UnityEngine.UI.dll` 을 Unity **템플릿** 경로에서 참조하고 있었는데
@@ -107,5 +108,8 @@
     <Reference Include="UnityEngine.XRModule"><HintPath>D:\Unity\6000.3.24f1\Editor\Data\Managed\UnityEngine\UnityEngine.XRModule.dll</HintPath></Reference>
     <Reference Include="UnityEditor"><HintPath>D:\Unity\6000.3.24f1\Editor\Data\Managed\UnityEditor.dll</HintPath></Reference>
     <Reference Include="UnityEngine.UI"><HintPath>D:\Unity\6000.3.24f1\Editor\Data\Resources\PackageManager\ProjectTemplates\libcache\com.unity.template.3d-cross-platform-17.0.14\ScriptAssemblies\UnityEngine.UI.dll</HintPath></Reference>
+    <Reference Include="nunit.framework"><HintPath>D:\Unity\6000.3.24f1\Editor\Data\Resources\PackageManager\BuiltInPackages\com.unity.ext.nunit\net40\unity-custom\nunit.framework.dll</HintPath></Reference>
+    <Reference Include="UnityEngine.TestRunner"><HintPath>D:\Unity\6000.3.24f1\Editor\Data\Resources\PackageManager\ProjectTemplates\libcache\com.unity.template.3d-cross-platform-17.0.14\ScriptAssemblies\UnityEngine.TestRunner.dll</HintPath></Reference>
+    <Reference Include="UnityEditor.TestRunner"><HintPath>D:\Unity\6000.3.24f1\Editor\Data\Resources\PackageManager\ProjectTemplates\libcache\com.unity.template.3d-cross-platform-17.0.14\ScriptAssemblies\UnityEditor.TestRunner.dll</HintPath></Reference>
   </ItemGroup>
 </Project>
