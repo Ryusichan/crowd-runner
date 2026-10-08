@@ -1,10 +1,13 @@
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
+[Bb]in/
 [Bb]uild/
 [Bb]uilds/
 [Ll]ogs/
 UserSettings/
 *.csproj
+# 검사기 csproj 는 추적한다 — Unity 가 만드는 것이 아니라 우리가 쓴 것이다
+!tools/*.csproj
 *.sln
 __pycache__/
