@@ -3,7 +3,7 @@ using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 
-namespace Game.EditorTools
+namespace CrowdRunner.EditorTools
 {
     /// <summary>
     /// **대역 캐릭터를 굽는다** — M0 가 재야 하는 비용을 가진, 아직 없는 아트의 대역.
@@ -22,7 +22,7 @@ namespace Game.EditorTools
     /// 통과했으면 실제 캐릭터도 그 안에 들어와야 한다. 넘으면 M0 결과가 무효다.
     ///
     /// 배치 모드로 돈다 (오너 규칙: 에디터 창을 띄우지 않는다):
-    /// <code>Unity -batchmode -nographics -quit -projectPath . -executeMethod Game.EditorTools.M0Assets.Bake</code>
+    /// <code>Unity -batchmode -nographics -quit -projectPath . -executeMethod CrowdRunner.EditorTools.M0Assets.Bake</code>
     /// </summary>
     public static class M0Assets
     {

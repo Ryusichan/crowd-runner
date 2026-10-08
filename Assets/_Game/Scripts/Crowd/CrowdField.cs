@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Game.Crowd
+namespace CrowdRunner.Crowd
 {
     /// <summary>
     /// **그릴 것의 자리** — 군중 1,000 개체의 좌표·위상을 들고 고정 스텝으로 옮긴다.

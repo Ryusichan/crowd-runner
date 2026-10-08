@@ -79,6 +79,17 @@ namespace CrowdRunner.Core
                 case "speed": return Num(head, 1, v => l.forwardSpeed = v);
                 case "length": return Num(head, 1, v => l.length = v);
 
+                case "rating":
+                {
+                    // `rating 12 20 30` — 남은 병력 기준 ☣ / ☣☣ / ☣☣☣
+                    if (head.Count < 4) return "rating 에 수가 " + (head.Count - 1) + " 개다 — `rating <☣> <☣☣> <☣☣☣>` 처럼 셋";
+                    var r = new int[3];
+                    for (int k = 0; k < 3; k++)
+                        if (!int.TryParse(head[k + 1], out r[k])) return "rating 의 수가 숫자가 아니다: " + head[k + 1];
+                    l.rating = r;
+                    return null;
+                }
+
                 case "gate":
                 {
                     if (bar.Length < 3) return "게이트에 선택지가 " + (bar.Length - 1) + " 개다 — `| L add 30 | R mul 3` 처럼 둘 이상";

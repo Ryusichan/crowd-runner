@@ -5,7 +5,7 @@ using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-namespace Game.EditorTools
+namespace CrowdRunner.EditorTools
 {
     /// <summary>
     /// **M0 APK — 한 번의 Unity 주행으로 끝낸다.**
@@ -14,7 +14,7 @@ namespace Game.EditorTools
     /// 그래서 임포트 · 대역 캐릭터 굽기 · 씬 만들기 · APK 빌드가 **한 호출** 안에 있다. 나눠 두면
     /// 사람이 셋을 순서대로 불러야 하고, 그러면 왕복이 세 번이다.
     ///
-    /// <code>Unity -batchmode -nographics -quit -projectPath . -executeMethod Game.EditorTools.M0Build.Android</code>
+    /// <code>Unity -batchmode -nographics -quit -projectPath . -executeMethod CrowdRunner.EditorTools.M0Build.Android</code>
     ///
     /// 에디터 창을 띄우지 않는다 (같은 날 규칙). 측정은 폰에서 돌고 결과는 `adb logcat` 으로 나온다.
     /// </summary>
@@ -68,6 +68,9 @@ namespace Game.EditorTools
                 locationPathName = Apk,
                 target = BuildTarget.Android,
                 options = BuildOptions.None,
+                // **측정용 빌드라고 못 박는다.** 이 정의가 없으면 `GameBoot` 가 게임 장면을
+                // 세우고, 그러면 측정 장면에 게임이 섞여 **M0 의 수가 거짓이 된다**
+                extraScriptingDefines = new[] { "CR_M0" },
             };
             var report = BuildPipeline.BuildPlayer(opt);
             var s = report.summary;

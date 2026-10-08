@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Profiling;
 
-namespace Game.Crowd
+namespace CrowdRunner.Crowd
 {
     /// <summary>
     /// **M0 측정기** — 군중 렌더링 방식의 비용을 기기에서 숫자로 뽑는다 (`docs/M0_CROWD.md`).

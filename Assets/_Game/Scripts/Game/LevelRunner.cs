@@ -74,6 +74,10 @@ namespace CrowdRunner.Game
             }
 
             Sim = new Sim(Level);
+            // 보이는 쪽에 알린다 — 게이트·지역·벽은 레벨마다 다르므로 판을 띄울 때 세운다.
+            // 뷰가 아직 없을 수도 있다 (`Awake` 순서) — 그때는 뷰가 자기 `Awake` 에서 다시 받는다
+            var view = GetComponent<CrowdRunner.View.LevelView>();
+            if (view != null) view.OnLevelLoaded(Level);
             return true;
         }
 

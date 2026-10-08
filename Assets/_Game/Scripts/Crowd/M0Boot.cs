@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Game.Crowd
+namespace CrowdRunner.Crowd
 {
     /// <summary>
     /// **M0 장면을 코드로 세운다** — 씬 파일에 아무것도 담지 않는다.
@@ -15,7 +15,9 @@ namespace Game.Crowd
         static void Boot()
         {
             if (!Application.isPlaying) return;
-#if !UNITY_EDITOR
+            // **측정용 빌드에만 선다.** `CR_M0` 가 없으면 게임 쪽(`GameBoot`)이 장면을 세운다 —
+            // 한 빌드가 둘을 다 하려 들면 측정 장면에 게임이 섞이고 M0 의 수가 거짓이 된다
+#if CR_M0 && !UNITY_EDITOR
             Go();
 #endif
         }

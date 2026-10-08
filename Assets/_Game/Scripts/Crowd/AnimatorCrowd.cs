@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Game.Crowd
+namespace CrowdRunner.Crowd
 {
     /// <summary>
     /// **방식 A — 유닛마다 `SkinnedMeshRenderer` + `Animator`.** "그냥 만들면 이렇게 된다" 는 기준선.

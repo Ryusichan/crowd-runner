@@ -129,6 +129,20 @@ namespace CrowdRunner.Core
         public List<LevelEvent> events = new List<LevelEvent>();
 
         /// <summary>
+        /// **☣ 등급 기준** — 끝났을 때 남은 병력이 이 수 이상이면 그 등급. 좀비퀸 월드맵이
+        /// 구역마다 ☣ 셋을 그리므로 (`docs/DESIGN.md` §3b) 그 자리에 들어갈 수가 필요하다.
+        ///
+        /// **눈대중으로 적지 않는다.** 이 수는 `tools/sim` 이 전 경로를 돌려 잰 잔여에서 나오고,
+        /// 검증기가 **닿을 수 있는지**를 본다: ☣☣☣ 는 어떤 경로로든 나와야 하고, **모든**
+        /// 경로로 나오면 안 된다(그러면 등급이 아니라 참가상이다). ☣ 하나는 이기면 받는다.
+        ///
+        /// 좀비퀸에서 **맞출 수 없는 목표**를 세워 놓고 한참 원인을 찾은 적이 있다
+        /// (`HANDOFF` §0c-15: 지표가 0 을 읽을 수 없는 구조였다). 목표를 세우는 쪽이
+        /// 그 목표가 닿는지 확인하지 않으면, 못 맞추는 것이 **플레이어의 일**이 된다.
+        /// </summary>
+        public int[] rating = null;
+
+        /// <summary>
         /// 데이터가 **돌려 볼 수 있는 모양인가.** 틀린 레벨을 시뮬에 넣으면 시뮬이 거짓말을 한다 —
         /// 그래서 돌리기 전에 본다. 반환값이 null 이면 괜찮고, 아니면 그게 이유다.
         /// </summary>
@@ -141,6 +155,15 @@ namespace CrowdRunner.Core
             if (initialUnits <= 0) return "initialUnits 가 " + initialUnits + " 다 — 0 명으로는 시작할 수 없다";
             if (forwardSpeed <= 0f) return "forwardSpeed 가 0 이하다 — 전진하지 않는 판은 끝나지 않는다";
             if (events.Count == 0) return "사건이 하나도 없다 — 그냥 길이다";
+
+            if (rating != null)
+            {
+                if (rating.Length != 3) return "rating 이 " + rating.Length + " 개다 — ☣ 셋이므로 세 수를 적는다";
+                for (int r = 0; r < 3; r++)
+                    if (rating[r] <= 0) return "rating[" + r + "] 가 " + rating[r] + " 다 — 0 명으로 받는 등급은 없다";
+                if (rating[1] <= rating[0] || rating[2] <= rating[1])
+                    return "rating 이 오름차순이 아니다 (" + rating[0] + "/" + rating[1] + "/" + rating[2] + ") — 뒤 등급이 더 쉬우면 등급이 아니다";
+            }
 
             float last = -1f;
             for (int i = 0; i < events.Count; i++)
