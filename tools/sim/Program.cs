@@ -147,18 +147,21 @@ namespace CrowdRunner.Tools
             Console.WriteLine("## 장 전체 — **고정된 비선택으로 충분한가**");
 
             int fails = 0;
-            foreach (var side in new[] { -1, +1 })
+
+            // ⚠ **가운데를 같이 잰다.** 세션 B 가 찾았다 (2026-10-09): 폰을 **한 번도 안 만지면**
+            // `targetX` 가 0 이고, 그러면 왼쪽도 오른쪽도 아니라 **앞의 두 검사가 둘 다 비켜
+            // 간다.** 그 상태로 챕터 1 이 10/10 깨졌다. 고친 뒤에도 **매번 잰다** — 고쳤다는
+            // 말로는 다시 새는 것을 못 막는다.
+            foreach (var (x, name) in new[] { (-1f, "왼쪽 고정"), (+1f, "오른쪽 고정"), (0f, "가운데 (손 안 댐)") })
             {
                 int won = 0, grades = 0;
                 var lost = new List<string>();
-                foreach (var (level, paths) in rows)
+                foreach (var (level, _) in rows)
                 {
-                    // 한쪽에 계속 붙어 있는 것 = 모든 비트가 같은 경로 (`LL…L` 또는 `RR…R`)
-                    var r = paths[side < 0 ? 0 : paths.Count - 1].r;
+                    var r = RunFixed(level, x * level.roadWidth * 0.25f);
                     if (r.won) { won++; grades += Grade.Of(true, r.units, level.rating); }
                     else lost.Add(level.Code);
                 }
-                string name = side < 0 ? "왼쪽 고정" : "오른쪽 고정";
                 Console.WriteLine($"   {name}: {won}/{rows.Count} 클리어 · ☣ {grades}/{rows.Count * Grade.Max}"
                                   + (lost.Count > 0 ? " · 막히는 판 " + string.Join(",", lost) : ""));
 
@@ -169,6 +172,7 @@ namespace CrowdRunner.Tools
                     fails++;
                 }
             }
+
             Console.WriteLine();
             return fails;
         }
@@ -277,6 +281,28 @@ namespace CrowdRunner.Tools
                 sim.Step(lane * half * 0.5f);
             }
 
+            return new Run
+            {
+                won = sim.State == SimState.Won,
+                units = sim.Units,
+                peak = sim.PeakUnits,
+                lost = sim.AlliesLost,
+                zone = sim.ZoneLost,
+                killed = sim.EnemiesKilled,
+                k = sim.LossCoefficient,
+                time = sim.Time,
+            };
+        }
+
+        /// <summary>
+        /// **손가락을 한 자리에 두고** 끝까지 간다. `RunOne` 은 게이트마다 고르지만 이것은
+        /// 아무것도 안 고른다 — *"안 만지면 어떻게 되나"* 가 그것이다.
+        /// </summary>
+        static Run RunFixed(LevelData level, float x)
+        {
+            var sim = new Sim(level);
+            for (int step = 0; step < 60 * 600 && sim.State != SimState.Won && sim.State != SimState.Lost; step++)
+                sim.Step(x);
             return new Run
             {
                 won = sim.State == SimState.Won,

@@ -216,14 +216,34 @@ namespace CrowdRunner.Core
                 case EventKind.Gate:
                 {
                     // **리더 중심 하나로 고른다** (기획서 §3.3). 병력마다 판정하면 왼쪽 병력은 +50,
-                    // 오른쪽 병력은 ×3 에 닿아 규칙이 무너진다. 고른 쪽과 **가장 가까운** 선택지가
-                    // 당첨이고, 나머지는 그 순간 죽는다 — 한 짝에서 한 번만 발동한다
-                    int best = 0; float bestD = float.MaxValue;
+                    // 오른쪽 병력은 ×3 에 닿아 규칙이 무너진다. 한 짝에서 한 번만 발동한다.
+                    //
+                    // ⚠ **고르는 기준은 `Side` 다 — 위험물을 거르는 기준과 같아야 한다.**
+                    // 처음에는 `X` 와 선택지 위치의 **거리**로 골랐는데, 위험물(`e.lane`)은
+                    // `Side` 로 걸렀다. 두 규칙이 다르면 **한가운데(X=0)가 제3의 길**이 된다:
+                    // 두 선택지가 정확히 같은 거리라 **배열에 먼저 적힌 쪽**이 당첨되고,
+                    // 위험물은 `Side`(+1=R) 로 걸러진다. 그 조합이 어느 쪽 고정으로도 안 나오는
+                    // 경로여서, **폰을 한 번도 안 만지고 챕터 1 을 10/10 클리어**했다
+                    // (세션 B, 2026-10-09). 두 검사(좌우 고정 · 경로 스윕)가 둘 다 비켜 갔다.
+                    //
+                    // 그리고 그 길의 결과를 정한 것은 **레벨 글에 선택지를 적은 순서**였다 —
+                    // 플레이어에게 보이지 않는 것이 결과를 정하면 그것은 규칙이 아니다.
+                    //
+                    // 이제 **길은 둘뿐이고 늘 둘 중 하나에 서 있다**(`Side`). 가운데는
+                    // 오른쪽으로 친다 — 따로 다루지 않는 것이 요점이다.
+                    int best = -1;
                     for (int k = 0; k < e.options.Length; k++)
+                        if (e.options[k].lane == Side) { best = k; break; }
+                    if (best < 0)
                     {
-                        float lx = e.options[k].lane * (RoadWidth * 0.25f);
-                        float d = X - lx; if (d < 0f) d = -d;
-                        if (d < bestD) { bestD = d; best = k; }
+                        // 그 쪽에 선택지가 없는 게이트(한쪽만 둔 경우) — 가장 가까운 것으로
+                        float bestD = float.MaxValue; best = 0;
+                        for (int k = 0; k < e.options.Length; k++)
+                        {
+                            float lx = e.options[k].lane * (RoadWidth * 0.25f);
+                            float d = X - lx; if (d < 0f) d = -d;
+                            if (d < bestD) { bestD = d; best = k; }
+                        }
                     }
                     var pick = e.options[best];
                     Last.gateFired = true; Last.gateLane = pick.lane; Last.gateBefore = Allies;
