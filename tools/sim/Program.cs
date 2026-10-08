@@ -61,6 +61,7 @@ namespace CrowdRunner.Tools
                 Console.WriteLine();
             }
 
+            Summary(rows);
             if (JudgeChapter(rows) != 0) bad++;
             if (JudgeProgress(rows) != 0) bad++;
 
@@ -93,6 +94,37 @@ namespace CrowdRunner.Tools
 
             rc = Judge(level, results, gates);
             return results;
+        }
+
+        /// <summary>
+        /// **열 판을 한 표로.** 블록 열 개를 읽어야 장의 모양이 보이는 것은 읽히지 않는다 —
+        /// 오너가 *"난이도 곡선이 이상하다"* 를 말할 수 있으려면 **시작 병력 · 최고점 ·
+        /// 잔여 폭 · ☣ 기준**이 한 화면에 나란히 있어야 한다.
+        ///
+        /// 이 표는 판정이 아니다. 판정은 아래 세 층이 하고, 이것은 **사람이 보는 것**이다.
+        /// </summary>
+        static void Summary(List<(LevelData level, List<(string path, Run r)> paths)> rows)
+        {
+            if (rows.Count == 0) return;
+            Console.WriteLine("## 장 요약 — 사람이 보는 표");
+            Console.WriteLine("| 판 | 이름 | 가르치는 것 | 시작 | 최고 | 클리어 | 잔여 | ☣ 기준 | 시간 |");
+            Console.WriteLine("|---|---|---|---|---|---|---|---|---|");
+            foreach (var (level, paths) in rows)
+            {
+                int won = 0, best = 0, worst = int.MaxValue, peak = 0;
+                float time = 0f;
+                foreach (var (_, r) in paths)
+                {
+                    if (r.won) { won++; if (r.units > best) best = r.units; if (r.units < worst) worst = r.units; }
+                    if (r.peak > peak) peak = r.peak;
+                    if (r.time > time) time = r.time;
+                }
+                if (won == 0) worst = 0;
+                string rate = level.rating != null && level.rating.Length == 3
+                    ? level.rating[0] + "/" + level.rating[1] + "/" + level.rating[2] : "-";
+                Console.WriteLine($"| {level.Code} | {level.name} | {level.teaches} | {level.initialUnits} | {peak} | {won}/{paths.Count} | {worst}~{best} | {rate} | {time:0}s |");
+            }
+            Console.WriteLine();
         }
 
         /// <summary>
