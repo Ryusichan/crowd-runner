@@ -18,6 +18,10 @@ units 25
 road 7
 length 290
 
+# ☣ 기준: tools/sim 이 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
+rating 5 12 20
+
+
 # 게이트 ① — 25 에서는 +35(60) 와 ×3(75) 가 다른 수다
 gate 25 | L add 35 | R mul 3
 

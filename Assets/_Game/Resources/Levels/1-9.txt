@@ -9,6 +9,10 @@ units 30
 road 8
 length 240
 
+# ☣ 기준: tools/sim 이 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
+rating 22 35 49
+
+
 gate 25 commit 150 | L add 40 | R mul 3
 narrow 60 width 2.7 len 70 lane R
 zone 60 dps 1.1 len 70 lane R

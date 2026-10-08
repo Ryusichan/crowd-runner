@@ -9,6 +9,10 @@ units 14
 road 7
 length 170
 
+# ☣ 기준: tools/sim 이 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
+rating 5 8 11
+
+
 gate 25 commit 110 | L mul 3 | R add 20
 wall 60 hp 1400 lane L
 wall 60 hp 500 lane R

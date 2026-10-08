@@ -9,6 +9,10 @@ units 12
 road 7
 length 160
 
+# ☣ 기준: tools/sim 이 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
+rating 29 34 40
+
+
 gate 25 | L add 30 | R mul 3
 enemy 70 count 25
 gate 105 | L add 35 | R mul 2

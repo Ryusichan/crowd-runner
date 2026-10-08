@@ -67,7 +67,7 @@ namespace CrowdRunner.Tools
             foreach (var (path, r) in results)
                 Console.WriteLine($"| {path} | {(r.won ? "클리어" : "실패")} | {r.units} | {r.peak} | {r.lost:0} | {r.zone:0} | {r.killed:0} | {r.k:0.00} | {r.time:0.0}s |");
 
-            return Judge(results, gates);
+            return Judge(level, results, gates);
         }
 
         struct Run { public bool won; public int units, peak; public float lost, zone, killed, k, time; }
@@ -122,6 +122,17 @@ namespace CrowdRunner.Tools
             return n;
         }
 
+        /// <summary>
+        /// 잰 잔여(`worst`~`best`) 안에서 등급 기준을 고른다. **완벽한 플레이를 요구하지 않는다** —
+        /// `tools/sim` 은 게이트를 미리 보고 딱 붙어 서지만 사람은 조금씩 흘린다. 그래서 ☣☣☣ 를
+        /// 최대 잔여에 맞추지 않고 75 % 지점에 둔다
+        /// </summary>
+        static int Suggest(int worst, int best, float t)
+        {
+            int v = (int)System.Math.Round(worst + (best - worst) * t);
+            return v < 1 ? 1 : v;
+        }
+
         static string PathName(int mask, int gates)
         {
             var s = new System.Text.StringBuilder();
@@ -154,7 +165,7 @@ namespace CrowdRunner.Tools
         /// </summary>
         const float MinSpread = 0.25f;
 
-        static int Judge(List<(string path, Run r)> results, int gates)
+        static int Judge(LevelData level, List<(string path, Run r)> results, int gates)
         {
             int won = 0, best = 0, worst = int.MaxValue, peak = 0;
             foreach (var (_, r) in results)
@@ -191,7 +202,30 @@ namespace CrowdRunner.Tools
             if (gates >= 2 && won == results.Count)
                 warn.Add("지는 경로가 없다 — 가르치는 판이면 맞고, 뒤쪽 판이면 약하다");
 
-            // ④ 그릴 수 있어야 한다. **최악이 기준이다** — 한 번만 넘어도 그 프레임이 무너지고,
+            // ④ **☣ 기준이 닿아야 한다.**
+            //
+            // 목표를 세우는 쪽이 그 목표가 닿는지 확인하지 않으면, 못 맞추는 것이 **플레이어의
+            // 일**이 된다. 좀비퀸에서 지표가 0 을 읽을 수 없는 구조로 목표를 세워 놓고 한참
+            // 원인을 찾았다 (`HANDOFF` §0c-15). 그래서 여기서는 **잰 수**와 맞춰 본다.
+            if (level.rating == null)
+            {
+                fail.Add("☣ 기준(`rating`)이 없다 — 월드맵이 등급을 그릴 수 없다");
+                if (won > 0) Console.WriteLine($"   제안: rating {Suggest(worst, best, 0.0f)} {Suggest(worst, best, 0.35f)} {Suggest(worst, best, 0.75f)}");
+            }
+            else if (won > 0)
+            {
+                int bronze = level.rating[0], silver = level.rating[1], gold = level.rating[2];
+                if (bronze > worst)
+                    fail.Add($"☣ 기준 {bronze} 가 가장 적게 남는 클리어({worst})보다 높다 — 이겼는데 등급이 없는 경로가 생긴다");
+                if (gold > best)
+                    fail.Add($"☣☣☣ 기준 {gold} 가 **어떤 경로로도 못 닿는다** (최대 잔여 {best})");
+                else if (gold <= worst)
+                    fail.Add($"☣☣☣ 기준 {gold} 를 **모든 클리어 경로가 받는다** (최소 잔여 {worst}) — 등급이 아니라 참가상이다");
+                if (silver <= bronze || gold <= silver)
+                    fail.Add($"☣ 기준이 겹친다 ({bronze}/{silver}/{gold})");
+            }
+
+            // ⑤ 그릴 수 있어야 한다. **최악이 기준이다** — 한 번만 넘어도 그 프레임이 무너지고,
             //    그 순간이 보통 증식 직후라 **가장 보여 주고 싶은 장면**이다
             if (RenderCap > 0 && peak > RenderCap)
                 fail.Add($"최대 병력 {peak} 가 그릴 수 있는 수({RenderCap})를 넘는다");
