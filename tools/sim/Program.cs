@@ -21,7 +21,7 @@ namespace CrowdRunner.Tools
 
             // 레벨은 **파일에서** 온다 — 코드에 박으면 10 개를 못 만든다 (기획서 §12)
             string dir = System.IO.Path.GetFullPath(System.IO.Path.Combine(
-                AppContext.BaseDirectory, "../../../../../Assets/_Game/Levels"));
+                AppContext.BaseDirectory, "../../../../../Assets/_Game/Resources/Levels"));
             if (args.Length > 0) dir = args[0];
             if (!System.IO.Directory.Exists(dir)) { Console.WriteLine("레벨 폴더가 없다: " + dir); return 1; }
 
