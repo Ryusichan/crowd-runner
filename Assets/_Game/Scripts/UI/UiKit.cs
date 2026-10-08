@@ -122,6 +122,7 @@ namespace CrowdRunner.UI
             var rt = Rect(name, parent);
             var t = rt.gameObject.AddComponent<Text>();
             t.font = Font;
+            // `Px()` 가 나눠 둔 것을 여기서 **되곱는다** — 둘은 서로를 지운다 (그쪽 주석 참고)
             t.fontSize = Mathf.Max(1, Mathf.RoundToInt(size * FontScale));
             t.text = text;
             t.color = color;
@@ -200,6 +201,17 @@ namespace CrowdRunner.UI
         public static int Caption => Px(12);   // 보조 설명 · 단위
         public static int Tagline => Px(11);   // 제목 밑 한 줄
         public static int Micro   => Px(10);   // 버전 · 각주. **이보다 작게 쓰지 않는다**
+        /// <summary>
+        /// 문서의 크기(px)를 **`FontScale` 로 나눠** 둔다. 그리고 <see cref="Label"/> 이 그릴 때
+        /// **다시 곱한다** — 즉 **둘은 서로를 지운다.** `FontScale` 을 어떻게 두든 최종 크기는
+        /// 문서의 수 그대로다.
+        ///
+        /// ⚠ **그래서 `FontScale` 을 올려도 글자가 커지지 않는다.** 이 프로젝트의 캔버스는
+        /// 1080×1920 이고 좀비퀸은 420×900 이라 같은 상수가 2.13 배 작게 뜨는데, 여기서
+        /// `FontScale` 을 올려 고치려다 **`Body` 가 16 → 6 으로 줄어든 값만 로그에 찍혔다**
+        /// (2026-10-09). 키우는 자리는 `Meta/MetaFlow.F()` 다 — <see cref="Label"/> 에
+        /// **넘기는 크기 자체**를 키운다.
+        /// </summary>
         static int Px(int docSize) => Mathf.Max(1, Mathf.RoundToInt(docSize / Mathf.Max(0.01f, FontScale)));
 
         // ==== 여백 단계 ====
