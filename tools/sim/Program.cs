@@ -18,80 +18,56 @@ namespace CrowdRunner.Tools
         static int Main(string[] args)
         {
             Console.OutputEncoding = System.Text.Encoding.UTF8;
-            var level = Sample();
 
-            string bad = level.Validate();
-            if (bad != null) { Console.WriteLine("레벨 " + level.Code + " 이 틀렸다: " + bad); return 1; }
+            // 레벨은 **파일에서** 온다 — 코드에 박으면 10 개를 못 만든다 (기획서 §12)
+            string dir = System.IO.Path.GetFullPath(System.IO.Path.Combine(
+                AppContext.BaseDirectory, "../../../../../Assets/_Game/Levels"));
+            if (args.Length > 0) dir = args[0];
+            if (!System.IO.Directory.Exists(dir)) { Console.WriteLine("레벨 폴더가 없다: " + dir); return 1; }
 
+            var files = System.IO.Directory.GetFiles(dir, "*.txt");
+            Array.Sort(files, StringComparer.Ordinal);
+            if (files.Length == 0) { Console.WriteLine("레벨이 하나도 없다: " + dir); return 1; }
+
+            int bad = 0;
+            foreach (var f in files)
+            {
+                string err;
+                var level = LevelFile.Parse(System.IO.File.ReadAllText(f), out err);
+                if (level == null)
+                {
+                    Console.WriteLine($"## {System.IO.Path.GetFileName(f)}  ** 못 읽는다 **");
+                    Console.WriteLine("   " + err);
+                    Console.WriteLine();
+                    bad++;
+                    continue;
+                }
+                if (Report(level) != 0) bad++;
+                Console.WriteLine();
+            }
+
+            Console.WriteLine(bad == 0
+                ? $"레벨 {files.Length} 개 — 전부 통과"
+                : $"레벨 {files.Length} 개 중 **{bad} 개가 걸렸다**");
+            return bad > 0 ? 1 : 0;
+        }
+
+        static int Report(LevelData level)
+        {
             int gates = 0;
             foreach (var e in level.events) if (e.kind == EventKind.Gate) gates++;
-            Console.WriteLine($"레벨 {level.Code} · 시작 {level.initialUnits} 명 · 길이 {level.length} m · 게이트 {gates} 개 · 경로 {1 << gates} 가지");
-            Console.WriteLine();
+            Console.WriteLine($"## {level.Code} · 시작 {level.initialUnits} · 길이 {level.length} m · 게이트 {gates} · 경로 {1 << gates} 가지");
 
             var results = new List<(string path, Run r)>();
             for (int mask = 0; mask < (1 << gates); mask++)
                 results.Add((PathName(mask, gates), RunOne(level, mask)));
 
-            Console.WriteLine("| 경로 | 결과 | 잔여 | 최대 병력 | 전투 전사 | 지역에서 녹음 | 적 처치 | k | 시간 |");
+            Console.WriteLine("| 경로 | 결과 | 잔여 | 최대 | 전투 | 지역 | 처치 | k | 시간 |");
             Console.WriteLine("|---|---|---|---|---|---|---|---|---|");
             foreach (var (path, r) in results)
                 Console.WriteLine($"| {path} | {(r.won ? "클리어" : "실패")} | {r.units} | {r.peak} | {r.lost:0} | {r.zone:0} | {r.killed:0} | {r.k:0.00} | {r.time:0.0}s |");
 
-            // **세 경로가 다 있어야 레벨이다** (기획서 §6.3). 전부 클리어면 선택이 없는 것이고,
-            // 전부 실패면 못 깨는 판이다 — 둘 다 "레벨을 안 만든 것" 과 같다
-            return Judge(results);
-        }
-
-        // ── 레벨 판정 ────────────────────────────────────────────────────────────
-        //
-        // **숫자를 찍는 것과 판정하는 것은 다르다.** 표만 찍으면 사람이 매번 읽고 판단해야 하고,
-        // 레벨이 50 개가 되면 아무도 안 읽는다. 그래서 **규칙을 적어 두고 기계가 본다.**
-        //
-        // 규칙 값은 전부 `[WORKING]` 이다 — 기획서 §6.3 의 "세 경로" 를 숫자로 옮긴 것이고,
-        // 실제 값은 플레이해 보고 정한다. 지금 중요한 것은 **값이 아니라 그 자리가 있는 것**이다.
-
-        /// <summary>그릴 수 있는 최대 병력. **M0 가 정한다** — 방식 A 는 60~70 이었고 B 는 측정 중이다</summary>
-        const int RenderCap = 0;   // 0 = 아직 모른다 → 그 검사를 건너뛴다
-
-        static int Judge(List<(string path, Run r)> results)
-        {
-            int won = 0, best = 0, worst = int.MaxValue, peak = 0;
-            foreach (var (_, r) in results)
-            {
-                if (r.won) { won++; if (r.units > best) best = r.units; if (r.units < worst) worst = r.units; }
-                if (r.peak > peak) peak = r.peak;
-            }
-
-            Console.WriteLine();
-            Console.WriteLine($"클리어 {won}/{results.Count} · 최대 병력 {peak} · 클리어 경로의 잔여 {worst}~{best}");
-
-            var fail = new List<string>();
-            var warn = new List<string>();
-
-            // ① 깰 수 있어야 한다
-            if (won == 0) fail.Add("어떤 선택으로도 최종 방어선을 넘지 못한다");
-
-            // ② 고르는 뜻이 있어야 한다. **전부 클리어 = 게이트가 장식**이고,
-            //    그건 이 장르의 **유일한 조작**이 아무 일도 안 한다는 뜻이다 (기획서 §3.4)
-            if (won == results.Count && results.Count > 1)
-                fail.Add("모든 경로가 클리어된다 — 게이트가 선택이 아니라 장식이다");
-
-            // ③ 클리어되는 경로끼리도 **갈려야** 한다. 다 이기는데 결과가 같으면 고른 보람이 없다
-            if (won > 1 && best > 0 && (best - worst) < best * 0.2f)
-                warn.Add($"클리어 경로의 잔여가 {worst}~{best} 로 거의 같다 — 잘 고른 값이 작다");
-
-            // ④ 그릴 수 있어야 한다. **최악이 기준이다** — 한 번만 넘어도 그 프레임이 무너지고,
-            //    그 순간이 보통 증식 직후라 **가장 보여 주고 싶은 장면**이다
-            if (RenderCap > 0 && peak > RenderCap)
-                fail.Add($"최대 병력 {peak} 가 그릴 수 있는 수({RenderCap})를 넘는다");
-
-            foreach (var w in warn) Console.WriteLine("  경고: " + w);
-            foreach (var f in fail) Console.WriteLine("  ** 실패: " + f + " **");
-
-            if (RenderCap == 0)
-                Console.WriteLine("  (렌더 상한이 아직 없다 — M0 방식 B 측정 뒤 `RenderCap` 을 채운다)");
-
-            return fail.Count > 0 ? 1 : 0;
+            return Judge(results, gates);
         }
 
         struct Run { public bool won; public int units, peak; public float lost, zone, killed, k, time; }
@@ -153,38 +129,63 @@ namespace CrowdRunner.Tools
             return s.Length == 0 ? "(게이트 없음)" : s.ToString();
         }
 
+        // ── 레벨 판정 ────────────────────────────────────────────────────────────
+        //
+        // **숫자를 찍는 것과 판정하는 것은 다르다.** 표만 찍으면 사람이 매번 읽어야 하고,
+        // 레벨이 50 개가 되면 아무도 안 읽는다. 그래서 **규칙을 적어 두고 기계가 본다.**
+        //
+        // 값은 전부 `[WORKING]` 이다 — 기획서 §6.3 의 "세 경로" 를 숫자로 옮긴 것이고, 실제 값은
+        // 플레이해 보고 정한다. 지금 중요한 것은 값이 아니라 **그 자리가 있는 것**이다.
+
+        /// <summary>그릴 수 있는 최대 병력. **M0 가 정한다** — 방식 A 는 60~70, B 는 측정 중</summary>
+        const int RenderCap = 0;   // 0 = 아직 모른다 → 그 검사를 건너뛴다
+
         /// <summary>
-        /// 손으로 적은 1-1. **데이터 모양이 쓸 만한지 보려고** 둔 것이고, 진짜 레벨은
-        /// `ScriptableObject` / JSON 에서 온다 (기획서 §12).
+        /// 잘 고른 것과 못 고른 것의 **잔여 병력 차이** 하한. `[WORKING]` 25 % —
+        /// 그보다 작으면 플레이어가 **차이를 못 느낀다**. 실제 값은 사람이 해 보고 정한다
         /// </summary>
-        static LevelData Sample()
+        const float MinSpread = 0.25f;
+
+        static int Judge(List<(string path, Run r)> results, int gates)
         {
-            // **대가를 다른 축에 둔다** (세션 B 지적 2026-10-08). *"많이 주지만 적도 많다"* 는
-            // 여전히 수 대 수라 **산수 한 번이면 끝**이고, 한 번 풀면 매번 같은 답이다.
+            int won = 0, best = 0, worst = int.MaxValue, peak = 0;
+            foreach (var (_, r) in results)
+            {
+                if (r.won) { won++; if (r.units > best) best = r.units; if (r.units < worst) worst = r.units; }
+                if (r.peak > peak) peak = r.peak;
+            }
+            if (won == 0) worst = 0;
+
+            Console.WriteLine($"   클리어 {won}/{results.Count} · 최대 병력 {peak} · 클리어 잔여 {worst}~{best}");
+
+            var fail = new List<string>();
+            var warn = new List<string>();
+
+            // ① 깰 수 있어야 한다
+            if (won == 0) fail.Add("어떤 선택으로도 최종 방어선을 넘지 못한다");
+
+            // ② **고른 것이 결과를 바꿔야 한다.** 이것 하나가 ②③ 을 겸한다.
             //
-            // 그래서 오른쪽(×3)은 **지속 피해 지역 + 벽**을 지나게 한다. 둘 다 전선 폭에 안 막힌다:
-            //  · 지역은 **머릿수에 비례**해 깎으므로 많이 받을수록 많이 녹는다
-            //  · 벽은 **시간**을 먹는데, 그 시간 동안 지역이 계속 깎는다
-            // 왼쪽(+30)은 적게 받지만 **깨끗하다.** 어느 쪽이 나은지는 *지금 병력이 얼마인가*에
-            // 달리고, 그래서 매 판 다시 판단한다.
-            var l = new LevelData { chapter = 1, index = 1, initialUnits = 10, roadWidth = 7f, length = 170f };
+            // 처음에는 *"모든 경로가 클리어되면 실패"* 로 두었는데 **너무 뭉툭했다** — 기획서 §6.2 의
+            // 1~3 판은 *가르치는* 판이라 어느 쪽을 골라도 깨지는 것이 맞고, 거기까지 떨어뜨리면
+            // 튜토리얼을 만들 수 없다. 실패한 첫 주행이 그 둘을 걸었다.
+            //
+            // 바꿔야 하는 것은 **승패가 아니라 결과**다: 어떤 경로는 지거나, **남는 병력이 뚜렷이
+            // 달라야** 한다. 둘 다 아니면 게이트는 장식이고, 이 장르에서 조작은 그것 하나뿐이다.
+            float spread = best > 0 ? (best - worst) / (float)best : 0f;
+            if (gates >= 2 && won == results.Count && spread < MinSpread)
+                fail.Add($"모든 경로가 클리어되는데 잔여도 {worst}~{best} ({spread * 100f:0}% 차이)로 비슷하다 — 고를 이유가 없다");
+            else if (gates >= 2 && won == results.Count && spread < MinSpread * 1.6f)
+                warn.Add($"지는 경로가 없고 잔여 차이도 {spread * 100f:0}% 뿐이다 — 뒤 판에서는 더 갈라야 한다");
 
-            l.events.Add(LevelEvent.Gate(20f, commitUntilZ: 90f,
-                new GateOption(-1, GateOp.Add, 30),
-                new GateOption(+1, GateOp.Multiply, 3)));
+            // ④ 그릴 수 있어야 한다. **최악이 기준이다** — 한 번만 넘어도 그 프레임이 무너지고,
+            //    그 순간이 보통 증식 직후라 **가장 보여 주고 싶은 장면**이다
+            if (RenderCap > 0 && peak > RenderCap)
+                fail.Add($"최대 병력 {peak} 가 그릴 수 있는 수({RenderCap})를 넘는다");
 
-            // 오른쪽만: 녹는 길 + 그 안의 벽
-            l.events.Add(LevelEvent.Zone(30f, dps: 1.2f, length: 40f, lane: +1));
-            l.events.Add(LevelEvent.Wall(55f, 600f, lane: +1));
-            // 왼쪽만: 작은 적 떼
-            l.events.Add(LevelEvent.Enemy(60f, 15, lane: -1));
-
-            l.events.Add(LevelEvent.Gate(95f, commitUntilZ: 0f,
-                new GateOption(-1, GateOp.Add, 40),
-                new GateOption(+1, GateOp.Multiply, 2)));
-
-            l.events.Add(LevelEvent.Enemy(160f, 70, isFinal: true));
-            return l;
+            foreach (var w in warn) Console.WriteLine("   경고: " + w);
+            foreach (var f in fail) Console.WriteLine("   ** 실패: " + f + " **");
+            return fail.Count > 0 ? 1 : 0;
         }
     }
 }

@@ -1,0 +1,15 @@
+# 1-3 — 적보다 많아야 한다 (기획서 §6.2: "적 군단")
+#
+# 중간 전투가 처음 나온다. **전투는 병력을 깎고**, 그 손실은 *적 수와 수치*로 정해진다 —
+# 많이 들고 가도 덜 죽지 않고 **버틸 뿐**이다 (`docs/DESIGN.md` §3c). 그래서 중간 전투 앞에서
+# 고른 값이 최종 전투까지 **그대로 따라온다**.
+chapter 1
+index 3
+units 12
+road 7
+length 160
+
+gate 25 | L add 30 | R mul 3
+enemy 70 count 25
+gate 105 | L add 35 | R mul 2
+enemy 150 count 60 final
