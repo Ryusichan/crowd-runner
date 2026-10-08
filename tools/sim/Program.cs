@@ -30,6 +30,7 @@ namespace CrowdRunner.Tools
             if (files.Length == 0) { Console.WriteLine("레벨이 하나도 없다: " + dir); return 1; }
 
             int bad = 0;
+            var rows = new List<(LevelData level, List<(string path, Run r)> paths)>();
             foreach (var f in files)
             {
                 string err;
@@ -42,9 +43,13 @@ namespace CrowdRunner.Tools
                     bad++;
                     continue;
                 }
-                if (Report(level) != 0) bad++;
+                var chapterRow = Report(level, out int rc);
+                if (rc != 0) bad++;
+                rows.Add((level, chapterRow));
                 Console.WriteLine();
             }
+
+            if (JudgeChapter(rows) != 0) bad++;
 
             Console.WriteLine(bad == 0
                 ? $"레벨 {files.Length} 개 — 전부 통과"
@@ -52,7 +57,7 @@ namespace CrowdRunner.Tools
             return bad > 0 ? 1 : 0;
         }
 
-        static int Report(LevelData level)
+        static List<(string path, Run r)> Report(LevelData level, out int rc)
         {
             int gates = 0;
             foreach (var e in level.events) if (e.kind == EventKind.Gate) gates++;
@@ -73,7 +78,54 @@ namespace CrowdRunner.Tools
                 Console.WriteLine($"| {path} | {(r.won ? "클리어" : "실패")} | {bio} | {r.units} | {r.peak} | {r.lost:0} | {r.zone:0} | {r.killed:0} | {r.k:0.00} | {r.time:0.0}s |");
             }
 
-            return Judge(level, results, gates);
+            rc = Judge(level, results, gates);
+            return results;
+        }
+
+        /// <summary>
+        /// **장 전체를 한 번 본다.** 판 하나씩 보는 판정으로는 **절대** 볼 수 없는 결함이 있다.
+        ///
+        /// 세션 B 가 손가락을 한쪽에 고정하고 열 판을 돌려 찾았다 (2026-10-09):
+        /// **왼쪽 고정으로 10/10 클리어.** 그러면 이 게임의 유일한 조작이 판단이 아니라
+        /// **방향 하나**가 되고, 기획서 §3.4 가 금지한 자리다.
+        ///
+        /// 충격적인 것은 **그 수가 이미 내 표 안에 있었다**는 점이다. 항상-왼쪽은 `LL…L`
+        /// 경로이고 1-7 에서 32, 1-9 에서 58 로 둘 다 그 판의 최선이었다. 판 하나만 보면
+        /// *"지는 경로가 있다"* 로 전부 통과한다 — **결함이 판들 사이에 있었다.**
+        ///
+        /// 교훈: 검사의 **단위**가 결함의 단위보다 작으면, 그 검사는 통과를 보장하지 않는다.
+        /// 각 판에 나쁜 선택이 있다는 것과, 플레이어가 **고를 필요가 있다**는 것은 다른 말이다.
+        /// </summary>
+        static int JudgeChapter(List<(LevelData level, List<(string path, Run r)> paths)> rows)
+        {
+            if (rows.Count < 2) return 0;
+            Console.WriteLine("## 장 전체 — **고정된 비선택으로 충분한가**");
+
+            int fails = 0;
+            foreach (var side in new[] { -1, +1 })
+            {
+                int won = 0, grades = 0;
+                var lost = new List<string>();
+                foreach (var (level, paths) in rows)
+                {
+                    // 한쪽에 계속 붙어 있는 것 = 모든 비트가 같은 경로 (`LL…L` 또는 `RR…R`)
+                    var r = paths[side < 0 ? 0 : paths.Count - 1].r;
+                    if (r.won) { won++; grades += Grade.Of(true, r.units, level.rating); }
+                    else lost.Add(level.Code);
+                }
+                string name = side < 0 ? "왼쪽 고정" : "오른쪽 고정";
+                Console.WriteLine($"   {name}: {won}/{rows.Count} 클리어 · ☣ {grades}/{rows.Count * Grade.Max}"
+                                  + (lost.Count > 0 ? " · 막히는 판 " + string.Join(",", lost) : ""));
+
+                // **전부 깨면 실패.** 한 판이라도 막히면, 거기서 플레이어는 고르는 것을 배운다
+                if (won == rows.Count)
+                {
+                    Console.WriteLine($"   ** 실패: {name}으로 **전 판이 깨진다** — 조작이 판단이 아니라 방향 하나가 된다 **");
+                    fails++;
+                }
+            }
+            Console.WriteLine();
+            return fails;
         }
 
         struct Run { public bool won; public int units, peak; public float lost, zone, killed, k, time; }
