@@ -61,7 +61,18 @@ namespace CrowdRunner.Core
     /// </summary>
     public class LevelData
     {
-        public int id;
+        /// <summary>
+        /// **도시 번호** (1 = 부산). 월드맵이 좀비퀸 것 그대로라 **그 번호 체계를 따른다** —
+        /// 도시 하나 = 10 판 (`docs/DESIGN.md` §3b). 번호가 다르면 월드맵이 이 레벨을 못 찾고,
+        /// 그러면 메타를 통째로 가져온 이득이 사라진다.
+        /// </summary>
+        public int chapter = 1;
+        /// <summary>도시 안에서 몇 번째 판인가 (1~10). `chapter` 와 함께 "1-3" 을 만든다</summary>
+        public int index = 1;
+
+        /// <summary>`"1-3"` — 화면·로그·검사기가 판을 가리키는 이름</summary>
+        public string Code => chapter + "-" + index;
+
         public int initialUnits = 10;
         public float roadWidth = 7f;
         public float forwardSpeed = 4.5f;
@@ -74,6 +85,10 @@ namespace CrowdRunner.Core
         /// </summary>
         public string Validate()
         {
+            // 번호부터 본다 — 월드맵이 이 둘로 판을 찾는다. 틀리면 **판이 목록에서 사라지고**,
+            // 그건 "레벨이 안 보인다" 로만 나타나서 원인을 찾기 어렵다
+            if (chapter < 1) return "chapter 가 " + chapter + " 다 — 도시 번호는 1 부터다 (1 = 부산)";
+            if (index < 1 || index > 10) return "index 가 " + index + " 다 — 도시 하나는 10 판이다";
             if (initialUnits <= 0) return "initialUnits 가 " + initialUnits + " 다 — 0 명으로는 시작할 수 없다";
             if (forwardSpeed <= 0f) return "forwardSpeed 가 0 이하다 — 전진하지 않는 판은 끝나지 않는다";
             if (events.Count == 0) return "사건이 하나도 없다 — 그냥 길이다";
