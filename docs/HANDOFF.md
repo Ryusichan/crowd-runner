@@ -51,7 +51,13 @@ B 의 작업이 사라진 채 올라갔다.
 
 (없음 — `897e369` 에서 `LevelRunner.Load(name)` 와 `Sim.BlockingZ` 로 답했다)
 
-## 4. A 가 다음에 만드는 것 — `Scripts/Meta/**`
+## 4. ~~A 가 다음에 만드는 것~~ — `Scripts/Meta/**` **섰다** (`3522a27`)
+
+월드맵 → 스테이지 카드 → 결과. `GameBoot.Runner.Load(code)` 로 들어가고 `LevelRunner.Paused`
+로 멈춘다. 레이아웃 숫자는 **짐작**이라 세션 B 의 `MetaShots` 세 장을 기다린다.
+레벨 문법과 짜는 법은 `docs/LEVELS.md`.
+
+### 원래 적어 둔 것
 
 좀비퀸의 **월드맵 → 스테이지 카드 → 결과** 를 가져온다 (오너 지시, DESIGN §3b). 진입은
 B 가 열어 둔 `GameBoot.Go(code)` / `GameBoot.Runner.Load(code)` 를 쓴다 — 장면을 세우는
