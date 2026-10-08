@@ -304,17 +304,37 @@ namespace CrowdRunner.Meta
                                    F(UiKit.Title), UiKit.Text, TextAnchor.MiddleCenter, true);
             UiKit.Place(left.rectTransform, mid, new Vector2(0f, -30f), new Vector2(900f, 68f));
 
-            // **다음 등급까지 몇 명 부족한지 말해 준다.** 말해 주지 않으면 플레이어는
-            // *"더 잘할 수 있었다"* 는 것만 알고 **얼마나** 인지 모른다 — 그러면 다시 하기가
-            // 도박이 된다. 숫자가 붙으면 "게이트 하나만 다르게" 가 된다
-            if (lv != null && lv.rating != null && lv.rating.Length == 3 && resultGrade < Grade.Max)
+            // **이긴 화면과 진 화면은 다른 것을 말해야 한다.**
+            //
+            // 처음에는 한 줄을 둘 다에 썼더니 **진 화면에 `☣ 기준 22 명` 이 떴다** (세션 B).
+            // 졌는데 보상 줄이 그대로 나오면 *"졌는데 22 를 받았나"* 로 읽힌다 — "기준" 이라는
+            // 말도 그 자리에서는 읽히지 않는다.
+            //
+            // 이겼으면 **다음 등급까지 얼마나 모자란지** 가 다시 할 이유가 된다.
+            // 졌으면 그 수는 쓸모가 없다 — 등급은 고사하고 못 깼으니까. 대신 **그 판이
+            // 가르치려던 것**을 보여 준다. 진 사람에게 필요한 것은 점수가 아니라 **단서**다.
+            if (resultWon && lv != null && lv.rating != null && lv.rating.Length == 3 && resultGrade < Grade.Max)
             {
                 int need = lv.rating[resultGrade] - resultRemaining;
-                string more = resultWon && need > 0
-                    ? Bio(resultGrade + 1) + " 까지 " + need + " 명"
-                    : Bio(resultGrade + 1) + " 기준 " + lv.rating[resultGrade] + " 명";
+                string more = need > 0
+                    ? Bio(resultGrade + 1) + " 까지 " + need + " 명 더"
+                    : Bio(resultGrade + 1) + " 는 " + lv.rating[resultGrade] + " 명부터";
                 var hint = UiKit.Label("Hint", root, more, F(UiKit.Body), UiKit.Yellow, TextAnchor.MiddleCenter, true);
                 UiKit.Place(hint.rectTransform, mid, new Vector2(0f, -104f), new Vector2(900f, 52f));
+            }
+            else if (!resultWon && lv != null && lv.teaches.Length > 0)
+            {
+                // 아래 단추와 내용 사이가 비던 자리다 (세션 B 가 450 px 을 쟀다).
+                // 여백을 줄이는 대신 **거기에 쓸모 있는 것**을 넣는다
+                var card = UiKit.Panel("Tip", root, UiKit.Hex(0x2a2138));
+                UiKit.Place(card.rectTransform, mid, new Vector2(0f, -200f), new Vector2(880f, 200f));
+                UiKit.SetRadius(card, 24f);
+
+                var cap = UiKit.Label("TipCap", card.rectTransform, "이 구역이 묻는 것", F(UiKit.Caption), UiKit.Dim, TextAnchor.UpperCenter);
+                UiKit.Place(cap.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -24f), new Vector2(820f, 40f));
+
+                var tip = UiKit.Label("TipText", card.rectTransform, lv.teaches, F(UiKit.Body), UiKit.Text, TextAnchor.UpperCenter, true);
+                UiKit.Place(tip.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -82f), new Vector2(820f, 96f));
             }
 
             var next = NextLevel();
