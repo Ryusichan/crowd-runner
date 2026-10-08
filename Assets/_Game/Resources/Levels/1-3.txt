@@ -9,6 +9,8 @@
 # 안 변하고(L↔R 이름만 바뀐다) 장 전체의 "왼쪽이 좋다" 규칙성만 깨진다.
 chapter 1
 index 3
+name Nampo-dong Street
+teaches 중간에 한 번 부딪히고 다시 고른다
 units 12
 road 7
 length 160

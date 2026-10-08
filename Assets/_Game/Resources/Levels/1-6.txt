@@ -7,6 +7,8 @@
 # 싸우고 남은 수가 어느 쪽이든 비슷해서, **두 답이 같은 데로 떨어졌다.**
 chapter 1
 index 6
+name Haeundae Patrol
+teaches 전투로 줄어든 군단을 다시 늘린다
 units 16
 road 7
 length 200

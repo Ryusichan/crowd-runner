@@ -122,6 +122,16 @@ namespace CrowdRunner.Core
         /// <summary>`"1-3"` — 화면·로그·검사기가 판을 가리키는 이름</summary>
         public string Code => chapter + "-" + index;
 
+        /// <summary>
+        /// 화면에 뜨는 이름 (`"Choryang Alley"`). **좀비퀸과 같은 부산 지명을 쓴다** —
+        /// 월드맵을 공유하므로 두 게임이 같은 세계로 보이는 것이 맞다 (`docs/DESIGN.md` §3b).
+        /// 비어 있으면 화면이 `Code` 를 쓴다 — 그러면 디버그 화면처럼 보인다.
+        /// </summary>
+        public string name = "";
+
+        /// <summary>그 판이 **가르치는 것** 한 줄. 스테이지 카드에 뜬다 (기획서 §6.2 의 순서)</summary>
+        public string teaches = "";
+
         public int initialUnits = 10;
         public float roadWidth = 7f;
         public float forwardSpeed = 4.5f;

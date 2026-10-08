@@ -66,6 +66,11 @@ namespace CrowdRunner.Core
 
         static string ParseLine(LevelData l, string line)
         {
+            // **글 두 줄은 낱말로 쪼개지 않는다.** 이름에 띄어쓰기가 들어가므로
+            // (`name Choryang Alley`) 낱말 단위로 읽으면 첫 낱말만 남는다
+            if (line.StartsWith("name ")) { l.name = line.Substring(5).Trim(); return null; }
+            if (line.StartsWith("teaches ")) { l.teaches = line.Substring(8).Trim(); return null; }
+
             var bar = line.Split('|');
             var head = Words(bar[0]);
             if (head.Count == 0) return "빈 줄이 아닌데 낱말이 없다";

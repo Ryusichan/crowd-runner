@@ -70,7 +70,12 @@ namespace CrowdRunner.EditorTools
                           $"사건 {level.events.Count,2} (게이트 {gates} 적 {enemies} 벽 {walls} 지역 {zonesN}) · " +
                           $"가만히(오른쪽) {sR.State} 잔여 {sR.Units,3} 최고 {sR.PeakUnits,3} {stR / 60f:F0}s · " +
                           $"왼쪽고정 {sL.State} 잔여 {sL.Units,3} 최고 {sL.PeakUnits,3} {stL / 60f:F0}s · " +
-                          $"쓰러짐 전투 {fx.SpawnedCombat,3}/{sL.AlliesLost - sL.ZoneLost:F0} 지역 {fx.SpawnedZone,3}/{sL.ZoneLost:F0}");
+                          $"쓰러짐 전투 {fx.SpawnedCombat,3}/{sL.AlliesLost:F0} 지역 {fx.SpawnedZone,3}/{sL.ZoneLost:F0}");
+                // **분모를 확인한다.** 1-7 에서 `전투 34/-8` 이 나왔다 — `AlliesLost - ZoneLost` 로
+                // 뺐는데 `AlliesLost` 는 **전투 손실만** 센다 (`Sim` 의 두 카운터가 따로다).
+                // 음수 분모는 눈에 걸려서 잡혔지만, 분모가 양수로 틀렸으면 비율이 그럴듯해 보였다
+                if (sL.AlliesLost < 0f || sL.ZoneLost < 0f)
+                    Debug.LogError($"[CR] {name}: 손실 카운터가 음수다 (전투 {sL.AlliesLost} 지역 {sL.ZoneLost})");
                 if (sR.State == SimState.Won) wonR++;
                 if (sL.State == SimState.Won) wonL++;
                 ok++;

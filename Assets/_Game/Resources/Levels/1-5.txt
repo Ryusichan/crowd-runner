@@ -4,6 +4,8 @@
 # `10×3+40 = 70` 이다. 1-2 가 가르친 것(적을 땐 더하기)을 **순서**로 다시 묻는다.
 chapter 1
 index 5
+name Busan Medical Center
+teaches 같은 게이트라도 순서가 결과를 바꾼다
 units 10
 road 7
 length 185

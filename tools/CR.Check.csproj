@@ -16,6 +16,12 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)..\Assets\_Game\Scripts\**\*.cs" />
   </ItemGroup>
+  <!-- ⚠ **이 목록이 프로젝트의 패키지와 같아야 한다.**
+       2026-10-09: `UnityEngine.UI.dll` 을 Unity **템플릿** 경로에서 참조하고 있었는데
+       `Packages/manifest.json` 에는 `com.unity.ugui` 가 없었다 → 검사기는 **오류 0** 을 찍고
+       Unity 배치는 `UnityEngine.UI 없음` 으로 **12 개** 오류를 냈다. 좀비퀸 §0c-14 와 같은 모양:
+       *"컴파일된다" 가 어느 환경에서 컴파일된다는 뜻인지* 를 안 물었다.
+       패키지를 추가하거나 뺄 때는 **여기도 같이** 본다. -->
   <ItemGroup>
     <Reference Include="UnityEngine.AccessibilityModule"><HintPath>D:\Unity\6000.3.24f1\Editor\Data\Managed\UnityEngine\UnityEngine.AccessibilityModule.dll</HintPath></Reference>
     <Reference Include="UnityEngine.AdaptivePerformanceModule"><HintPath>D:\Unity\6000.3.24f1\Editor\Data\Managed\UnityEngine\UnityEngine.AdaptivePerformanceModule.dll</HintPath></Reference>

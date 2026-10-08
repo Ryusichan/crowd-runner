@@ -5,6 +5,8 @@
 # 큰 군단이 처음으로 **불리해지는** 자리다.
 chapter 1
 index 9
+name Busan Station Line
+teaches 좁은 길에서는 앞줄만 싸운다
 units 30
 road 8
 length 240

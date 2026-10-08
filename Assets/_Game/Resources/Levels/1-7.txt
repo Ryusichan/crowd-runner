@@ -9,6 +9,8 @@
 # 안 변하고(L↔R 이름만 바뀐다) 장 전체의 "왼쪽이 좋다" 규칙성만 깨진다.
 chapter 1
 index 7
+name Haeundae Police Station
+teaches 녹는 길 — 머릿수에 비례해 잃는다
 units 20
 road 7
 length 210

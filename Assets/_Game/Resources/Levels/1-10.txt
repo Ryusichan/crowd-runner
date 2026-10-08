@@ -18,6 +18,8 @@
 # 안 변하고(L↔R 이름만 바뀐다) 장 전체의 "왼쪽이 좋다" 규칙성만 깨진다.
 chapter 1
 index 10
+name Busan Port Last Stand
+teaches 최종 방어선 — 배운 것을 전부 쓴다
 units 25
 road 7
 length 290

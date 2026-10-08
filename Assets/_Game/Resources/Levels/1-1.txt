@@ -5,6 +5,8 @@
 # 이 판은 **게이트를 하나만** 둔다 (선택지가 하나뿐인 길에는 그 규칙을 적용하지 않는다).
 chapter 1
 index 1
+name Choryang Alley
+teaches 게이트를 지나면 군단이 는다
 units 10
 road 7
 length 110

@@ -81,9 +81,22 @@ namespace CrowdRunner.Game
             return true;
         }
 
+        /// <summary>
+        /// **멈춘다** — 메타 화면(월드맵·스테이지 카드·결과)이 떠 있는 동안.
+        ///
+        /// 세션 B 가 오버레이 캔버스를 세우면서 *"메타가 떠 있는 동안 게임은 멈추는 것이 아니라
+        /// 가려진다 — 멈추는 것은 `LevelRunner` 쪽 결정"* 이라고 남겼다. 맞다. 그래서 여기 둔다.
+        ///
+        /// **시간도 같이 멈춘다**: 누적기를 비우지 않고 `Update` 자체를 비켜난다. 안 그러면
+        /// 메타 화면에 머문 시간이 `accumulator` 에 쌓여 **돌아오는 순간 군단이 앞으로 뛴다**
+        /// (0.25 s 상한이 있어 한 번에 15 틱이지만, 그 15 틱이 하필 게이트 앞이면 고를 틈이 없다).
+        /// 그리고 `Sim.Time` 이 안 가므로 **판 시간이 메뉴에서 늘지 않는다** — 좀비퀸도 같은 규칙이다.
+        /// </summary>
+        public bool Paused { get; set; }
+
         void Update()
         {
-            if (Sim == null) return;
+            if (Sim == null || Paused) return;
             ReadDrag();
 
             // **고정 스텝으로 밀어 넣는다.** `Time.deltaTime` 을 그대로 주면 기기마다 결과가 달라지고,

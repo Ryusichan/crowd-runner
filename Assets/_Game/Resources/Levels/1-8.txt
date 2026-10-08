@@ -4,6 +4,8 @@
 # (많이 들고 가도 덜 죽지 않는다) 두 번을 버티려면 **그 전에 충분히 받아야** 한다.
 chapter 1
 index 8
+name Centum Fire Station
+teaches 세 번 부딪힌다. 중간 보충이 없다
 units 20
 road 7
 length 230
