@@ -1,0 +1,17 @@
+# 1-9 — 좁은 길에서 큰 군단 (기획서 §6.2: "좁은 경로")
+#
+# 좁으면 **전선이 줄어 전투가 길어진다.** 좁은 것만으로는 손실이 안 늘지만(§3c)
+# 그 구간에 **지역이 깔려 있으면** 오래 있는 만큼 녹는다 — 좁음과 지역의 곱이 이 판이다.
+# 큰 군단이 처음으로 **불리해지는** 자리다.
+chapter 1
+index 9
+units 30
+road 8
+length 240
+
+gate 25 commit 150 | L add 40 | R mul 3
+narrow 60 width 2.7 len 70 lane R
+zone 60 dps 1.1 len 70 lane R
+enemy 100 count 45 lane L
+gate 160 | L add 60 | R mul 2
+enemy 230 count 130 final

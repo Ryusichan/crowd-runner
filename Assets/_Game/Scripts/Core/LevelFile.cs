@@ -29,6 +29,7 @@ namespace CrowdRunner.Core
     /// gate 20 commit 90 | L add 30 | R mul 3
     /// zone 30 dps 1.2 len 40 lane R
     /// wall 55 hp 600 lane R
+    /// narrow 70 width 3 len 30
     /// enemy 60 count 15 lane L
     /// enemy 160 count 70 final
     /// </code>
@@ -121,6 +122,17 @@ namespace CrowdRunner.Core
                     if (!TryKeyNum(head, "hp", out hp)) return "`hp <수>` 가 없다";
                     int lane; TryKeyLane(head, out lane);
                     l.events.Add(LevelEvent.Wall(z, hp, lane));
+                    return null;
+                }
+
+                case "narrow":
+                {
+                    float z, w, len;
+                    string e = Pos(head, out z); if (e != null) return e;
+                    if (!TryKeyNum(head, "width", out w)) return "`width <수>` 가 없다";
+                    if (!TryKeyNum(head, "len", out len)) return "`len <수>` 가 없다";
+                    int lane; TryKeyLane(head, out lane);
+                    l.events.Add(LevelEvent.Narrow(z, w, len, lane));
                     return null;
                 }
 

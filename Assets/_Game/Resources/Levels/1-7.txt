@@ -1,0 +1,16 @@
+# 1-7 — 위험한 길과 안전한 길 (기획서 §6.2: "감소 게이트")
+#
+# 처음으로 **지는 경로**가 있다. 오른쪽은 크게 받지만 **녹는 길**을 지난다 —
+# 지역은 머릿수에 비례해 깎으므로 **많이 받을수록 많이 녹는다** (`docs/DESIGN.md` §3c).
+# 왼쪽은 적게 받고 깨끗하다. 게이트가 가두므로 **고르면 끝까지 그 길**이다.
+chapter 1
+index 7
+units 20
+road 7
+length 210
+
+gate 25 commit 120 | L add 25 | R mul 3
+zone 35 dps 1.6 len 70 lane R
+enemy 90 count 30 lane L
+gate 135 | L add 40 | R mul 2
+enemy 195 count 100 final

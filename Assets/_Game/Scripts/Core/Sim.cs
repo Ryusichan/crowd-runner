@@ -76,6 +76,8 @@ namespace CrowdRunner.Core
 
         /// <summary>지금 밟고 있는 지속 피해 지역들 (겹칠 수 있다)</summary>
         readonly List<int> zones = new List<int>();
+        /// <summary>지금 지나는 좁은 구간들. **가장 좁은 것**이 이긴다 — 겹치면 더 답답한 쪽이 맞다</summary>
+        readonly List<int> narrows = new List<int>();
         /// <summary>지역에서 녹은 누계 — 전투 손실과 **따로** 센다. 섞으면 어느 쪽이 비쌌는지 못 본다</summary>
         public float ZoneLost { get; private set; }
 
@@ -110,7 +112,7 @@ namespace CrowdRunner.Core
             Time += dt;
 
             // 좌우는 **막혀 있어도** 움직인다 — 싸우는 중에 옆으로 못 비키면 조작이 끊긴 느낌이 난다
-            float half = level.roadWidth * 0.5f;
+            float half = RoadWidth * 0.5f;
             if (desiredX > half) desiredX = half;
             if (desiredX < -half) desiredX = -half;
             X = desiredX;
@@ -124,6 +126,11 @@ namespace CrowdRunner.Core
 
             // **막혀 있어도 돈다.** 지역 안에서 벽을 때리고 있으면 그동안 계속 녹는 것이 맞다 —
             // 그 자리가 이 게임에서 제일 비싼 자리이고, 레벨이 그걸 노리고 짜일 수 있어야 한다
+            for (int k = narrows.Count - 1; k >= 0; k--)
+            {
+                var nv = level.events[narrows[k]];
+                if (Z > nv.z + nv.zoneLength) narrows.RemoveAt(k);
+            }
             if (zones.Count > 0) { TickZones(dt); if (State == SimState.Lost) return; }
 
             if (BlockingIndex >= 0) { TickBlocking(dt); return; }
@@ -152,6 +159,25 @@ namespace CrowdRunner.Core
         /// 리더가 선 쪽 (−1 왼쪽 / +1 오른쪽). **갇혀 있는 동안은 고른 쪽으로 고정된다** —
         /// 두 길이 칸막이로 갈려 있기 때문이고, 그래야 게이트 선택에 결과가 붙는다.
         /// </summary>
+        /// <summary>
+        /// 지금 자리의 길 폭. 좁은 구간 안이면 **가장 좁은 것**이 이긴다 — 겹치면 더 답답한 쪽이 맞다.
+        /// 전투·벽·좌우 제한이 전부 이 값을 쓴다. `level.roadWidth` 를 직접 읽는 곳이 남아 있으면
+        /// **좁은 구간이 그 자리에서만 안 걸린다** — 조용히 틀리는 종류다.
+        /// </summary>
+        public float RoadWidth
+        {
+            get
+            {
+                float w = level.roadWidth;
+                for (int k = 0; k < narrows.Count; k++)
+                {
+                    float nw = level.events[narrows[k]].narrowWidth;
+                    if (nw < w) w = nw;
+                }
+                return w;
+            }
+        }
+
         public int Side => Z < commitUntil ? commitLane : (X < 0f ? -1 : +1);
 
         float commitUntil = -1f;
@@ -188,7 +214,7 @@ namespace CrowdRunner.Core
                     int best = 0; float bestD = float.MaxValue;
                     for (int k = 0; k < e.options.Length; k++)
                     {
-                        float lx = e.options[k].lane * (level.roadWidth * 0.25f);
+                        float lx = e.options[k].lane * (RoadWidth * 0.25f);
                         float d = X - lx; if (d < 0f) d = -d;
                         if (d < bestD) { bestD = d; best = k; }
                     }
@@ -214,6 +240,9 @@ namespace CrowdRunner.Core
                     blockingWallHp = e.wallHp;
                     State = SimState.Breaking; Last.wallBegan = true;
                     break;
+                case EventKind.Narrow:
+                    narrows.Add(i);
+                    break;
                 case EventKind.Zone:
                     // 막지 않는다 — **지나가면서** 깎인다. 그래서 전진이 멈추는 전투·벽과 다르다
                     zones.Add(i);
@@ -228,7 +257,7 @@ namespace CrowdRunner.Core
             {
                 float a0 = Allies, e0 = blockingEnemies;
                 float al = Allies;
-                Combat.Tick(ref al, ref blockingEnemies, ally, zombie, level.roadWidth, dt);
+                Combat.Tick(ref al, ref blockingEnemies, ally, zombie, RoadWidth, dt);
                 Allies = al;
                 AlliesLost += a0 - Allies;
                 EnemiesKilled += e0 - blockingEnemies;
@@ -248,7 +277,7 @@ namespace CrowdRunner.Core
             }
             else // Wall
             {
-                Combat.TickWall(Allies, ref blockingWallHp, ally, level.roadWidth, dt);
+                Combat.TickWall(Allies, ref blockingWallHp, ally, RoadWidth, dt);
                 if (blockingWallHp <= 0f) { BlockingIndex = -1; State = SimState.Running; Last.wallEnded = true; }
             }
         }

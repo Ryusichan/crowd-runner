@@ -22,7 +22,7 @@ namespace CrowdRunner.Core
         public GateOption(int lane, GateOp op, int value) { this.lane = lane; this.op = op; this.value = value; }
     }
 
-    public enum EventKind { Gate, Enemy, Wall, Zone }
+    public enum EventKind { Gate, Enemy, Wall, Zone, Narrow }
 
     /// <summary>
     /// 길 위의 한 사건. **`z` 하나로 줄 세운다** — 이 게임은 선형이고, 그래서 위치는 전진 거리다.
@@ -77,6 +77,16 @@ namespace CrowdRunner.Core
         /// <summary>구간 길이(m). 지나는 **시간**이 곧 비용이라, 느릴수록·길수록 비싸다</summary>
         public float zoneLength;
 
+        // ---- Narrow ----
+        /// <summary>
+        /// 이 구간의 길 폭(m). **전선이 좁아진다** — 한 번에 싸우는 수가 줄어든다.
+        ///
+        /// 좁은 것 **자체로는 손실이 안 는다** (전투 손실은 적 수와 수치로 정해진다, §3c).
+        /// 느는 것은 **시간**이고, 그래서 **지역과 겹칠 때** 비로소 아프다 — 좁은 길에서 오래
+        /// 싸우는 동안 계속 녹는다. 기획서 §6.2 의 9 판("제한된 공간에서 대군 운영")이 그 조합이다.
+        /// </summary>
+        public float narrowWidth;
+
         public static LevelEvent Gate(float z, float commitUntilZ, params GateOption[] options)
             => new LevelEvent { kind = EventKind.Gate, z = z, commitUntilZ = commitUntilZ, options = options };
 
@@ -85,6 +95,10 @@ namespace CrowdRunner.Core
 
         public static LevelEvent Wall(float z, float hp, int lane = 0)
             => new LevelEvent { kind = EventKind.Wall, z = z, wallHp = hp, lane = lane };
+
+        /// <summary>좁아지는 구간. `zoneLength` 를 길이로 쓴다 (같은 뜻이라 칸을 또 만들지 않는다)</summary>
+        public static LevelEvent Narrow(float z, float width, float length, int lane = 0)
+            => new LevelEvent { kind = EventKind.Narrow, z = z, narrowWidth = width, zoneLength = length, lane = lane };
 
         /// <summary>지속 피해 지역 (기획서 §5). `lane` 을 주면 그쪽 길에만 깔린다</summary>
         public static LevelEvent Zone(float z, float dps, float length, int lane = 0)
@@ -154,6 +168,15 @@ namespace CrowdRunner.Core
                     return "벽 #" + i + " 의 체력이 " + e.wallHp + " 다";
                 else if (e.kind == EventKind.Zone && (e.dps <= 0f || e.zoneLength <= 0f))
                     return "지역 #" + i + " 의 dps/길이가 " + e.dps + "/" + e.zoneLength + " 다";
+                else if (e.kind == EventKind.Narrow)
+                {
+                    if (e.zoneLength <= 0f) return "좁은 구간 #" + i + " 의 길이가 " + e.zoneLength + " 다";
+                    // 넓어지는 것은 좁은 구간이 아니다 — 그렇게 쓰면 읽는 사람이 반대로 이해한다
+                    if (e.narrowWidth <= 0f || e.narrowWidth >= roadWidth)
+                        return "좁은 구간 #" + i + " 의 폭이 " + e.narrowWidth + " 로 길 폭(" + roadWidth + ") 이상이다";
+                    // 한 명도 못 서면 전투가 끝나지 않는다
+                    if (e.narrowWidth < 1.0f) return "좁은 구간 #" + i + " 이 " + e.narrowWidth + " m 다 — 한 명도 못 선다";
+                }
 
                 if (e.lane < -1 || e.lane > 1) return "사건 #" + i + " 의 lane 이 " + e.lane + " 다 (−1/0/+1)";
                 // **최종 방어선을 한쪽에만 두면 반대쪽은 그냥 지나간다** — 이기는 조건이 사라진다

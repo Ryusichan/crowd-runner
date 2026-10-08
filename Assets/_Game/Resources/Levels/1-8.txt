@@ -1,0 +1,15 @@
+# 1-8 — 전투가 두 번 (기획서 §6.2: "전투 구간 2개")
+#
+# 중간 전투가 둘이라 **손실이 두 번 쌓인다**. 전투 손실은 적 수로 정해지므로
+# (많이 들고 가도 덜 죽지 않는다) 두 번을 버티려면 **그 전에 충분히 받아야** 한다.
+chapter 1
+index 8
+units 20
+road 7
+length 230
+
+gate 25 | L add 45 | R mul 3
+enemy 75 count 45
+gate 115 | L add 50 | R mul 2
+enemy 165 count 60
+enemy 220 count 90 final
