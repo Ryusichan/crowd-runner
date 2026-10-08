@@ -107,22 +107,23 @@ namespace CrowdRunner.Tools
         {
             if (rows.Count == 0) return;
             Console.WriteLine("## 장 요약 — 사람이 보는 표");
-            Console.WriteLine("| 판 | 이름 | 가르치는 것 | 시작 | 최고 | 클리어 | 잔여 | ☣ 기준 | 시간 |");
-            Console.WriteLine("|---|---|---|---|---|---|---|---|---|");
+            Console.WriteLine("| 판 | 이름 | 가르치는 것 | 시작 | 최고 | 클리어 | 잔여 | ☣ 기준 | 최대 증감 | 시간 |");
+            Console.WriteLine("|---|---|---|---|---|---|---|---|---|---|");
             foreach (var (level, paths) in rows)
             {
-                int won = 0, best = 0, worst = int.MaxValue, peak = 0;
+                int won = 0, best = 0, worst = int.MaxValue, peak = 0, delta = 0;
                 float time = 0f;
                 foreach (var (_, r) in paths)
                 {
                     if (r.won) { won++; if (r.units > best) best = r.units; if (r.units < worst) worst = r.units; }
                     if (r.peak > peak) peak = r.peak;
                     if (r.time > time) time = r.time;
+                    if (r.maxDelta > delta) delta = r.maxDelta;
                 }
                 if (won == 0) worst = 0;
                 string rate = level.rating != null && level.rating.Length == 3
                     ? level.rating[0] + "/" + level.rating[1] + "/" + level.rating[2] : "-";
-                Console.WriteLine($"| {level.Code} | {level.name} | {level.teaches} | {level.initialUnits} | {peak} | {won}/{paths.Count} | {worst}~{best} | {rate} | {time:0}s |");
+                Console.WriteLine($"| {level.Code} | {level.name} | {level.teaches} | {level.initialUnits} | {peak} | {won}/{paths.Count} | {worst}~{best} | {rate} | +{delta} | {time:0}s |");
             }
             Console.WriteLine();
         }
@@ -256,7 +257,7 @@ namespace CrowdRunner.Tools
 
         static int[] Fill(int n, int v) { var a = new int[n]; for (int i = 0; i < n; i++) a[i] = v; return a; }
 
-        struct Run { public bool won; public int units, peak; public float lost, zone, killed, k, time; }
+        struct Run { public bool won; public int units, peak; public float lost, zone, killed, k, time; public int maxDelta; }
 
         /// <summary>
         /// 경로 하나. `mask` 의 비트가 게이트마다 **왼쪽(0) / 오른쪽(1)** 을 정한다 —
@@ -269,6 +270,7 @@ namespace CrowdRunner.Tools
             float half = level.roadWidth * 0.5f;
 
             // 다음 게이트를 **미리 보고** 그쪽으로 붙어 선다 — 사람도 게이트를 읽고 미리 옮긴다
+            int maxDelta = 0;
             for (int step = 0; step < 60 * 600 && sim.State != SimState.Won && sim.State != SimState.Lost; step++)
             {
                 int lane = 0;
@@ -279,6 +281,16 @@ namespace CrowdRunner.Tools
                     lane = ((mask >> bit) & 1) == 0 ? -1 : +1;
                 }
                 sim.Step(lane * half * 0.5f);
+
+                // **게이트가 띄우는 실제 증감.** 화면은 `×3` 아래에 `+28` 을 같이 띄우는데
+                // (세션 B, `View/GatePassFx`), 그 글자 길이가 게이트 네모의 폭 상한을 정한다.
+                // 가장 긴 수가 어디서 나오는지는 **돌려 봐야** 안다 — 곱셈의 증감은 그때
+                // 병력에 비례하므로 레벨 글만 봐서는 모른다
+                if (sim.Last.gateFired)
+                {
+                    int d = (int)System.Math.Abs(sim.Last.gateAfter - sim.Last.gateBefore);
+                    if (d > maxDelta) maxDelta = d;
+                }
             }
 
             return new Run
@@ -291,6 +303,7 @@ namespace CrowdRunner.Tools
                 killed = sim.EnemiesKilled,
                 k = sim.LossCoefficient,
                 time = sim.Time,
+                maxDelta = maxDelta,
             };
         }
 
@@ -313,6 +326,7 @@ namespace CrowdRunner.Tools
                 killed = sim.EnemiesKilled,
                 k = sim.LossCoefficient,
                 time = sim.Time,
+                maxDelta = 0,   // 고정 주행은 게이트를 안 고르므로 재지 않는다
             };
         }
 
