@@ -39,6 +39,11 @@ namespace CrowdRunner.Tests
 
             var runner = GameBoot.Go("1-3");
             Assert.IsNotNull(runner.Sim, "판을 못 띄웠다 — " + runner.Error);
+            // **애니메이션을 끈다.** 1 차 촬영에서 월드맵을 `ScreenIn` **중간**에 찍었고,
+            // 제목 화소가 배경과 같은 값(27,28,37)으로 나와서 *"디자인이 어둡다"* 로 보고했다 —
+            // **잴 수 없는 것에 맞춰 고칠 뻔한** 자리다 (세션 A 가 화소를 떠서 잡았다).
+            // 카드·결과는 `ModalIn` 이 끝난 뒤라 멀쩡했고, 그래서 **한 장만 틀렸다** — 더 나쁘다.
+            MetaFlow.Instant = true;
             flow = new GameObject("MetaFlow").AddComponent<MetaFlow>();
             yield return null;
             Directory.CreateDirectory(Dir);
@@ -145,6 +150,24 @@ namespace CrowdRunner.Tests
             return (minY, maxY, minX, maxX, n);
         }
 
+        /// <summary>
+        /// **아직 움직이는 중이면 찍지 않는다.** `Instant` 가 꺼지거나 새 연출이 붙으면 같은 일이
+        /// 조용히 돌아온다 — 그때 나오는 그림은 *"디자인이 흐리다"* 로 읽히고, 그 말에 맞춰
+        /// 색을 올리면 **잴 수 없는 것에 맞춰 고치는** 셈이 된다.
+        ///
+        /// `CanvasGroup.alpha` 를 본다: 등장 연출이 전부 그 값으로 뜬다.
+        /// </summary>
+        static void AssertSettled(Transform root, string shot)
+        {
+            foreach (var g in root.GetComponentsInChildren<CanvasGroup>())
+            {
+                if (!g.gameObject.activeInHierarchy) continue;
+                Assert.GreaterOrEqual(g.alpha, 0.99f,
+                    $"{shot}: '{g.name}' 이 알파 {g.alpha:F2} 다 — 등장 연출 중간을 찍고 있다. " +
+                    "이 그림으로는 대비를 판단할 수 없다 (MetaFlow.Instant 를 보라)");
+            }
+        }
+
         static void SetLayer(Transform t, int layer)
         {
             t.gameObject.layer = layer;
@@ -175,6 +198,7 @@ namespace CrowdRunner.Tests
             // 캔버스 자식들이 전부 Default 에 있었고, 카메라를 UI 레이어로 좁히자 **빈 그림(0.0%)**
             // 이 나왔다. UI 가 UI 레이어에 있는 것이 맞는 상태이므로 되돌리지 않는다
             SetLayer(cv.transform, 5);
+            AssertSettled(cv.transform, name);
 
             cv.renderMode = RenderMode.ScreenSpaceCamera;
             cv.worldCamera = cam;
