@@ -34,8 +34,22 @@ namespace CrowdRunner.View
         VatCrowd allyView, foeView;
         Transform road, wall, divider;
         Transform[] gates = new Transform[0];
+        /// <summary>게이트 네모마다의 **z 와 차선** — 지났을 때 *어느 것이 고른 것인지* 를
+        /// 찾으려면 필요하다. `Transform.position` 에서 되읽지 않는 이유: 연출이 그 위치를
+        /// 움직이므로 연출 중에 되읽으면 **같은 게이트를 두 번 고르거나 못 찾는다**</summary>
+        float[] gateZ = new float[0];
+        int[] gateLane = new int[0];
+        readonly Transform[] refusedBuf = new Transform[4];
+        GatePassFx fxGate;
+
+        /// <summary>
+        /// 게이트 응답을 몇 번 띄웠나 — **주행이 화면 대신 묻는다.** 게이트를 네 번 지났는데
+        /// 응답이 두 번이면 플레이어는 *어떤 선택에는 반응이 있고 어떤 선택에는 없는* 게임을
+        /// 본다. 그 증상은 PNG 한 장으로는 절대 안 잡힌다 (한 순간만 담기므로).
+        /// </summary>
+        public int GatePops => fxGate != null ? fxGate.Popped : 0;
         Transform[] zones = new Transform[0];
-        TextMesh countLabel;
+        TextMesh countLabel, countShadow;
         CasualtyFx fx;
         Camera cam;
         float wallHp0;
@@ -50,6 +64,7 @@ namespace CrowdRunner.View
             allyView.Init(renderCap); foeView.Init(renderCap);
             allyView.SetActive(true); foeView.SetActive(true);
             fx = new CasualtyFx(); fx.Init();
+            fxGate = new GatePassFx(); fxGate.Init(Label);
             runner.OnTick += OnTick;
             BuildScene();
             // **늦게 붙었을 수도 있다.** `LevelRunner.Awake` 가 먼저 돌면 그때 뷰가 없어서
@@ -82,12 +97,18 @@ namespace CrowdRunner.View
             RenderSettings.ambientLight = new Color(0.22f, 0.23f, 0.26f);
 
             var li = new GameObject("Sun").AddComponent<Light>();
+            li.transform.SetParent(transform, false);
             li.type = LightType.Directional;
             li.intensity = 0.85f;
             li.shadows = LightShadows.None;   // 400 개체의 그림자는 드로우를 두 배로 만든다 (§6b)
             li.transform.rotation = Quaternion.Euler(52f, -28f, 0f);
 
             road = Box("Road", new Color(0.46f, 0.50f, 0.44f));
+            // **숫자 뒤에 어두운 사본을 깐다.** 이 게임에서 반드시 읽어야 하는 수는 이 하나인데,
+            // 흰 글자가 밝은 길 위에 오면 **그려졌는데 안 보인다** — 첫 게임 화면이 그랬다.
+            // 테두리를 주는 길도 있지만 `TextMesh` 에는 없고, 사본 한 장이 드로우 한 번으로 끝난다
+            countShadow = Label("CountShadow", 0.5f);
+            countShadow.color = new Color(0.06f, 0.05f, 0.09f, 0.85f);
             countLabel = Label("Count", 0.5f);
         }
 
@@ -101,11 +122,13 @@ namespace CrowdRunner.View
             wall = null; divider = null;
 
             var g = new System.Collections.Generic.List<Transform>();
+            var gz = new System.Collections.Generic.List<float>();
+            var gl = new System.Collections.Generic.List<int>();
             var z = new System.Collections.Generic.List<Transform>();
             foreach (var e in level.events)
             {
                 if (e.kind == EventKind.Gate)
-                    foreach (var o in e.options) g.Add(Gate(e.z, o));
+                    foreach (var o in e.options) { g.Add(Gate(e.z, o)); gz.Add(e.z); gl.Add(o.lane); }
                 else if (e.kind == EventKind.Zone)
                     z.Add(Zone(e));
                 else if (e.kind == EventKind.Wall)
@@ -117,6 +140,8 @@ namespace CrowdRunner.View
                 }
             }
             gates = g.ToArray();
+            gateZ = gz.ToArray();
+            gateLane = gl.ToArray();
             zones = z.ToArray();
 
             // 차선 칸막이 — 게이트를 고르면 합류 지점까지 **길이 갇힌다** (세션 A `commitUntilZ`).
@@ -169,6 +194,7 @@ namespace CrowdRunner.View
 
             fx.Tick(Time.deltaTime);
             fx.Draw();
+            fxGate.Tick(Time.deltaTime, cam);
 
             // **지나친 게이트를 가린다.** 안 가리면 뒤에 남은 게이트가 카메라에 가까워져
             // 글자가 거대해지고 서로 겹친다 — 첫 촬영에서 `×135` 와 `+30` 이 화면 아래를 덮었다.
@@ -176,7 +202,10 @@ namespace CrowdRunner.View
             for (int i = 0; i < gates.Length; i++)
             {
                 if (gates[i] == null) continue;
-                bool ahead = gates[i].position.z > sim.Z - 2f;
+                // 연출 중인 게이트는 연출이 들고 있다 — 여기서 같은 `activeSelf` 를 매 프레임
+                // 반대로 쓰면 **깜빡인다**
+                if (fxGate.Animating(gates[i])) continue;
+                bool ahead = gateZ[i] > sim.Z - 2f;
                 if (gates[i].gameObject.activeSelf != ahead) gates[i].gameObject.SetActive(ahead);
             }
 
@@ -184,6 +213,10 @@ namespace CrowdRunner.View
             countLabel.transform.position = new Vector3(sim.X, 3.4f, sim.Z + 1.5f);
             countLabel.transform.rotation = cam.transform.rotation;
             countLabel.color = sim.State == SimState.Lost ? new Color(0.8f, 0.3f, 0.3f) : Color.white;
+            // 그림자는 **카메라 쪽으로** 조금 당겨 깐다 — 뒤로 밀면 길에 묻힌다
+            countShadow.text = countLabel.text;
+            countShadow.transform.position = countLabel.transform.position + new Vector3(0.10f, -0.12f, -0.02f);
+            countShadow.transform.rotation = countLabel.transform.rotation;
 
             cam.transform.position = new Vector3(0f, 19f, sim.Z - 26f);
         }
@@ -198,6 +231,42 @@ namespace CrowdRunner.View
             if (sim == null) return;
             // 전투사는 **막은 것이 서 있는 z**(앞줄)에서, 지역사는 군중 가운데에서
             fx.Take(t, sim.X, sim.Z, sim.RoadWidth, sim.BlockingZ > 0.1f ? sim.BlockingZ : sim.Z + 2f);
+            if (t.gateFired) GatePassed(t);
+        }
+
+        /// <summary>
+        /// **고른 것에 응답한다.** 이 게임의 조작은 게이트 하나뿐인데 지금까지 그 하나에
+        /// 아무 응답이 없었다 — 고른 쪽도 버린 쪽도 그냥 사라졌다 (`GatePassFx` 주석).
+        ///
+        /// 어느 것이 고른 것인지는 **`Tick.gateLane` 으로만** 판단한다. 화면상의 X 거리로
+        /// 다시 고르지 않는 이유: 세션 A 가 `Sim` 에서 바로 그 두 기준이 갈라져 **한가운데가
+        /// 제3의 길**이 된 것을 고쳤다 (`Sim.cs` §221 주석). 표현이 자기 기준으로 다시
+        /// 고르면 그 갈라짐이 **화면 쪽에 되살아난다** — 시뮬은 왼쪽으로 넣었는데 화면은
+        /// 오른쪽이 터지는 것은, 틀린 것 중에서도 가장 알아채기 어려운 쪽이다.
+        /// </summary>
+        void GatePassed(in Sim.Tick t)
+        {
+            var lv = runner.Level;
+            if (lv == null) return;
+            // 방금 터진 게이트 = 지나온 게이트 중 **가장 앞의 것**
+            float zBest = float.NegativeInfinity;
+            LevelEvent ev = default; bool found = false;
+            foreach (var e in lv.events)
+                if (e.kind == EventKind.Gate && e.z <= runner.Sim.Z && e.z > zBest) { zBest = e.z; ev = e; found = true; }
+            if (!found) return;
+
+            Transform chosen = null; int nRef = 0;
+            for (int i = 0; i < gates.Length; i++)
+            {
+                if (gates[i] == null || !Mathf.Approximately(gateZ[i], zBest)) continue;
+                if (gateLane[i] == t.gateLane || ev.options.Length == 1) chosen = gates[i];
+                else if (nRef < refusedBuf.Length) refusedBuf[nRef++] = gates[i];
+            }
+
+            string rule = "?";
+            foreach (var o in ev.options)
+                if (o.lane == t.gateLane || ev.options.Length == 1) { rule = Sign(o.op) + o.value; break; }
+            fxGate.Pass(chosen, refusedBuf, nRef, rule, t.gateBefore, t.gateAfter, cam);
         }
 
         /// <summary>갇힘이 끝나는 z — 시뮬이 공개하지 않으므로 레벨에서 읽는다 (게이트가 들고 있다)</summary>
@@ -269,6 +338,10 @@ namespace CrowdRunner.View
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = name;
+            // **자기 밑에 단다.** 부모가 없으면 판 오브젝트를 지워도 길·게이트·벽이 장면에
+            // 남는다 — 판을 바꿀 때마다 쌓이고, 해가 넷이면 화면이 하얗게 날아간다.
+            // `GameBoot.AssertOneWorld` 가 바로 이 자리를 가리켰다
+            go.transform.SetParent(transform, false);
             Destroy(go.GetComponent<Collider>());   // 물리 엔진을 안 쓴다 (`DESIGN.md` §2)
             // **`Mobile/Diffuse` 에는 `_Color` 가 없다.** 그 셰이더는 `_MainTex` 만 받으므로
             // `material.color = c` 가 **아무 일도 안 하고**, 길·게이트·벽·지역·칸막이가 전부
@@ -280,6 +353,14 @@ namespace CrowdRunner.View
             if (!m.HasProperty("_Color"))
                 Debug.LogError("[CR] 셰이더 '" + sh.name + "' 에 _Color 가 없다 — 모든 네모가 하얗게 나온다");
             m.color = c;
+            // **광택을 끈다.** `Legacy Shaders/Diffuse` 를 못 찾으면 `Standard` 로 떨어지는데
+            // 그쪽 기본 광택은 0.5 다. 길처럼 **넓고 평평한 면**은 정반사 로브가 화면 전체에
+            // 걸쳐 퍼져서 **면 하나가 통째로 하얘진다** — 색을 제대로 줬는데도 그렇다.
+            // 이 게임에 반짝이는 것은 하나도 없으므로 그냥 끈다
+            if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0f);
+            if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0f);
+            if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
+            if (m.HasProperty("_SpecColor")) m.SetColor("_SpecColor", Color.black);
             go.GetComponent<Renderer>().sharedMaterial = m;
             return go.transform;
         }
@@ -287,6 +368,7 @@ namespace CrowdRunner.View
         TextMesh Label(string name, float size)
         {
             var go = new GameObject(name);
+            go.transform.SetParent(transform, false);   // 위와 같은 이유 — 남으면 글자가 겹쳐 쌓인다
             var tm = go.AddComponent<TextMesh>();
             // **없으면 조용히 비는 대신 로그를 남긴다** — 숫자가 안 보이면 이 게임은 읽을 수 없다
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")

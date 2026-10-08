@@ -48,9 +48,54 @@ namespace CrowdRunner
 #endif
         }
 
+        /// <summary>
+        /// **장면을 통째로 지운다** — 테스트가 다음 것을 깨끗하게 시작할 때.
+        ///
+        /// `Go` 는 **판**만 지우고 오버레이는 살려 둔다 (판이 바뀌어도 메타 화면은 살아야 하니까).
+        /// 그런데 테스트는 판이 아니라 **처음부터** 다시 시작한다. 오버레이가 남으면 앞 테스트의
+        /// 메타 화면 패널이 자식으로 남아 새 화면을 **가린다** — 글자는 그려지는데 위에 덮인 판
+        /// 때문에 안 보이고, 검사는 *글자가 지정한 색에 못 닿는다* 로 읽는다.
+        ///
+        /// 실제로 그렇게 나왔다: 서로 다른 글자 둘이 **소수점 일곱 자리까지 같은 도달값**(9.3%)을
+        /// 냈다. 같은 것에 덮여 있었던 것이다. 월드 쪽 샘을 막다가 **UI 쪽에 같은 샘**을 만든
+        /// 셈이고, 그래서 지우는 일은 두 곳이 아니라 **여기 한 곳**에 둔다.
+        /// </summary>
+        public static void Reset()
+        {
+            // **이미 죽은 것을 건너뛴다.** 뿌리 하나를 즉시 지우면 그 자식들도 같이 죽는데,
+            // 배열은 그 자식들의 **죽은 참조**를 그대로 들고 있다 — 거기에 `.transform` 을
+            // 물으면 `MissingReferenceException` 이다. Unity 의 `== null` 은 파괴된 것도 참이다
+            var all = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+            foreach (var o in all)
+            {
+                if (o == null) continue;
+                if (o.transform.parent != null) continue;
+                if (o.name != "CrowdRunner" && o.name != "MetaFlow" && o.name != "Overlay") continue;
+                Object.DestroyImmediate(o);
+            }
+            Runner = null;
+            Overlay = null;
+        }
+
         /// <summary>장면을 세우고 한 판을 띄운다. 테스트도 이것을 쓴다</summary>
         public static LevelRunner Go(string level)
         {
+            // **앞 판을 지운다.** 안 지우면 판마다 길·게이트·`Sun` 이 **쌓인다.** 조명이 넷이면
+            // 0.85 × 4 라 화면이 통째로 하얗게 날아가고, 그 증상은 *"길 색이 안 먹는다"* 로만
+            // 보인다 — 머티리얼은 멀쩡한데. 네 번째 판부터 그림이 못 쓰게 되는데 첫 판은
+            // 멀쩡하므로 **처음 보는 사람은 레벨 탓을 한다**.
+            //
+            // M0 에서 같은 종류를 이미 한 번 치렀다 (`docs/M0_CROWD.md` §7: 렌더러가 구간
+            // 사이로 유닛을 흘려 빈 장면이 14.33 ms 를 찍었다). 남은 것이 다음 측정에 섞이는
+            // 결함은 **그럴듯한 수**를 내놓기 때문에 조용히 오래 간다
+            if (Runner != null && Runner.gameObject != null)
+            {
+                // **즉시** 지운다. `Destroy` 는 프레임 끝까지 미뤄지는데, 그 사이에 새 판이
+                // 서면 한 프레임 동안 길과 해가 둘이고 — 그 프레임에 화면을 찍으면 하얗게
+                // 나온다. 바로 그 한 프레임을 찍는 것이 이 저장소의 촬영 기계가 하는 일이다
+                Object.DestroyImmediate(Runner.gameObject);
+                Runner = null;
+            }
             var go = new GameObject("CrowdRunner");
             // **편집 모드에서는 부르지 않는다.** `DontDestroyOnLoad` 는 플레이 모드 전용이고
             // 에디터 스크립트에서 부르면 예외가 난다 — 화면 찍는 기계(`MetaShots`)가 바로
@@ -62,15 +107,36 @@ namespace CrowdRunner
             // 부르므로 그때 뷰가 있어야 게이트·벽이 세워진다 — `AddComponent` 가 즉시
             // `Awake` 를 돌리기 때문에 순서가 결과를 바꾼다
             go.AddComponent<LevelView>();
-            Overlay = BuildOverlay(go.transform);
-            EnsureEventSystem(go.transform);
+            // **오버레이는 판보다 오래 산다.** 판 오브젝트의 자식으로 두면 다음 판을 띄울 때
+            // 같이 죽고, 메타 화면(월드맵·카드·결과)은 **그 캔버스의 자식**이라 통째로 사라진다.
+            // 증상은 "결과 화면이 빈다" 인데 원인은 레벨을 바꾼 쪽에 있다 — 가장 찾기 어려운 모양
+            if (Overlay == null) Overlay = BuildOverlay();
+            EnsureEventSystem(Overlay.transform);
             Runner = runner;
+            AssertOneWorld();
             if (runner.Sim == null)
                 Debug.LogError("[CR] 판을 못 띄웠다: " + runner.Error);
             else
                 Debug.Log($"[CR] level={level} units={runner.Sim.Units} road={runner.Sim.RoadWidth:F1}m " +
                           $"events={runner.Level.events.Count}");
             return runner;
+        }
+
+        /// <summary>
+        /// **세상이 하나인지 센다.** 길이 둘이면 그림이 틀리는데, 틀린 그림은 *레벨이 이상하다*
+        /// 로 보인다. 지우는 쪽을 고쳐 놓았어도 **세는 쪽을 같이 둔다** — 다음에 누가 다른 문으로
+        /// 장면을 세우면 그 문에서 다시 샐 것이고, 그때 이 줄이 자리를 바로 가리킨다.
+        /// </summary>
+        static void AssertOneWorld()
+        {
+            int suns = 0, roads = 0;
+            foreach (var l in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+                if (l.type == LightType.Directional) suns++;
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+                if (t.name == "Road") roads++;
+            if (suns > 1 || roads > 1)
+                Debug.LogError($"[CR] 앞 판이 안 지워졌다 — 해 {suns} 개 · 길 {roads} 개. " +
+                               "조명이 겹쳐 화면이 하얗게 날아가고, 그 증상은 '길 색이 안 먹는다' 로만 보인다");
         }
 
         /// <summary>
@@ -89,10 +155,10 @@ namespace CrowdRunner
             go.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
         }
 
-        static Canvas BuildOverlay(Transform parent)
+        static Canvas BuildOverlay()
         {
             var go = new GameObject("Overlay");
-            go.transform.SetParent(parent, false);
+            if (Application.isPlaying) Object.DontDestroyOnLoad(go);
             var c = go.AddComponent<Canvas>();
             c.renderMode = RenderMode.ScreenSpaceOverlay;
             c.sortingOrder = 100;

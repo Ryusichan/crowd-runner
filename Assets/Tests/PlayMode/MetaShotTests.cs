@@ -4,6 +4,7 @@ using CrowdRunner;
 using CrowdRunner.Core;
 using CrowdRunner.Game;
 using CrowdRunner.Meta;
+using CrowdRunner.View;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -34,8 +35,9 @@ namespace CrowdRunner.Tests
         [UnitySetUp]
         public IEnumerator Setup()
         {
-            foreach (var o in Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None))
-                if (o.name == "CrowdRunner" || o.name == "MetaFlow") Object.Destroy(o);
+            // **오버레이까지 지운다.** 앞 테스트의 메타 패널이 남으면 새 화면을 덮고, 그 증상은
+            // *"글자가 지정한 색에 못 닿는다"* 로만 보인다 (`GameBoot.Reset` 주석)
+            GameBoot.Reset();
             yield return null;
 
             var runner = GameBoot.Go("1-3");
@@ -124,6 +126,7 @@ namespace CrowdRunner.Tests
         public IEnumerator Shoots_Result_Screens_And_Checks_Doing_Nothing_Fails()
         {
             yield return PlayUntilResult("1-1", SimState.Won);
+            AssertEveryGateAnswered();
             float won = Shot("meta_result_won");
             float gap = BiggestVerticalGap(GameBoot.Overlay.transform, out float gapAt);
             Debug.Log($"[CR-TEST] 결과(이김) 화소 {won:F1}% · 가장 큰 세로 공백 {gap:F0}px " +
@@ -182,10 +185,106 @@ namespace CrowdRunner.Tests
             for (int i = 0; i < 60; i++) yield return null;
             Time.timeScale = prev;
 
+            MeasureDecisionTime(runner);
             float share = ShotWorld("game", runner);
             Debug.Log($"[CR-TEST] 게임 화면: 병력 {runner.Sim.Units} z {runner.Sim.Z:F0} · 그려진 화소 {share:F1}%");
             Assert.Greater(runner.Sim.Units, lv.initialUnits, "게이트를 지나지 않았다 — 군단이 안 커졌다");
             Assert.Greater(share, 3f, "게임 화면이 거의 비었다 — 군중이 안 그려지는지 보라");
+        }
+
+        /// <summary>
+        /// **고를 시간이 있는가** — 네 번째 질문.
+        ///
+        /// 앞의 셋은 *나쁜 선택이 존재하나* · *한쪽에 붙여 두면* · *아무것도 안 하면* 이었다.
+        /// 셋 다 **선택의 내용**을 묻는다. 이것은 **선택할 기회**를 묻는다: 게이트가 화면에
+        /// 들어온 뒤 거기 닿기까지 몇 초인가. 짧으면 게이트는 *판단* 이 아니라 **반사신경**이고,
+        /// 그러면 두 선택지의 수를 아무리 잘 짜도 플레이어는 읽을 틈이 없다.
+        ///
+        /// 레벨 쪽에서는 보이지 않는다 — 카메라 높이·각도·화각·전진 속도가 정하므로
+        /// **표현 쪽 수**다. 레벨을 하나도 안 고치고 이 수를 바꿀 수 있다.
+        ///
+        /// ## 두 번 틀렸던 자리
+        ///
+        /// ① 손으로 짠 뷰·투영 행렬. Unity 의 뷰 공간은 이미 −z 가 앞이라 `.inverse` 뒤에
+        ///    z 를 또 뒤집으면 **w 가 틀린 값으로 나눠진다.** 그래서 실제 카메라를 옮겨
+        ///    `WorldToViewportPoint` 에 묻는다 — 게임이 쓰는 그 함수여야 답이 게임과 같다.
+        /// ② `seen < 0` 을 "못 찾았다" 로 썼다. **z 는 정당하게 음수다.** `z=-77` 이라는 옳은
+        ///    측정을 "못 찾음" 으로 읽어 `0.00초` 를 찍었고, 0.00 은 *게이트가 코앞에서
+        ///    튀어나온다* 는 **그럴듯한 결함 보고**로 읽힌다. 센티넬이 정당한 값과 겹치면
+        ///    측정은 조용히 거짓이 된다 — 그래서 찾았는지는 `bool` 이 따로 말한다.
+        /// ③ 배치 창은 640x480 **가로**다. 그 화각으로 재면 세로 9:16 기기의 답이 아니다.
+        ///    `cam.aspect` 를 세로로 고정하고 재고 되돌린다.
+        /// </summary>
+        static void MeasureDecisionTime(LevelRunner runner)
+        {
+            var cam = Camera.main;
+            var lv = runner.Level;
+            if (cam == null || lv == null) { Debug.LogError("[CR-TEST] 카메라나 레벨이 없다 — 고를 시간을 못 잰다"); return; }
+
+            var keepPos = cam.transform.position;
+            float keepAspect = cam.aspect;
+            cam.aspect = 1080f / 1920f;       // 세로 기기의 화각으로 — 배치 창(가로)이 아니라
+
+            try
+            {
+                foreach (var e in lv.events)
+                {
+                    if (e.kind != EventKind.Gate || e.options.Length == 0) continue;
+                    float laneX = e.options[0].lane * 2.1f;
+                    var target = new Vector3(laneX, 1.0f, e.z);
+
+                    bool found = false; float seen = 0f, readable = 0f; bool readFound = false;
+                    for (float z = e.z; z > e.z - 160f; z -= 0.25f)
+                    {
+                        cam.transform.position = new Vector3(0f, 19f, z - 26f);
+                        var vp = cam.WorldToViewportPoint(target);
+                        bool on = vp.z > 0.1f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
+                        if (!on) break;
+                        found = true; seen = z;      // 아직 보인다 — 더 뒤로
+                        // **읽히는 크기인가.** 게이트 네모는 2 m 높이고, 그 안의 숫자가 그 절반쯤
+                        // 된다. 1920 px 중 60 px 미만이면 두 글자짜리 숫자는 뭉개진다
+                        var top = cam.WorldToViewportPoint(target + new Vector3(0f, 1.0f, 0f));
+                        var bot = cam.WorldToViewportPoint(target + new Vector3(0f, -1.0f, 0f));
+                        float h = Mathf.Abs(top.y - bot.y) * 1920f;
+                        if (h >= 60f) { readFound = true; readable = z; }
+                    }
+
+                    if (!found)
+                    {
+                        Debug.LogError($"[CR-TEST] 게이트 z={e.z:F0} 가 **닿는 순간에도 화면에 없다** — " +
+                                       "카메라 각도나 차선 폭을 보라");
+                        return;
+                    }
+                    float lead = (e.z - seen) / Mathf.Max(0.1f, lv.forwardSpeed);
+                    float readLead = readFound ? (e.z - readable) / Mathf.Max(0.1f, lv.forwardSpeed) : 0f;
+                    // **두 수는 다른 것을 말한다.** 화면에 있는 시간은 길어도 (22 초) 숫자가
+                    // 읽히는 크기가 되는 것은 훨씬 늦다. 플레이어가 *고를 수 있는* 시간은
+                    // 뒤쪽이다 — 앞의 수만 보면 "시간은 충분하다" 는 **틀린 안심**이 된다
+                    Debug.Log($"[CR-TEST] 게이트 z={e.z:F0}: 화면 진입 {lead:F2}초 전 ({e.z - seen:F0}m) · " +
+                              $"**숫자가 읽히는 크기 {readLead:F2}초 전** ({e.z - readable:F0}m) · " +
+                              $"전진 {lv.forwardSpeed:F1} m/s");
+                    if (!readFound)
+                        Debug.LogError("[CR-TEST] 게이트 숫자가 **끝까지 읽을 크기가 안 된다** — " +
+                                       "닿는 순간에도 60px 미만이다");
+                    lead = readLead;
+                    // 숫자에 뜻을 붙여 둔다 — 다음에 보는 사람이 2.1 초가 좋은지 나쁜지 모른다.
+                    // 광고형 러너의 손가락 반응은 보통 0.3~0.5 초, 숫자 두 개를 **읽고** 고르는 데
+                    // 더 필요하니 1.5 초를 아래 선으로 둔다 (오너 확정 전 [WORKING] 값)
+                    if (lead < 1.5f)
+                        Debug.LogWarning($"[CR-TEST] ⚠ 고를 시간이 {lead:F2}초다 — 두 숫자를 읽고 고르기엔 짧다. " +
+                                         "카메라를 더 뒤/위로 두거나 전진 속도를 낮춰야 한다");
+                    return;   // 첫 게이트만 — 나머지는 같은 기하다
+                }
+                Debug.LogWarning("[CR-TEST] 이 판에 게이트가 없다 — 고를 시간을 잴 자리가 없다");
+            }
+            finally
+            {
+                // **되돌린다.** 안 되돌리면 뒤이어 찍는 게임 화면이 다른 화각으로 나오고,
+                // 그건 "오늘 그림이 어제와 다르다" 로만 보인다
+                cam.transform.position = keepPos;
+                cam.aspect = keepAspect;
+                cam.ResetAspect();
+            }
         }
 
         /// <summary>3D 카메라를 뜬다. UI 는 뺀다 (HUD 가 덮으면 게임이 안 보인다)</summary>
@@ -213,6 +312,7 @@ namespace CrowdRunner.Tests
             for (int i = 0; i < px.Length; i += 7)
                 if (Mathf.Abs(px[i].r - bg.r) + Mathf.Abs(px[i].g - bg.g) + Mathf.Abs(px[i].b - bg.b) > 24) lit++;
             File.WriteAllBytes(Path.Combine(Dir, name + ".png"), tex.EncodeToPNG());
+            ProbeWorld(tex, cam);
 
             cam.targetTexture = prevTarget;
             cam.cullingMask = prevMask;
@@ -220,6 +320,59 @@ namespace CrowdRunner.Tests
             rt.Release();
             Object.DestroyImmediate(rt);
             return lit / (px.Length / 7f) * 100f;
+        }
+
+        /// <summary>
+        /// **왜 하얀가** — 그림이 못 쓰게 나왔을 때 짐작하지 않기 위한 눈.
+        ///
+        /// 첫 게임 화면은 길이 새하얗게 날아가고 병력 수가 흰 바탕의 흰 글자였다. 그런데
+        /// `그려진 화소 38.3%` 는 **통과했다**. 화소를 세는 검사는 *무언가 그려졌나* 만 묻지
+        /// *읽히나* 를 안 묻는다 — 이 저장소에서 같은 종류로 이미 여러 번 속았다
+        /// (`docs/M0_CROWD.md` §7).
+        ///
+        /// 그래서 두 가지를 **수로** 남긴다.
+        /// ① **머티리얼이 실제로 무슨 색인가.** `m.color = c` 가 먹었는지는 셰이더가 정한다.
+        ///    셰이더 이름과 색을 같이 찍으면 *색을 줬는데 왜 하얗지* 가 한 줄로 끝난다.
+        /// ② **숫자와 그 뒤 배경의 대비.** 흰 글자가 흰 길 위에 있으면 글자는 **있는데 없다**.
+        ///    라벨이 있는 화면 자리의 화소를 직접 읽어 밝기 차를 본다.
+        /// </summary>
+        static void ProbeWorld(Texture2D tex, Camera cam)
+        {
+            foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+            {
+                if (r.sharedMaterial == null) continue;
+                string n = r.gameObject.name;
+                if (n != "Road" && n != "Wall" && n != "Divider" && n != "Zone" && n != "Gate") continue;
+                var m = r.sharedMaterial;
+                Debug.Log($"[CR-TEST] 재질 {n,-8} 셰이더 {m.shader.name} · " +
+                          $"_Color {(m.HasProperty("_Color") ? m.color.ToString("F2") : "없음")} · " +
+                          $"광택 {(m.HasProperty("_Glossiness") ? m.GetFloat("_Glossiness").ToString("F2") : "-")}");
+            }
+
+            var label = Object.FindFirstObjectByType<TextMesh>();
+            if (label == null) { Debug.LogWarning("[CR-TEST] 병력 수 라벨을 못 찾았다"); return; }
+            var vp = cam.WorldToViewportPoint(label.transform.position);
+            if (vp.z <= 0f || vp.x < 0f || vp.x > 1f || vp.y < 0f || vp.y > 1f)
+            { Debug.LogWarning("[CR-TEST] 병력 수가 화면 밖이다"); return; }
+            int px = Mathf.Clamp((int)(vp.x * tex.width), 8, tex.width - 9);
+            int py = Mathf.Clamp((int)(vp.y * tex.height), 8, tex.height - 9);
+
+            // 라벨 자리 둘레에서 **가장 밝은 것과 가장 어두운 것** — 글자와 배경이 그 둘이다.
+            // 둘이 가까우면 글자는 그려졌어도 안 읽힌다
+            float lo = 1f, hi = 0f;
+            for (int dy = -34; dy <= 34; dy += 2)
+                for (int dx = -60; dx <= 60; dx += 2)
+                {
+                    int x = Mathf.Clamp(px + dx, 0, tex.width - 1), y = Mathf.Clamp(py + dy, 0, tex.height - 1);
+                    var c = tex.GetPixel(x, y);
+                    float l = 0.299f * c.r + 0.587f * c.g + 0.114f * c.b;
+                    if (l < lo) lo = l; if (l > hi) hi = l;
+                }
+            float contrast = hi - lo;
+            Debug.Log($"[CR-TEST] 병력 수 대비: 밝은 {hi:F2} 어두운 {lo:F2} → **차 {contrast:F2}**");
+            if (contrast < 0.25f)
+                Debug.LogWarning($"[CR-TEST] ⚠ 병력 수가 배경과 밝기 차 {contrast:F2} 뿐이다 — " +
+                                 "그려지긴 했지만 **안 읽힌다**. 이 게임에서 유일하게 꼭 읽어야 하는 수다");
         }
 
         /// <summary>
@@ -260,6 +413,28 @@ namespace CrowdRunner.Tests
                 cur = Mathf.Max(cur, spans[i].y);
             }
             return best;
+        }
+
+        /// <summary>
+        /// **고른 것마다 응답이 있었나.** 게이트 연출은 한순간이라 PNG 로는 *있었는지* 를 알 수
+        /// 없다 — 찍힌 프레임에 안 떠 있었던 것과 아예 안 뜨는 것이 똑같이 생긴다. 그래서
+        /// 한 판을 끝까지 돌리고 **지난 게이트 수와 띄운 응답 수를 맞춘다.**
+        ///
+        /// 하나라도 빠지면 *어떤 선택에는 반응이 있고 어떤 선택에는 없는* 게임이 되고,
+        /// 그게 조작이 하나뿐인 게임에서 가장 비싼 결함이다.
+        /// </summary>
+        void AssertEveryGateAnswered()
+        {
+            var runner = GameBoot.Runner;
+            var view = runner != null ? runner.GetComponent<LevelView>() : null;
+            var lv = runner != null ? runner.Level : null;
+            Assert.IsNotNull(view, "LevelView 가 없다 — 게이트 응답을 셀 수 없다");
+            int gates = 0;
+            foreach (var e in lv.events) if (e.kind == EventKind.Gate) gates++;
+            Debug.Log($"[CR-TEST] 게이트 {gates} 개 · 응답 {view.GatePops} 번");
+            Assert.AreEqual(gates, view.GatePops,
+                $"게이트를 {gates} 번 지났는데 응답은 {view.GatePops} 번이다 — " +
+                "어떤 선택에는 반응이 있고 어떤 선택에는 없는 게임이 된다");
         }
 
         IEnumerator PlayUntilResult(string code, SimState? want)
