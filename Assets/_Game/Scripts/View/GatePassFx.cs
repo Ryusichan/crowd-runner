@@ -68,11 +68,17 @@ namespace CrowdRunner.View
 
             int d = Mathf.RoundToInt(after) - Mathf.RoundToInt(before);
             var tm = pops[slot].tm;
-            tm.text = rule + "\n" + (d >= 0 ? "+" : "") + d;
+            string delta = (d >= 0 ? "+" : "") + d;
+            // **같은 수를 두 번 쓰지 않는다.** 덧셈 게이트는 규칙과 변화량이 같은 수라
+            // (`+35` / `+35`) 두 줄이 같은 말을 하고, 그러면 두 줄짜리 형식 자체가
+            // *장식* 으로 읽혀서 **곱셈에서 그 둘이 다를 때도 안 읽힌다**
+            tm.text = rule == delta ? delta : rule + "\n" + delta;
             tm.color = good ? new Color(0.58f, 0.94f, 0.62f) : new Color(0.96f, 0.52f, 0.48f);
             tm.gameObject.SetActive(true);
             var at = chosen != null ? chosen.position : Vector3.zero;
-            pops[slot].p0 = new Vector3(at.x, 2.2f, at.z);
+            // **군중 위로 띄운다.** 2.2 m 는 사람 키 높이라 숫자가 떼 한가운데에 묻혔다 —
+            // 첫 연출 사진에서 게이트 글자와도 겹쳤다
+            pops[slot].p0 = new Vector3(at.x, 4.6f, at.z);
             pops[slot].t = 0f;
             pops[slot].live = true;
             tm.transform.position = pops[slot].p0;

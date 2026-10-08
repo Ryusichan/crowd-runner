@@ -185,6 +185,9 @@ namespace CrowdRunner.Tests
             for (int i = 0; i < 60; i++) yield return null;
             Time.timeScale = prev;
 
+            MeasureGateLabels(runner);
+            yield return ShootTheGatePass(runner);
+
             MeasureDecisionTime(runner);
             float share = ShotWorld("game", runner);
             Debug.Log($"[CR-TEST] 게임 화면: 병력 {runner.Sim.Units} z {runner.Sim.Z:F0} · 그려진 화소 {share:F1}%");
@@ -320,6 +323,73 @@ namespace CrowdRunner.Tests
             rt.Release();
             Object.DestroyImmediate(rt);
             return lit / (px.Length / 7f) * 100f;
+        }
+
+        /// <summary>
+        /// **게이트 글자를 키워도 되는가** — 세션 A 가 물은 것에 짐작 말고 수로 답한다.
+        ///
+        /// 읽히는 거리(43 m)는 **글자 크기가 정한다.** 키우면 더 멀리서 읽히지만, 한 게이트의
+        /// 두 선택지는 2~4 m 밖에 안 떨어져 있어서 **서로 붙으면 둘 다 못 읽는다** — 그러면
+        /// 멀리서 읽히게 만든 대가로 가까이서 못 읽게 된다.
+        ///
+        /// 그래서 `Renderer.bounds` 로 **실제 글자 폭**을 재고 두 선택지 사이의 빈 틈을 센다.
+        /// 남는 틈이 곧 키울 수 있는 몫이다.
+        /// </summary>
+        static void MeasureGateLabels(LevelRunner runner)
+        {
+            var seen = new System.Collections.Generic.Dictionary<float, System.Collections.Generic.List<Bounds>>();
+            foreach (var tm in Object.FindObjectsByType<TextMesh>(FindObjectsSortMode.None))
+            {
+                if (tm.gameObject.name != "GateText") continue;
+                var r = tm.GetComponent<Renderer>();
+                if (r == null) continue;
+                float z = Mathf.Round(tm.transform.position.z);
+                if (!seen.TryGetValue(z, out var list)) seen[z] = list = new System.Collections.Generic.List<Bounds>();
+                list.Add(r.bounds);
+            }
+            foreach (var kv in seen)
+            {
+                if (kv.Value.Count < 2) continue;
+                kv.Value.Sort((a, b) => a.center.x.CompareTo(b.center.x));
+                var L = kv.Value[0]; var R = kv.Value[1];
+                float gap = (R.center.x - R.extents.x) - (L.center.x + L.extents.x);
+                float wide = Mathf.Max(L.size.x, R.size.x);
+                // 둘 다 키우면 틈은 **양쪽에서** 줄어든다 — 그래서 여유는 틈의 절반씩이다
+                float room = wide > 0.01f ? 1f + gap / wide : 1f;
+                Debug.Log($"[CR-TEST] 게이트 z={kv.Key:F0} 글자 폭 {L.size.x:F2}/{R.size.x:F2} m · " +
+                          $"사이 {gap:F2} m → **{room:F2} 배까지 키워도 안 붙는다**");
+                if (gap < 0.15f)
+                    Debug.LogWarning($"[CR-TEST] ⚠ 두 선택지 글자가 {gap:F2} m 밖에 안 떨어져 있다 — 이미 붙어 보인다");
+                return;
+            }
+            Debug.LogWarning("[CR-TEST] 선택지 둘인 게이트를 못 찾았다 — 글자 폭을 못 쟀다");
+        }
+
+        /// <summary>
+        /// **연출을 한 장 찍는다** — 게이트 응답은 1 초도 안 사는데, 지금까지 **아무도 본 적이
+        /// 없다.** `GatePops` 수는 *일어났나* 만 말하고 *어떻게 생겼나* 를 말하지 않는다.
+        ///
+        /// 다음 게이트를 지나는 **그 순간**에 멈춰 찍는다. 조금이라도 늦으면 글자가 다 올라가
+        /// 사라진 뒤라 빈 길만 남고, 그 그림은 *"연출이 없다"* 와 똑같이 생긴다.
+        /// </summary>
+        IEnumerator ShootTheGatePass(LevelRunner runner)
+        {
+            var view = runner.GetComponent<LevelView>();
+            if (view == null) { Debug.LogWarning("[CR-TEST] LevelView 가 없다 — 연출을 못 찍는다"); yield break; }
+            int before = view.GatePops;
+            float prev = Time.timeScale;
+            Time.timeScale = 20f;       // 100 배면 연출이 한 프레임에 다 지나간다
+            int i = 0;
+            for (; i < 30000 && runner.Sim != null && view.GatePops == before; i++) yield return null;
+            Time.timeScale = prev;
+            if (view.GatePops == before)
+            {
+                Debug.LogWarning("[CR-TEST] 다음 게이트를 못 만났다 — 연출 사진 없음");
+                yield break;
+            }
+            yield return null;          // 연출이 한 프레임 자라게
+            float share = ShotWorld("gate_pass", runner);
+            Debug.Log($"[CR-TEST] 게이트 연출 사진: 응답 {view.GatePops} 번째 · 그려진 화소 {share:F1}%");
         }
 
         /// <summary>

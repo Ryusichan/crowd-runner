@@ -32,7 +32,7 @@ namespace CrowdRunner.View
         LevelRunner runner;
         CrowdField allies, foes;
         VatCrowd allyView, foeView;
-        Transform road, wall, divider;
+        Transform road, wall, divider, ground, curbL, curbR;
         Transform[] gates = new Transform[0];
         /// <summary>게이트 네모마다의 **z 와 차선** — 지났을 때 *어느 것이 고른 것인지* 를
         /// 찾으려면 필요하다. `Transform.position` 에서 되읽지 않는 이유: 연출이 그 위치를
@@ -103,7 +103,15 @@ namespace CrowdRunner.View
             li.shadows = LightShadows.None;   // 400 개체의 그림자는 드로우를 두 배로 만든다 (§6b)
             li.transform.rotation = Quaternion.Euler(52f, -28f, 0f);
 
+            // **땅이 있어야 길이 길로 보인다.** 길만 그리면 하늘색 위에 떠 있는 리본이고,
+            // 그러면 군단이 *어디를* 달리는지가 없다. 땅 한 장 + 연석 둘이면 끝난다 —
+            // 광고형 러너가 옆을 비워 두지 않는 이유다
+            ground = Box("Ground", new Color(0.30f, 0.38f, 0.28f));
             road = Box("Road", new Color(0.46f, 0.50f, 0.44f));
+            // 연석은 길의 **가장자리를 말한다**. 갇힌 차선 칸막이(`divider`)와 달리 늘 서 있고,
+            // 밝아서 길의 폭이 한눈에 읽힌다 — 폭이 좁아지는 구간이 눈에 걸려야 한다
+            curbL = Box("Curb", new Color(0.80f, 0.78f, 0.70f));
+            curbR = Box("Curb", new Color(0.80f, 0.78f, 0.70f));
             // **숫자 뒤에 어두운 사본을 깐다.** 이 게임에서 반드시 읽어야 하는 수는 이 하나인데,
             // 흰 글자가 밝은 길 위에 오면 **그려졌는데 안 보인다** — 첫 게임 화면이 그랬다.
             // 테두리를 주는 길도 있지만 `TextMesh` 에는 없고, 사본 한 장이 드로우 한 번으로 끝난다
@@ -157,8 +165,19 @@ namespace CrowdRunner.View
 
             float w = sim.RoadWidth;
             // 길은 카메라를 따라온다 — 레벨 전체 길이로 한 장 깔면 멀리서 z 정밀도가 깨진다
-            road.localScale = new Vector3(w, 0.1f, 240f);
-            road.position = new Vector3(0f, -0.05f, sim.Z + 60f);
+            road.localScale = new Vector3(w, 0.1f, 190f);
+            road.position = new Vector3(0f, -0.05f, sim.Z + 36f);
+            // 땅은 길보다 **살짝 아래**에 둔다 — 같은 높이면 z-파이팅으로 얼룩진다
+            // **지평선을 남긴다.** 땅을 끝없이 깔면 화면 위까지 전부 땅이고, 그러면 그림이
+            // 세상이 아니라 **질감**으로 보인다. 보이는 끝(게이트가 들어오는 102 m)보다 조금
+            // 뒤에서 끊어 하늘이 띠로 남게 한다 — 달리는 방향이 어디인지가 그 띠로 읽힌다
+            ground.localScale = new Vector3(320f, 0.1f, 190f);
+            ground.position = new Vector3(0f, -0.22f, sim.Z + 36f);
+            float half = w * 0.5f;
+            curbL.localScale = new Vector3(0.35f, 0.34f, 190f);
+            curbR.localScale = curbL.localScale;
+            curbL.position = new Vector3(-half, 0.12f, sim.Z + 36f);
+            curbR.position = new Vector3(+half, 0.12f, sim.Z + 36f);
 
             Formation(allies, sim.Units, sim.X, sim.Z, w, 0);
             allyView.Sync(allies); allyView.Draw();
@@ -210,7 +229,8 @@ namespace CrowdRunner.View
             }
 
             countLabel.text = sim.Units.ToString();
-            countLabel.transform.position = new Vector3(sim.X, 3.4f, sim.Z + 1.5f);
+            // 군단보다 **앞에 그리고 위로** — 머리 위에 겹치면 숫자도 군중도 둘 다 안 읽힌다
+            countLabel.transform.position = new Vector3(sim.X, 4.4f, sim.Z + 7.5f);
             countLabel.transform.rotation = cam.transform.rotation;
             countLabel.color = sim.State == SimState.Lost ? new Color(0.8f, 0.3f, 0.3f) : Color.white;
             // 그림자는 **카메라 쪽으로** 조금 당겨 깐다 — 뒤로 밀면 길에 묻힌다
@@ -297,7 +317,9 @@ namespace CrowdRunner.View
             for (int i = 0; i < f.Count; i++)
             {
                 f.X[i] = cx + f.SideTarget[i];
-                f.Z[i] = cz + (f.Phase[i] - 0.5f) * 3.2f + (f.SpeedMul[i] - 1f) * 18f;
+                // **떼는 깊이가 있어야 떼다.** 3.2 m 로는 한 줄로 서 있고, 그러면 42 명이
+                // 42 명으로 안 읽힌다 (앞줄만 보인다). 뒤로 늘리면 수가 눈에 쌓인다
+                f.Z[i] = cz + (f.Phase[i] - 0.5f) * 8.5f + (f.SpeedMul[i] - 1f) * 18f;
                 f.Phase[i] += Time.deltaTime * 1.4f;
                 if (f.Phase[i] >= 1f) f.Phase[i] -= 1f;
             }
@@ -310,13 +332,20 @@ namespace CrowdRunner.View
             var col = o.op == GateOp.Multiply ? new Color(0.40f, 0.72f, 0.42f)
                     : o.op == GateOp.Add ? new Color(0.44f, 0.62f, 0.82f)
                     : new Color(0.78f, 0.42f, 0.40f);
+            // **문이어야 문으로 보인다.** 2.6 × 2.0 은 군중(67 명이 길을 꽉 채운다)보다 작아서
+            // 지나가는 표지판처럼 보였다 — 첫 연출 사진에서 그게 그대로 드러났다. 차선 폭을
+            // 거의 채우고 사람 키보다 높게 두면 **통과한다**는 것이 모양만으로 읽힌다
+            float lane = (runner.Level != null ? runner.Level.roadWidth : 8f) * 0.5f;
             var t = Box("Gate", col);
-            t.localScale = new Vector3(2.6f, 2.0f, 0.2f);
-            t.position = new Vector3(o.lane * 2.1f, 1.0f, z);
+            t.localScale = new Vector3(lane * 0.90f, 3.2f, 0.25f);
+            t.position = new Vector3(o.lane * lane * 0.5f, 1.6f, z);
             var lab = Label("GateText", 0.34f);
             lab.transform.SetParent(t, false);
-            lab.transform.localPosition = new Vector3(0f, 0.25f, -0.6f);
-            lab.transform.localScale = Vector3.one * 0.4f;
+            lab.transform.localPosition = new Vector3(0f, 0.06f, -0.6f);
+            // 부모가 차선만큼 넓어졌으므로 **자식의 지역 배율로 돌려놓는다** — 안 그러면
+            // 글자가 네모와 같이 늘어나 길쭉해진다
+            lab.transform.localScale = new Vector3(0.55f / Mathf.Max(0.1f, t.localScale.x),
+                                                   0.55f / t.localScale.y, 1f);
             lab.text = Sign(o.op) + o.value;
             return t;
         }
