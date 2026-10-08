@@ -178,7 +178,10 @@ namespace Game.EditorTools
 
         static Material Material()
         {
-            var sh = Shader.Find("Universal Render Pipeline/Simple Lit") ?? Shader.Find("Sprites/Default");
+            // **내장 파이프라인의 가장 싼 조명 셰이더.** URP 를 안 쓰는 이유는 `M0_CROWD.md` §2b:
+            // 반쯤 설정된 URP 로 재는 것이 내장으로 재는 것보다 나쁘다. M0 가 묻는 것은
+            // **A 대 B 의 비율**이고, 파이프라인은 양쪽을 같은 방향으로 움직인다
+            var sh = Shader.Find("Mobile/Diffuse") ?? Shader.Find("Legacy Shaders/Diffuse") ?? Shader.Find("Standard");
             var m = new Material(sh) { name = "standin" };
             AssetDatabase.CreateAsset(m, Dir + "/standin.mat");
             return m;
