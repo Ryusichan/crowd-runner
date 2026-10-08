@@ -268,6 +268,19 @@ namespace CrowdRunner.Meta
                                    UiKit.Body, UiKit.Text, TextAnchor.UpperCenter);
             UiKit.Place(left.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -600f), new Vector2(900f, 44f));
 
+            // **다음 등급까지 몇 명 부족한지 말해 준다.** 말해 주지 않으면 플레이어는
+            // *"더 잘할 수 있었다"* 는 것만 알고 **얼마나** 인지 모른다 — 그러면 다시 하기가
+            // 도박이 된다. 숫자가 붙으면 "게이트 하나만 다르게" 가 된다
+            if (lv != null && lv.rating != null && lv.rating.Length == 3 && resultGrade < Grade.Max)
+            {
+                int need = lv.rating[resultGrade] - resultRemaining;
+                string more = resultWon && need > 0
+                    ? Bio(resultGrade + 1) + " 까지 " + need + " 명"
+                    : Bio(resultGrade + 1) + " 기준 " + lv.rating[resultGrade] + " 명";
+                var hint = UiKit.Label("Hint", root, more, UiKit.Caption, UiKit.Yellow, TextAnchor.UpperCenter);
+                UiKit.Place(hint.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -652f), new Vector2(900f, 34f));
+            }
+
             var next = NextLevel();
             bool nextOpen = next != null && Grade.Unlocked(next.index, MetaSave.ClearedUpTo(City));
 

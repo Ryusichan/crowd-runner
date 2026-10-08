@@ -158,10 +158,20 @@ namespace CrowdRunner.Meta
 
             // **끝난 판을 한 번만 집는다.** 여기서 바로 `Show(Result)` 로 나가므로
             // `screen` 이 바뀌어 다음 프레임에 다시 들어오지 않는다
+            // `current` 가 없으면 **기록할 곳이 없다.** 지금 흐름에서는 `StartLevel` 이 먼저
+            // 넣으므로 안 일어나지만, 여기서 터지면 판이 끝나는 순간 예외가 나고 그것은
+            // *"다 깼는데 화면이 안 넘어간다"* 로만 보인다 — 가장 찾기 싫은 모양이다
+            if (current == null)
+            {
+                Debug.LogError("[CR] 끝난 판이 어느 판인지 모른다 — 기록하지 않고 지도로 돌아간다");
+                Show(MetaScreen.WorldMap);
+                return;
+            }
+
             resultWon = st == SimState.Won;
             resultRemaining = runner.Sim.Units;
-            resultGrade = Grade.Of(resultWon, resultRemaining, current?.rating);
-            MetaSave.Report(current.Code, resultWon, resultRemaining, current?.rating);
+            resultGrade = Grade.Of(resultWon, resultRemaining, current.rating);
+            MetaSave.Report(current.Code, resultWon, resultRemaining, current.rating);
             Show(MetaScreen.Result);
         }
 
