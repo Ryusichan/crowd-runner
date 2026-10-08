@@ -41,6 +41,13 @@ namespace CrowdRunner.Core
         // 처음에 프로퍼티로 두고 임시 변수에 복사해 `ref` 로 넘겼는데, 그러면 깎인 값이
         // **돌아오지 않아 벽이 영원히 안 부서진다**. 컴파일은 된다
         float blockingEnemies, blockingWallHp;
+        /// <summary>
+        /// 막고 있는 것이 **서 있는 z**. 그리는 쪽이 적 무리나 벽을 어디에 둘지 알아야 하는데,
+        /// 그것 때문에 `level.events[BlockingIndex]` 로 레벨 데이터를 뒤지게 하고 싶지 않다 —
+        /// 그러면 표현 쪽이 레벨 문법을 알아야 한다
+        /// </summary>
+        public float BlockingZ { get; private set; }
+
         public float BlockingEnemies => blockingEnemies;
         public float BlockingWallHp => blockingWallHp;
 
@@ -231,12 +238,12 @@ namespace CrowdRunner.Core
                     break;
                 }
                 case EventKind.Enemy:
-                    BlockingIndex = i;
+                    BlockingIndex = i; BlockingZ = e.z;
                     blockingEnemies = e.enemyCount;
                     State = SimState.Fighting; Last.fightBegan = true;
                     break;
                 case EventKind.Wall:
-                    BlockingIndex = i;
+                    BlockingIndex = i; BlockingZ = e.z;
                     blockingWallHp = e.wallHp;
                     State = SimState.Breaking; Last.wallBegan = true;
                     break;

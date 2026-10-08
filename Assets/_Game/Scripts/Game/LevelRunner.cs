@@ -33,8 +33,34 @@ namespace CrowdRunner.Game
 
         void Awake()
         {
-            var asset = Resources.Load<TextAsset>("Levels/" + levelName);
-            if (asset == null) { Error = "레벨을 못 찾았다: Resources/Levels/" + levelName; Debug.LogError("[CR] " + Error); return; }
+            // 인스펙터에 적힌 판으로 시작한다. 바깥(메타 화면·Boot)에서는 `Load(name)` 을 부른다
+            Load(levelName);
+        }
+
+        /// <summary>
+        /// **레벨 파일을 읽는 문.** 이름(`"1-1"`)으로 한 판을 띄운다 — `Resources/Levels/<이름>.txt`.
+        ///
+        /// 바깥에서 판을 여는 길은 **이것 하나뿐**이다. 세션 B 의 `Boot`, 좀비퀸에서 가져오는
+        /// 스테이지 카드, 테스트가 모두 여기로 들어온다. 문이 둘이면 한쪽만 초기화를 빼먹고,
+        /// 그건 *"두 번째 판부터 이상하다"* 로만 보여서 찾기 어렵다.
+        ///
+        /// **돌고 있던 판은 버린다** (다시 하기 / 다음 판). 그래서 누적기와 손가락 위치까지
+        /// 같이 비운다 — 안 비우면 새 판 첫 프레임이 지난 판의 밀린 시간만큼 앞으로 뛴다.
+        /// </summary>
+        /// <returns>떴으면 true. 못 떴으면 false 이고 이유는 <see cref="Error"/> 에 있다</returns>
+        public bool Load(string name)
+        {
+            levelName = name;
+            Level = null; Sim = null; Error = null;
+            targetX = 0f; accumulator = 0f; dragging = false;
+
+            var asset = Resources.Load<TextAsset>("Levels/" + name);
+            if (asset == null)
+            {
+                Error = "레벨을 못 찾았다: Resources/Levels/" + name;
+                Debug.LogError("[CR] " + Error);
+                return false;
+            }
 
             string why;
             Level = LevelFile.Parse(asset.text, out why);
@@ -42,11 +68,13 @@ namespace CrowdRunner.Game
             {
                 // **조용히 넘어가지 않는다.** 레벨이 틀렸는데 빈 판이 뜨면 *"게임이 안 나온다"* 로만
                 // 보이고, 원인이 레벨 글 한 줄이라는 것을 못 찾는다. 줄 번호가 `why` 에 들어 있다
-                Error = "레벨 " + levelName + " 을 못 읽는다 — " + why;
+                Error = "레벨 " + name + " 을 못 읽는다 — " + why;
                 Debug.LogError("[CR] " + Error);
-                return;
+                return false;
             }
+
             Sim = new Sim(Level);
+            return true;
         }
 
         void Update()
