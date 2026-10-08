@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    레벨을 **Unity 없이** 끝까지 돌리는 콘솔 러너.
+
+    `Assets/_Game/Scripts/Core/*.cs` 를 **그대로** 컴파일한다 — 복사본이 아니다. 복사하면 두 벌이
+    되고, 두 벌은 어긋난다. 그리고 이 프로젝트가 컴파일된다는 것 자체가 **`Core/` 가 UnityEngine 을
+    안 쓴다는 증거**다 (`docs/DESIGN.md` §2): 누가 `using UnityEngine;` 을 넣으면 여기서 깨진다.
+    사람이 지키는 규칙은 지켜지지 않으므로 컴파일러가 지킨다.
+
+    쓰는 법:  cd tools\sim ; dotnet run -c Release
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>crsim</AssemblyName>
+    <RootNamespace>CrowdRunner.Tools</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <!-- 경로를 **이 파일 기준**으로 잡는다. 절대 경로로 두면 다른 PC 에서 0 개를 컴파일하고도
+         "오류 없음" 이라고 말한다 (좀비퀸에서 실제로 그랬다 — `ZQ.Check.csproj` 9c04358) -->
+    <Compile Include="$(MSBuildThisFileDirectory)../../Assets/_Game/Scripts/Core/**/*.cs" />
+  </ItemGroup>
+
+</Project>
