@@ -2,6 +2,7 @@ using System.Collections;
 using System.IO;
 using CrowdRunner;
 using CrowdRunner.Core;
+using CrowdRunner.Game;
 using CrowdRunner.Meta;
 using NUnit.Framework;
 using UnityEngine;
@@ -129,6 +130,70 @@ namespace CrowdRunner.Tests
             Debug.Log("[CR-TEST] 결과 화면 화소 — 이김 " + won.ToString("F1") + "% · 짐 " + lost.ToString("F1") + "%");
             Assert.Greater(won, 3f, "이긴 결과 화면이 거의 비었다");
             Assert.Greater(lost, 3f, "진 결과 화면이 거의 비었다");
+        }
+
+        /// <summary>
+        /// **게임 화면을 찍는다** — 군중·길·게이트·적. UI 가 아니라 3D 카메라를 뜬다.
+        ///
+        /// 메타 화면과 경로가 다르다: 오버레이 캔버스를 카메라에 물릴 필요가 없고, 대신 **UI 를
+        /// 빼야** 한다 (게임이 어떻게 생겼는지 보려는 그림이라 HUD 가 덮으면 안 된다).
+        ///
+        /// 판을 조금 돌린 뒤에 찍는다 — 0 프레임에서는 군중이 한 점에 모여 있고 게이트가 멀어서
+        /// **아무것도 안 보인다.** 첫 게이트를 지난 뒤가 이 장르의 그림이다.
+        /// </summary>
+        [UnityTest, Timeout(300000)]
+        public IEnumerator Shoots_The_Gameplay_Screen()
+        {
+            var lv = LevelCatalog.Find("1-3");
+            Assert.IsNotNull(lv);
+            flow.StartLevel(lv);
+            float prev = Time.timeScale;
+            Time.timeScale = 100f;
+            var runner = GameBoot.Runner;
+            // 첫 게이트를 지나 군단이 커진 뒤 — 그때가 이 게임이 어떻게 생겼는지 보이는 자리다
+            for (int i = 0; i < 30000 && runner.Sim != null && runner.Sim.Units <= lv.initialUnits; i++)
+                yield return null;
+            for (int i = 0; i < 60; i++) yield return null;
+            Time.timeScale = prev;
+
+            float share = ShotWorld("game", runner);
+            Debug.Log($"[CR-TEST] 게임 화면: 병력 {runner.Sim.Units} z {runner.Sim.Z:F0} · 그려진 화소 {share:F1}%");
+            Assert.Greater(runner.Sim.Units, lv.initialUnits, "게이트를 지나지 않았다 — 군단이 안 커졌다");
+            Assert.Greater(share, 3f, "게임 화면이 거의 비었다 — 군중이 안 그려지는지 보라");
+        }
+
+        /// <summary>3D 카메라를 뜬다. UI 는 뺀다 (HUD 가 덮으면 게임이 안 보인다)</summary>
+        float ShotWorld(string name, LevelRunner runner)
+        {
+            var cam = Camera.main;
+            Assert.IsNotNull(cam, "카메라가 없다 — LevelView 가 안 섰다");
+            var rt = new RenderTexture(W, H, 24, RenderTextureFormat.ARGB32);
+            var prevTarget = cam.targetTexture;
+            int prevMask = cam.cullingMask;
+            cam.targetTexture = rt;
+            cam.cullingMask = ~(1 << 5);        // UI 빼고 전부
+            cam.Render();
+
+            var tex = new Texture2D(W, H, TextureFormat.RGB24, false);
+            var prevRt = RenderTexture.active;
+            RenderTexture.active = rt;
+            tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
+            tex.Apply(false);
+            RenderTexture.active = prevRt;
+
+            var px = tex.GetPixels32();
+            var bg = (Color32)cam.backgroundColor;
+            int lit = 0;
+            for (int i = 0; i < px.Length; i += 7)
+                if (Mathf.Abs(px[i].r - bg.r) + Mathf.Abs(px[i].g - bg.g) + Mathf.Abs(px[i].b - bg.b) > 24) lit++;
+            File.WriteAllBytes(Path.Combine(Dir, name + ".png"), tex.EncodeToPNG());
+
+            cam.targetTexture = prevTarget;
+            cam.cullingMask = prevMask;
+            Object.DestroyImmediate(tex);
+            rt.Release();
+            Object.DestroyImmediate(rt);
+            return lit / (px.Length / 7f) * 100f;
         }
 
         IEnumerator PlayUntilResult(string code, SimState want)

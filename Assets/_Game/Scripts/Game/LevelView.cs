@@ -74,9 +74,16 @@ namespace CrowdRunner.View
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.62f, 0.72f, 0.80f);
 
+            // **주변광을 못 박는다.** 기본값은 하늘(skybox) 기반인데 이 장면에는 하늘이 없어
+            // 엔진 기본 하늘을 샘플링한다 — 그 결과 **모든 것이 밝아지고 하늘색으로 물든다.**
+            // 첫 촬영에서 길(올리브 0.46)이 **흰색에 가까운 하늘빛**으로 나온 것이 그것이다.
+            // 코드로 세우는 장면은 하늘이 없으므로 평평한 주변광이 맞다 — 그래야 준 색이 그 색으로 나온다
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.22f, 0.23f, 0.26f);
+
             var li = new GameObject("Sun").AddComponent<Light>();
             li.type = LightType.Directional;
-            li.intensity = 1.05f;
+            li.intensity = 0.85f;
             li.shadows = LightShadows.None;   // 400 개체의 그림자는 드로우를 두 배로 만든다 (§6b)
             li.transform.rotation = Quaternion.Euler(52f, -28f, 0f);
 
@@ -162,6 +169,16 @@ namespace CrowdRunner.View
 
             fx.Tick(Time.deltaTime);
             fx.Draw();
+
+            // **지나친 게이트를 가린다.** 안 가리면 뒤에 남은 게이트가 카메라에 가까워져
+            // 글자가 거대해지고 서로 겹친다 — 첫 촬영에서 `×135` 와 `+30` 이 화면 아래를 덮었다.
+            // 지나친 선택지를 계속 보여 줄 이유도 없다: 이 게임의 조작은 **다음** 게이트 하나다
+            for (int i = 0; i < gates.Length; i++)
+            {
+                if (gates[i] == null) continue;
+                bool ahead = gates[i].position.z > sim.Z - 2f;
+                if (gates[i].gameObject.activeSelf != ahead) gates[i].gameObject.SetActive(ahead);
+            }
 
             countLabel.text = sim.Units.ToString();
             countLabel.transform.position = new Vector3(sim.X, 3.4f, sim.Z + 1.5f);
@@ -253,8 +270,17 @@ namespace CrowdRunner.View
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = name;
             Destroy(go.GetComponent<Collider>());   // 물리 엔진을 안 쓴다 (`DESIGN.md` §2)
-            var sh = Shader.Find("Mobile/Diffuse") ?? Shader.Find("Legacy Shaders/Diffuse") ?? Shader.Find("Standard");
-            go.GetComponent<Renderer>().sharedMaterial = new Material(sh) { color = c };
+            // **`Mobile/Diffuse` 에는 `_Color` 가 없다.** 그 셰이더는 `_MainTex` 만 받으므로
+            // `material.color = c` 가 **아무 일도 안 하고**, 길·게이트·벽·지역·칸막이가 전부
+            // **새하얗게** 나왔다 (첫 게임 화면 촬영에서 길이 화면을 하얗게 덮었다).
+            // 색을 주는 셰이더를 고르고, **실제로 먹었는지 확인**한다 — 조용히 흰색으로
+            // 떨어지면 "색을 줬는데 왜 하얗지" 가 된다
+            var sh = Shader.Find("Legacy Shaders/Diffuse") ?? Shader.Find("Standard");
+            var m = new Material(sh);
+            if (!m.HasProperty("_Color"))
+                Debug.LogError("[CR] 셰이더 '" + sh.name + "' 에 _Color 가 없다 — 모든 네모가 하얗게 나온다");
+            m.color = c;
+            go.GetComponent<Renderer>().sharedMaterial = m;
             return go.transform;
         }
 
