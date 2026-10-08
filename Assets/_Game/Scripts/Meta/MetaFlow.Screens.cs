@@ -289,6 +289,100 @@ namespace CrowdRunner.Meta
             UiKit.Place((RectTransform)mb.transform, new Vector2(0.5f, 0f), new Vector2(0f, 120f), new Vector2(620f, 68f));
         }
 
+        // ── 처음 한 번: 조작 안내 ────────────────────────────────────────────────
+        //
+        // 이 게임의 **유일한 조작**이 "손가락을 좌우로 끈다" 다 (기획서 §3.1). 안내가 없으면
+        // 플레이어는 가만히 서서 지는 것을 먼저 보고, 더 나쁜 경우 **오른쪽에 붙어 8/10 을
+        // 깨면서 고르는 법을 영영 안 배운다** (`DESIGN.md` §3f 가 그 사고를 기록한 자리다).
+        void BuildIntro()
+        {
+            var bg = UiKit.Panel("Bg", root, UiKit.Hex(0x1b1426));
+            UiKit.Stretch(bg.rectTransform);
+
+            var head = UiKit.Label("Head", root, "군단을 이끈다", UiKit.Display, UiKit.Text, TextAnchor.UpperCenter, true);
+            UiKit.Place(head.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -300f), new Vector2(900f, 70f));
+
+            var sub = UiKit.Label("Sub", root, "좀비화된 부산을 쓸어 간다", UiKit.Caption, UiKit.Dim, TextAnchor.UpperCenter);
+            UiKit.Place(sub.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -372f), new Vector2(900f, 34f));
+
+            string[] lines =
+            {
+                "손가락을 좌우로 끌어 군단을 옮긴다",
+                "게이트를 지나면 군단이 늘거나 준다",
+                "+10 과 ×3 중 어느 쪽이 큰지는 지금 병력에 따라 다르다",
+                "최종 방어선을 넘으면 그 구역을 정복한다",
+            };
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var row = UiKit.Panel("Line" + i, root, UiKit.Hex(0x2a2138));
+                UiKit.Place(row.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -480f - i * 130f), new Vector2(880f, 112f));
+                UiKit.SetRadius(row, 18f);
+
+                var num = UiKit.Label("N", row.rectTransform, (i + 1).ToString(), UiKit.Value, UiKit.Yellow, TextAnchor.MiddleCenter, true);
+                UiKit.Place(num.rectTransform, new Vector2(0f, 0.5f), new Vector2(56f, 0f), new Vector2(60f, 60f));
+
+                var txt = UiKit.Label("T", row.rectTransform, lines[i], UiKit.Body, UiKit.Text, TextAnchor.MiddleLeft);
+                UiKit.Place(txt.rectTransform, new Vector2(0f, 0.5f), new Vector2(120f, 0f), new Vector2(700f, 80f));
+
+                UiAnim.PopIn(row.rectTransform, i * UiAnim.CascadeStep * 2f);
+            }
+
+            var go = UiKit.Button("Go", root, "시작", UiKit.Body, UiKit.Purple, UiKit.Hex(0x1b1426), delegate
+            {
+                MetaSave.Data.introSeen = true;
+                MetaSave.Save();
+                Show(MetaScreen.WorldMap);
+            });
+            UiKit.Place((RectTransform)go.transform, new Vector2(0.5f, 0f), new Vector2(0f, 260f), new Vector2(620f, 112f));
+        }
+
+        // ── 판이 도는 동안 남아 있는 띠 ──────────────────────────────────────────
+        void BuildHud()
+        {
+            var btn = UiKit.Button("Leave", hud, "||", UiKit.Body, UiKit.Hex(0x2a2138), UiKit.Text, delegate
+            {
+                if (screen == MetaScreen.Playing) Show(MetaScreen.Paused);
+            });
+            // 왼쪽 위 — 엄지가 닿는 아래쪽은 **조작 영역**이다. 거기 두면 끌다가 눌린다
+            UiKit.Place((RectTransform)btn.transform, new Vector2(0f, 1f), new Vector2(96f, -96f), new Vector2(104f, 104f));
+        }
+
+        // ── 멈춤 ─────────────────────────────────────────────────────────────────
+        void BuildPaused()
+        {
+            var scrim = UiKit.Scrim("Scrim", root, 0.72f);
+            UiKit.Stretch(scrim.rectTransform);
+
+            var cardImg = UiKit.Panel("Card", root, UiKit.Hex(0x2a2138));
+            var card = cardImg.rectTransform;
+            UiKit.Place(card, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(820f, 560f));
+            UiKit.SetRadius(cardImg, 28f);
+
+            var head = UiKit.Label("Head", card, "멈췄다", UiKit.Title, UiKit.Text, TextAnchor.UpperCenter, true);
+            UiKit.Place(head.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -48f), new Vector2(740f, 48f));
+
+            var runner = GameBoot.Runner;
+            string line = runner != null && runner.Sim != null
+                ? "병력 " + runner.Sim.Units + " · " + Mathf.RoundToInt(runner.Sim.Z) + " m"
+                : "";
+            var sub = UiKit.Label("Sub", card, line, UiKit.Caption, UiKit.Dim, TextAnchor.UpperCenter);
+            UiKit.Place(sub.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -104f), new Vector2(740f, 34f));
+
+            var cont = UiKit.Button("Continue", card, "계속", UiKit.Body, UiKit.Purple, UiKit.Hex(0x1b1426),
+                                    delegate { Show(MetaScreen.Playing); });
+            UiKit.Place((RectTransform)cont.transform, new Vector2(0.5f, 0f), new Vector2(0f, 290f), new Vector2(620f, 104f));
+
+            var again = UiKit.Button("Again", card, "처음부터", UiKit.Body, UiKit.Hex(0x3b2f4d), UiKit.Text,
+                                     delegate { if (current != null) StartLevel(current); });
+            UiKit.Place((RectTransform)again.transform, new Vector2(0.5f, 0f), new Vector2(0f, 172f), new Vector2(620f, 96f));
+
+            var quit = UiKit.Button("Quit", card, CityName(City) + " 지도로", UiKit.Caption, UiKit.Hex(0x352a46), UiKit.Dim,
+                                    delegate { Show(MetaScreen.WorldMap); });
+            UiKit.Place((RectTransform)quit.transform, new Vector2(0.5f, 0f), new Vector2(0f, 64f), new Vector2(620f, 76f));
+
+            UiAnim.ModalIn(scrim, card);
+        }
+
         // ── 레벨을 하나도 못 읽었을 때 ───────────────────────────────────────────
         void ShowBroken()
         {

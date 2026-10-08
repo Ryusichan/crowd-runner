@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using CrowdRunner.Core;
 using CrowdRunner.Game;
@@ -7,7 +6,7 @@ using CrowdRunner.UI;
 
 namespace CrowdRunner.Meta
 {
-    public enum MetaScreen { WorldMap, StageCard, Playing, Result }
+    public enum MetaScreen { Intro, WorldMap, StageCard, Playing, Paused, Result }
 
     /// <summary>
     /// **메타 껍데기** — 월드맵 → 스테이지 카드 → 한 판 → 결과 → 월드맵.
@@ -48,6 +47,17 @@ namespace CrowdRunner.Meta
         }
 
         RectTransform root;
+
+        /// <summary>
+        /// **판이 도는 동안에도 남아 있는 것** — 나가기 단추 하나. `root` 는 판 중에 꺼지므로
+        /// 거기 두면 같이 꺼진다.
+        ///
+        /// 왜 필요한가: 지금 구조에서는 판에 들어가면 **나올 길이 없다.** 끝까지 지거나
+        /// 이겨야 한다. 1~2 분이라 견딜 만하지만, 잘못 고른 것을 아는 순간이 10 초쯤이고
+        /// 그때 다시 할 수 없으면 **고른 것을 배우는 데 90 초가 든다.**
+        /// </summary>
+        RectTransform hud;
+
         MetaScreen screen;
         LevelData current;          // 카드에 띄운 / 플레이 중인 판
         bool resultWon;
@@ -60,10 +70,15 @@ namespace CrowdRunner.Meta
         void Awake()
         {
             I = this;
-            EnsureEventSystem();
+            // `EventSystem` 은 `GameBoot` 이 세운다 (장면 세우는 일은 한 곳 — 둘이 서면 Unity 가 경고한다)
 
             root = UiKit.Rect("MetaRoot", GameBoot.Overlay.transform);
             UiKit.Stretch(root);
+
+            hud = UiKit.Rect("MetaHud", GameBoot.Overlay.transform);
+            UiKit.Stretch(hud);
+            BuildHud();
+            hud.gameObject.SetActive(false);
 
             // 레벨이 하나도 못 읽혔으면 **그것을 화면에 띄운다.** 빈 월드맵이 뜨면
             // "게임이 안 나온다" 로만 보이고 원인이 글 한 줄이라는 것을 못 찾는다
@@ -72,26 +87,13 @@ namespace CrowdRunner.Meta
                 ShowBroken();
                 return;
             }
-            Show(MetaScreen.WorldMap);
+            // 처음 켰으면 **조작을 한 번 알려 준다.** 이 게임의 유일한 조작이 "손가락을
+            // 좌우로 끈다" 인데, 아무 안내가 없으면 플레이어는 **가만히 서서 지는 것을**
+            // 먼저 본다 (오른쪽에 붙어 있으면 8/10 이 깨지므로 그조차 모르고 지나갈 수 있다)
+            Show(MetaSave.Data.introSeen ? MetaScreen.WorldMap : MetaScreen.Intro);
         }
 
         void OnDestroy() { if (I == this) I = null; }
-
-        /// <summary>
-        /// uGUI 는 `EventSystem` 이 없으면 **클릭을 하나도 받지 않는다.** 버튼이 보이는데
-        /// 눌리지 않으므로 *"버튼이 안 먹는다"* 로만 보인다 — 좀비퀸에서 한 번 겪었다.
-        /// `GameBoot` 가 캔버스를 세우므로 원래 그쪽 일이지만, 없으면 **내 화면이 죽는다.**
-        /// 그래서 없을 때만 세우고 로그를 남긴다 (두 벌이 서면 Unity 가 경고한다).
-        /// </summary>
-        static void EnsureEventSystem()
-        {
-            if (EventSystem.current != null) return;
-            var go = new GameObject("EventSystem");
-            Object.DontDestroyOnLoad(go);
-            go.AddComponent<EventSystem>();
-            go.AddComponent<StandaloneInputModule>();
-            Debug.Log("[CR] EventSystem 이 없어서 MetaFlow 가 세웠다");
-        }
 
         // ── 화면 전환 ────────────────────────────────────────────────────────────
         public void Show(MetaScreen s)
@@ -104,12 +106,18 @@ namespace CrowdRunner.Meta
             root.gameObject.SetActive(!playing);
             if (runner != null) runner.Paused = !playing;
 
+            // 나가기 띠는 **판이 도는 동안과 멈춰 있는 동안** 보인다 — 멈춤 화면에서
+            // 사라지면 "어디를 눌러 멈췄는지" 가 화면에서 없어진다
+            hud.gameObject.SetActive(playing || s == MetaScreen.Paused);
+
             if (playing) return;
 
             switch (s)
             {
+                case MetaScreen.Intro: BuildIntro(); break;
                 case MetaScreen.WorldMap: BuildWorldMap(); break;
                 case MetaScreen.StageCard: BuildStageCard(); break;
+                case MetaScreen.Paused: BuildPaused(); break;
                 case MetaScreen.Result: BuildResult(); break;
             }
             // **화면 전환은 각 화면이 아니라 이 길목에서 건다.** 화면마다 손으로 넣으면
