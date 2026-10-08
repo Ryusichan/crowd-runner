@@ -51,6 +51,29 @@ namespace CrowdRunner.Core
         public float EnemiesKilled { get; private set; }
 
         readonly bool[] fired;
+
+        // ── 표현이 읽는 문 ────────────────────────────────────────────────────────
+        // **이번 틱에 무슨 일이 있었나.** 표현(파티클·소리·카메라)은 *상태*가 아니라 *사건*을
+        // 알아야 한다 — "병력이 10 에서 40 이 됐다" 가 아니라 "게이트가 터졌다" 여야
+        // 생성 연출을 한 번만 낸다.
+        //
+        // **대리자(delegate)나 리스트를 쓰지 않는다.** 표현 쪽 예산이 프레임당 **관리 힙 할당
+        // 0 B** 라서(`docs/DESIGN.md` M0), 이벤트를 객체로 넘기면 그 예산을 로직이 먼저 쓴다.
+        // 그래서 **구조체 하나를 덮어쓰고** 표현이 `Step` 직후에 읽는다.
+        public struct Tick
+        {
+            /// <summary>이번 틱에 게이트가 터졌나 — 터졌으면 어느 쪽(−1/+1)과 그 전후 병력</summary>
+            public bool gateFired; public int gateLane; public float gateBefore, gateAfter;
+            /// <summary>전투·벽이 시작/끝났나 — 카메라가 붙고 떨어지는 지점</summary>
+            public bool fightBegan, fightEnded, wallBegan, wallEnded;
+            /// <summary>이번 틱에 잃은 병력 (전투 / 지역) — 사망 연출의 양을 정한다</summary>
+            public float lostToCombat, lostToZone;
+            /// <summary>이번 틱에 지운 적 수</summary>
+            public float killed;
+        }
+        /// <summary>**`Step` 직후에만 유효하다.** 다음 `Step` 이 덮어쓴다</summary>
+        public Tick Last;
+
         /// <summary>지금 밟고 있는 지속 피해 지역들 (겹칠 수 있다)</summary>
         readonly List<int> zones = new List<int>();
         /// <summary>지역에서 녹은 누계 — 전투 손실과 **따로** 센다. 섞으면 어느 쪽이 비쌌는지 못 본다</summary>
@@ -70,6 +93,7 @@ namespace CrowdRunner.Core
         /// </param>
         public void Step(float desiredX)
         {
+            Last = default;   // 매 틱 비운다 — 안 비우면 지난 틱 연출이 계속 다시 난다
             if (State == SimState.Won || State == SimState.Lost) return;
             float dt = FixedStep;
             Time += dt;
@@ -136,6 +160,7 @@ namespace CrowdRunner.Core
                 Allies -= Allies * (z.dps / ally.hp) * dt;
                 if (Allies < 0f) Allies = 0f;
                 ZoneLost += before - Allies;
+                Last.lostToZone += before - Allies;
             }
             if (Allies <= 0f) State = SimState.Lost;
         }
@@ -157,21 +182,23 @@ namespace CrowdRunner.Core
                         if (d < bestD) { bestD = d; best = k; }
                     }
                     var pick = e.options[best];
+                    Last.gateFired = true; Last.gateLane = pick.lane; Last.gateBefore = Allies;
                     ChosenLanes.Add(pick.lane);
                     if (e.commitUntilZ > Z) { commitUntil = e.commitUntilZ; commitLane = pick.lane; }
                     Allies = Apply(Allies, pick.op, pick.value);
+                    Last.gateAfter = Allies;
                     if (Allies <= 0f) { State = SimState.Lost; }
                     break;
                 }
                 case EventKind.Enemy:
                     BlockingIndex = i;
                     blockingEnemies = e.enemyCount;
-                    State = SimState.Fighting;
+                    State = SimState.Fighting; Last.fightBegan = true;
                     break;
                 case EventKind.Wall:
                     BlockingIndex = i;
                     blockingWallHp = e.wallHp;
-                    State = SimState.Breaking;
+                    State = SimState.Breaking; Last.wallBegan = true;
                     break;
                 case EventKind.Zone:
                     // 막지 않는다 — **지나가면서** 깎인다. 그래서 전진이 멈추는 전투·벽과 다르다
@@ -191,13 +218,15 @@ namespace CrowdRunner.Core
                 Allies = al;
                 AlliesLost += a0 - Allies;
                 EnemiesKilled += e0 - blockingEnemies;
+                Last.lostToCombat = a0 - Allies;
+                Last.killed = e0 - blockingEnemies;
 
                 if (Allies <= 0f) { State = SimState.Lost; BlockingIndex = -1; return; }
                 if (blockingEnemies <= 0f)
                 {
                     bool wasFinal = e.isFinal;
                     BlockingIndex = -1;
-                    State = SimState.Running;
+                    State = SimState.Running; Last.fightEnded = true;
                     // **최종 방어선을 넘으면 거기서 끝난다** — 남은 길을 걸어가게 두면 판이 늘어지고,
                     // 그 사이에 아무 일도 없다
                     if (wasFinal) Finish();
@@ -206,7 +235,7 @@ namespace CrowdRunner.Core
             else // Wall
             {
                 Combat.TickWall(Allies, ref blockingWallHp, ally, level.roadWidth, dt);
-                if (blockingWallHp <= 0f) { BlockingIndex = -1; State = SimState.Running; }
+                if (blockingWallHp <= 0f) { BlockingIndex = -1; State = SimState.Running; Last.wallEnded = true; }
             }
         }
 
