@@ -111,6 +111,121 @@ namespace CrowdRunner.Tests
         }
 
         /// <summary>
+        /// **결과 화면을 실데이터로 찍는다** — 이긴 판 하나와 진 판 하나.
+        ///
+        /// 빈 결과 화면은 화소 6.8 % 였다. 이긴 쪽에는 "다음 구역" 단추와 *"☣☣☣ 까지 N 명"* 줄이
+        /// 더 붙는데 그 배치를 **아무도 본 적이 없다** (세션 A 요청).
+        ///
+        /// 상태를 손으로 만들지 않고 **판을 끝까지 돌린다**: 1-1 은 손 안 대면 이기고 1-9 는 진다
+        /// (`LevelShots.Audit` 이 잰 수). 손으로 만들면 *실제로 그 상태가 나오는지* 는 안 재게 된다.
+        /// </summary>
+        [UnityTest, Timeout(300000)]
+        public IEnumerator Shoots_The_Result_Screen_Won_And_Lost()
+        {
+            yield return PlayUntilResult("1-1", SimState.Won);
+            float won = Shot("meta_result_won");
+            yield return PlayUntilResult("1-9", SimState.Lost);
+            float lost = Shot("meta_result_lost");
+            Debug.Log("[CR-TEST] 결과 화면 화소 — 이김 " + won.ToString("F1") + "% · 짐 " + lost.ToString("F1") + "%");
+            Assert.Greater(won, 3f, "이긴 결과 화면이 거의 비었다");
+            Assert.Greater(lost, 3f, "진 결과 화면이 거의 비었다");
+        }
+
+        IEnumerator PlayUntilResult(string code, SimState want)
+        {
+            var lv = LevelCatalog.Find(code);
+            Assert.IsNotNull(lv, code + " 을 목록에서 못 찾았다");
+            flow.StartLevel(lv);
+            // **빠르게 돌린다.** 1-9 는 57 초짜리라 실시간이면 주행이 1 분을 넘는다. `LevelRunner` 가
+            // 한 프레임당 0.25 초로 자르고 고정 스텝이라 **배속을 올려도 결과는 같다**
+            float prev = Time.timeScale;
+            // 배치 모드는 프레임이 아주 짧아(실측 real dt ≈ 0.0002 s) 배속 20 으로는 한 프레임에
+            // 0.004 초밖에 안 간다 — 3,600 프레임이 **14 초**였고 1-1 은 24 초짜리라 안 끝났다.
+            // `LevelRunner` 가 프레임당 0.25 초로 자르므로 배속을 올려도 결과는 같다 (고정 스텝)
+            Time.timeScale = 100f;
+            var runner = GameBoot.Runner;
+            // **멈췄으면 무엇이 멈췄는지 찍는다.** 1 차에서 3,600 프레임을 돌고도 `Running` 이었는데,
+            // 그 한 글자로는 *판이 안 돌았는지* · *다 돌았는데 안 끝났는지* 를 가릴 수 없다
+            int i = 0;
+            // **끝난 두 상태만** 기다린다. `Running` 만 보면 전투(`Fighting`)·벽(`Breaking`) 에서
+            // 빠져나오고, 그때 읽은 상태는 *"안 끝났다"* 로 보인다 — 실제로는 **도는 중**이다
+            for (; i < 30000 && runner.Sim != null
+                   && runner.Sim.State != SimState.Won && runner.Sim.State != SimState.Lost; i++)
+            {
+                if (i % 5000 == 0)
+                    Debug.Log($"[CR-TEST]   {code} {i}프레임 멈춤={runner.Paused} z={runner.Sim.Z:F0} " +
+                              $"병력={runner.Sim.Units} 상태={runner.Sim.State} dt={Time.deltaTime:F3}");
+                yield return null;
+            }
+            Time.timeScale = prev;
+            Debug.Log($"[CR-TEST]   {code} 끝 {i}프레임 · 상태 {(runner.Sim != null ? runner.Sim.State.ToString() : "Sim 없음")}");
+            Assert.AreEqual(want, runner.Sim.State, code + " 이 기대한 결과로 안 끝났다");
+            yield return null; yield return null;    // 결과 화면으로 넘어갈 틱
+        }
+
+        /// <summary>
+        /// **글자가 자기 색에 도달하는가.**
+        ///
+        /// 세션 A 가 대비 1.59~1.96 의 원인을 찾았는데 **색이 아니라 크기**였다: `UiKit` 의 글자
+        /// 상수는 높이 900 캔버스 기준인데 여기 캔버스는 1920 이라 같은 상수가 2.13 배 작게 떴고,
+        /// 글자가 너무 작아 **안티에일리어싱이 꽉 찬 화소를 못 만들었다.** 지정한 색은
+        /// `#f2f4ff` 인데 가장 밝은 화소가 `#716d7e` 에서 멈췄다.
+        ///
+        /// **색을 올렸으면 흐릿한 글자가 조금 밝아졌을 뿐 여전히 안 읽혔다** — 대비는 증상이고
+        /// 크기가 병이었다. 그래서 대비가 아니라 **도달률**을 본다: 글자 네모 안에서 가장 밝은
+        /// 화소가 지정한 색의 90 % 에 닿는가. 안 닿으면 *그 색으로 그려진 적이 없는* 것이다.
+        ///
+        /// 캔버스 기준이나 폰트를 누가 바꾸면 여기서 걸린다 — 증상이 아니라 원인에 붙은 검사다.
+        /// </summary>
+        static void AssertGlyphsReachTheirColour(Camera cam, Texture2D tex, Transform root, string shot)
+        {
+            var corners = new Vector3[4];
+            string worst = null; float worstReach = 2f; int seen = 0;
+            foreach (var t in root.GetComponentsInChildren<Text>())
+            {
+                if (!t.enabled || !t.gameObject.activeInHierarchy || string.IsNullOrWhiteSpace(t.text)) continue;
+                if (t.color.a < 0.95f) continue;                 // 일부러 흐린 것은 뺀다
+                float want = Lum(t.color);
+                if (want < 0.25f) continue;                      // 어두운 글자는 비율이 거꾸로다
+                var rt = t.rectTransform;
+                rt.GetWorldCorners(corners);
+                int x0 = W, x1 = 0, y0 = H, y1 = 0;
+                for (int i = 0; i < 4; i++)
+                {
+                    var v = cam.WorldToViewportPoint(corners[i]);
+                    int px = Mathf.RoundToInt(v.x * W), py = Mathf.RoundToInt(v.y * H);
+                    x0 = Mathf.Min(x0, px); x1 = Mathf.Max(x1, px);
+                    y0 = Mathf.Min(y0, py); y1 = Mathf.Max(y1, py);
+                }
+                x0 = Mathf.Clamp(x0, 0, W - 1); x1 = Mathf.Clamp(x1, 0, W - 1);
+                y0 = Mathf.Clamp(y0, 0, H - 1); y1 = Mathf.Clamp(y1, 0, H - 1);
+                if (x1 - x0 < 2 || y1 - y0 < 2) continue;
+
+                float got = 0f;
+                for (int y = y0; y <= y1; y++)
+                    for (int x = x0; x <= x1; x++)
+                        got = Mathf.Max(got, Lum(tex.GetPixel(x, y)));
+                seen++;
+                float reach = got / Mathf.Max(0.001f, want);
+                if (reach < worstReach)
+                {
+                    worstReach = reach;
+                    worst = t.name + " (" + Trim(t.text) + ") 크기 " + t.fontSize +
+                            " 도달 " + (reach * 100f).ToString("F0") + "%";
+                }
+            }
+            if (seen == 0) return;
+            Debug.Log("[CR-TEST] " + shot + ": 밝은 글자 " + seen + " 개 · 가장 낮은 도달 " +
+                      (worstReach * 100f).ToString("F0") + "% (" + worst + ")");
+            Assert.GreaterOrEqual(worstReach, 0.9f,
+                shot + ": " + worst + " — 지정한 색에 못 닿는다. 글자가 **너무 작아** " +
+                "안티에일리어싱이 꽉 찬 화소를 못 만든다 (색이 아니라 크기 · UiKit.FontScale 을 보라)");
+        }
+
+        static float Lum(Color c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }
+        static string Trim(string v) { return v.Length > 12 ? v.Substring(0, 12) : v; }
+
+        /// <summary>
         /// 그려진 것들이 차지하는 범위 — **캔버스 기준 좌표**(1080×1920)로 잰다.
         ///
         /// 화면 픽셀로 재면 안 된다: 배치 주행의 창이 **640×480** 이라 월드맵이 *"480px / 1920"*
@@ -221,6 +336,11 @@ namespace CrowdRunner.Tests
             float share = lit / (px.Length / 7f) * 100f;
 
             File.WriteAllBytes(Path.Combine(Dir, name + ".png"), tex.EncodeToPNG());
+
+            // **그림을 쓴 뒤에 단언한다.** 앞에 두었더니 글자 도달률이 걸리는 순간 PNG 가 안 써져서
+            // **보려던 그림을 잃었다** — 검사가 자기가 검사하던 증거를 없앤 셈이다. 판정은 판정이고
+            // 그림은 사람이 봐야 하는 것이라, 떨어지더라도 그림은 남는다
+            AssertGlyphsReachTheirColour(cam, tex, cv.transform, name);
 
             // **되돌린다** — 안 되돌리면 캔버스가 카메라 모드로 남고, 그건 *"어제는 됐는데
             // 오늘 UI 가 안 보인다"* 로만 보인다
