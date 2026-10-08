@@ -36,17 +36,17 @@ namespace CrowdRunner.Meta
 
             // ── 머리 ──
             var head = UiKit.Rect("Head", root);
-            UiKit.Place(head, new Vector2(0.5f, 1f), new Vector2(0f, -170f), new Vector2(980f, 220f));
+            UiKit.Place(head, new Vector2(0.5f, 1f), new Vector2(0f, -150f), new Vector2(980f, 260f));
 
             var city = UiKit.Label("City", head, CityName(City), UiKit.Display, UiKit.Text, TextAnchor.UpperCenter, true);
-            UiKit.Place(city.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(980f, 60f));
+            UiKit.Place(city.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(980f, 96f));
 
             var sub = UiKit.Label("Sub", head, "좀비화된 도시를 쓸어 간다", UiKit.Caption, UiKit.Dim, TextAnchor.UpperCenter);
-            UiKit.Place(sub.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -64f), new Vector2(980f, 36f));
+            UiKit.Place(sub.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -100f), new Vector2(980f, 44f));
 
             // 정복도 — **☣ 를 다 모아야 100 %** 다 (`Grade.Conquest`). 깨기만 하면 33 %
             var barBg = UiKit.Panel("BarBg", head, UiKit.Hex(0x2e243a));
-            UiKit.Place(barBg.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -120f), new Vector2(760f, 22f));
+            UiKit.Place(barBg.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -156f), new Vector2(760f, 22f));
             UiKit.SetRadius(barBg, 11f, 22f);
 
             var barFill = UiKit.Panel("BarFill", barBg.rectTransform, UiKit.Purple);
@@ -63,7 +63,7 @@ namespace CrowdRunner.Meta
             UiKit.SetRadius(barFill, 11f, 22f);
 
             var pct = UiKit.Label("Pct", head, Mathf.RoundToInt(conquest * 100f) + " % 정복", UiKit.Caption, UiKit.Dim, TextAnchor.UpperCenter);
-            UiKit.Place(pct.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -150f), new Vector2(760f, 34f));
+            UiKit.Place(pct.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -186f), new Vector2(760f, 44f));
 
             // ── 정복 경로: 아래(1-1) 에서 위(1-10) 로 꺾여 올라간다 ──
             //
@@ -74,7 +74,10 @@ namespace CrowdRunner.Meta
 
             // 노드 폭 470 · 흔들림 ±110 → 가로 195~885 (1080 안, 양옆 195 여유).
             // 세로는 70 + 9×140 = 1330 이 1480 안에 든다 — 세션 B 가 그림에서 쟀다
-            const float step = 140f, swing = 220f;
+            // 글자가 캔버스 기준에 맞춰 2.13 배 커졌으므로(`MatchFontsToCanvas`) 칸도 키운다 —
+            // 112 짜리 칸에 53 px 코드 + 37 px 이름을 넣으면 눌린다.
+            // 세로: 70 + 9×150 = 1420 (칸 절반 62 를 더해도 1482) · 가로: 195~885 (1080 안)
+            const float step = 150f, swing = 220f;
             var pos = new Vector2[levels.Count];
             for (int i = 0; i < levels.Count; i++)
                 pos[i] = new Vector2((i % 2 == 0 ? -1f : 1f) * swing * 0.5f, 70f + i * step);
@@ -120,25 +123,25 @@ namespace CrowdRunner.Meta
                                      next ? UiKit.Hex(0x5a4578) : open ? UiKit.Hex(0x3b2f4d) : UiKit.Hex(0x2f2740),
                                      next ? UiKit.Yellow : open ? UiKit.Hex(0x6b5a85) : UiKit.Hex(0x4b3d60),
                                      next ? 6f : 2f);
-            UiKit.Place(card.rectTransform, new Vector2(0.5f, 0f), at, new Vector2(470f, 112f));
+            UiKit.Place(card.rectTransform, new Vector2(0.5f, 0f), at, new Vector2(470f, 124f));
 
             var code = UiKit.Label("Code", card.rectTransform, lv.Code, UiKit.Value,
                                    open ? UiKit.Yellow : UiKit.Dim, TextAnchor.MiddleLeft, true);
-            UiKit.Place(code.rectTransform, new Vector2(0f, 1f), new Vector2(22f, -14f), new Vector2(120f, 36f));
+            UiKit.Place(code.rectTransform, new Vector2(0f, 1f), new Vector2(22f, -12f), new Vector2(140f, 48f));
 
             // **잠긴 판도 이름을 보여 준다.** `- - -` 로 가렸더니 열 칸 중 아홉이 빈 줄이 되어
             // 첫 화면이 거의 빈 화면이었다 (세션 B). 이름은 **스포일러가 아니라 지도**다 —
             // 어디로 가는지 보이는 것이 정복 지도의 값이다
             var nm = UiKit.Label("Name", card.rectTransform, lv.name, UiKit.LabelPt,
                                  open ? UiKit.Text : UiKit.Hex(0x8a7aa6), TextAnchor.MiddleLeft);
-            UiKit.Place(nm.rectTransform, new Vector2(0f, 1f), new Vector2(22f, -52f), new Vector2(330f, 34f));
+            UiKit.Place(nm.rectTransform, new Vector2(0f, 1f), new Vector2(22f, -64f), new Vector2(330f, 42f));
 
             // ☣ 셋 — 받은 것만 채운다
             for (int i = 0; i < Grade.Max; i++)
             {
                 var dot = UiKit.Panel("Bio" + i, card.rectTransform, i < grade ? UiKit.Green : UiKit.Hex(0x3f3450));
                 dot.sprite = UiKit.Circle;
-                UiKit.Place(dot.rectTransform, new Vector2(1f, 1f), new Vector2(-24f - (2 - i) * 34f, -26f), new Vector2(24f, 24f));
+                UiKit.Place(dot.rectTransform, new Vector2(1f, 1f), new Vector2(-26f - (2 - i) * 38f, -30f), new Vector2(26f, 26f));
             }
 
             // **다음에 할 판에 표를 붙인다.** 색만으로는 "다음" 이 안 읽힌다 — 한 화면에
@@ -146,20 +149,20 @@ namespace CrowdRunner.Meta
             if (next)
             {
                 var mark = UiKit.Label("Next", card.rectTransform, "▶", UiKit.Value, UiKit.Yellow, TextAnchor.MiddleCenter, true);
-                UiKit.Place(mark.rectTransform, new Vector2(0f, 0.5f), new Vector2(-34f, 0f), new Vector2(56f, 56f));
+                UiKit.Place(mark.rectTransform, new Vector2(0f, 0.5f), new Vector2(-44f, 0f), new Vector2(72f, 72f));
             }
 
             if (!open)
             {
                 var lock0 = UiKit.Label("Lock", card.rectTransform, "잠김", UiKit.Micro, UiKit.Hex(0x7a6b93), TextAnchor.MiddleRight);
-                UiKit.Place(lock0.rectTransform, new Vector2(1f, 0f), new Vector2(-24f, 26f), new Vector2(160f, 26f));
+                UiKit.Place(lock0.rectTransform, new Vector2(1f, 0f), new Vector2(-24f, 24f), new Vector2(200f, 36f));
                 return;
             }
 
             if (MetaSave.BestOf(lv.Code) > 0)
             {
                 var best = UiKit.Label("Best", card.rectTransform, "최고 " + MetaSave.BestOf(lv.Code), UiKit.Micro, UiKit.Dim, TextAnchor.MiddleRight);
-                UiKit.Place(best.rectTransform, new Vector2(1f, 0f), new Vector2(-24f, 26f), new Vector2(200f, 26f));
+                UiKit.Place(best.rectTransform, new Vector2(1f, 0f), new Vector2(-24f, 24f), new Vector2(240f, 36f));
             }
 
             // 카드 전체가 버튼이다 — 작은 과녁을 겨누게 하면 엄지로 누르기 어렵다
