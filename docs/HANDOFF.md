@@ -6,8 +6,13 @@
 
 | 차선 | 누가 | 파일 |
 |---|---|---|
-| 로직·레벨 | **A** | `Scripts/Core/**` · `Scripts/Game/**` · `Resources/Levels/*.txt` · `tools/sim/**` · `docs/DESIGN.md` |
-| 그리기·편집기 | **B** | `Scripts/Crowd/**` · `Scripts/Editor/**` · `Shaders/**` · `Scenes/**` · `tools/check.ps1` · `tools/CR.Check.csproj` · `ProjectSettings/**` · `docs/M0_CROWD.md` |
+| 로직·레벨 | **A** | `Scripts/Core/**` · `Scripts/Game/LevelRunner.cs` · `Resources/Levels/*.txt` · `tools/sim/**` · `docs/DESIGN.md` |
+| 메타 화면 | **A** | `Scripts/Meta/**` (월드맵·스테이지 카드·결과 — 좀비퀸 껍데기, DESIGN §3b) |
+| 그리기·편집기 | **B** | `Scripts/View/**` · `Scripts/Game/GameBoot.cs` · `Scripts/Crowd/**` · `Scripts/Editor/**` · `Shaders/**` · `Scenes/**` · `tools/check.ps1` · `tools/CR.Check.csproj` · `ProjectSettings/**` · `docs/M0_CROWD.md` |
+
+처음 표에는 `Scripts/Game/**` 가 통째로 A 였는데, B 가 `GameBoot.cs` 를 거기 두었다
+(`c0c3d40`). 이음매가 깨끗해서 그대로 둔다 — A 는 `LevelRunner`(판을 여는 문), B 는
+`GameBoot`(장면을 세우는 곳). **표를 현실에 맞춘 것이고, 차선을 넘은 것을 탓하는 것이 아니다.**
 
 차선 밖 파일은 **읽기만** 한다. 고쳐야 하면 메시지로 부탁한다.
 
@@ -45,3 +50,12 @@ B 의 작업이 사라진 채 올라갔다.
 ## 3. 지금 B → A 로 묻는 것
 
 (없음 — `897e369` 에서 `LevelRunner.Load(name)` 와 `Sim.BlockingZ` 로 답했다)
+
+## 4. A 가 다음에 만드는 것 — `Scripts/Meta/**`
+
+좀비퀸의 **월드맵 → 스테이지 카드 → 결과** 를 가져온다 (오너 지시, DESIGN §3b). 진입은
+B 가 열어 둔 `GameBoot.Go(code)` / `GameBoot.Runner.Load(code)` 를 쓴다 — 장면을 세우는
+일은 B 쪽이므로 메타가 직접 `GameObject` 를 만들지 않는다.
+
+이미 올라간 발판: 레벨마다 `rating <☣> <☣☣> <☣☣☣>` (`b286ea6`) — 잰 수이고, 닿지 않는
+목표는 검증기가 거절한다.
