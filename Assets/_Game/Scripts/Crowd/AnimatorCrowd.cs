@@ -43,8 +43,20 @@ namespace Game.Crowd
             }
         }
 
+        /// <summary>
+        /// **끌 때 자식도 꺼야 한다.** 전에는 뿌리만 끄고 `live = 0` 만 했다 — 그러면 자식은
+        /// **켜진 채로 남고**, 다음 구간이 뿌리를 다시 켜면 **지난 구간의 개체가 그대로 그려진다.**
+        /// `Sync` 는 `live` 부터 켜고 `n`~`live` 를 끄는데 `live` 가 0 이라 **끌 것을 못 찾는다.**
+        ///
+        /// 5 차 측정에서 이것이 잡혔다: `A-0`(아무도 안 세움)이 GPU **14.33 ms** 였고 빈 장면은
+        /// 0.70 이었다. 아무것도 안 그리는데 14 ms 가 나올 수는 없으니 **뭔가를 그리고 있었다** —
+        /// 앞 구간(250 명)이었다. 그래서 `A-0`~`A-250` 이 전부 250 명을 재고 **곡선이 평평했다.**
+        /// 설명이 안 되는 절편 하나가 이 버그를 가리켰다.
+        /// </summary>
         public void SetActive(bool on)
         {
+            if (!on && units != null)
+                for (int i = 0; i < live; i++) if (units[i] != null) units[i].gameObject.SetActive(false);
             if (root != null) root.SetActive(on);
             if (!on) live = 0;
         }
@@ -64,6 +76,21 @@ namespace Game.Crowd
                 // 적은 반대쪽을 본다 — 두 군단이 마주 달리는 것이 보여야 겹치는 순간이 읽힌다
                 t.localRotation = f.Side[i] == 0 ? IdentityFwd : IdentityBack;
             }
+        }
+
+        /// <summary>
+        /// 증식 봉우리 — 앞의 `n` 개를 끄고 **같은 프레임에** 다시 켠다.
+        ///
+        /// 전에는 봉우리가 120 명을 *더했다*. 그러면 `A-100` 구간이 실제로는 **820 명**이 되어
+        /// 네 점 스윕이 전부 1,000 근처로 뭉치고 **곡선이 사라진다** (`M0Bench` 주석 §4).
+        /// 끄고 켜면 활성화 비용은 그대로 들고 수는 고정이다.
+        /// </summary>
+        public void Churn(CrowdField f, int n)
+        {
+            if (units == null || units[0] == null) return;
+            int k = Mathf.Min(n, live);
+            for (int i = 0; i < k; i++) units[i].gameObject.SetActive(false);
+            for (int i = 0; i < k; i++) units[i].gameObject.SetActive(true);
         }
 
         static readonly Quaternion IdentityFwd = Quaternion.identity;
@@ -86,5 +113,6 @@ namespace Game.Crowd
             if (on) Debug.LogWarning("[M0] 방식 B(VAT) 미구현 — 이 구간의 수는 **무효**다 (0 을 '공짜' 로 읽지 말 것)");
         }
         public void Sync(CrowdField f) { }
+        public void Churn(CrowdField f, int n) { }
     }
 }
