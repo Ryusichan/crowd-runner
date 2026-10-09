@@ -64,12 +64,14 @@ namespace CrowdRunner.Tests
 
             flow.Show(MetaScreen.WorldMap);
             yield return null;
+            AssertButtonsCanBeTapped("월드맵");
             float a = Shot("meta_worldmap");
 
             var lv = LevelCatalog.Find("1-3");
             Assert.IsNotNull(lv, "1-3 을 목록에서 못 찾았다");
             flow.OpenCard(lv);
             yield return null;
+            AssertButtonsCanBeTapped("스테이지 카드");
             float b = Shot("meta_stagecard");
 
             flow.Show(MetaScreen.Result);
@@ -323,6 +325,42 @@ namespace CrowdRunner.Tests
             rt.Release();
             Object.DestroyImmediate(rt);
             return lit / (px.Length / 7f) * 100f;
+        }
+
+        /// <summary>
+        /// **보이는 단추가 정말 눌리는가.**
+        ///
+        /// 월드맵의 칸이 **보이는데 안 눌렸다.** `UiKit.Panel` 이 `raycastTarget = false` 로
+        /// 그림을 만들고(바탕이 클릭을 먹지 않게 하려는 뜻), 거기에 `Button` 만 붙이면
+        /// **클릭이 애초에 닿지 않는다.** 오너가 *"플레이 할 수가 없어"* 라고 하신 그 자리다.
+        ///
+        /// **안 들킨 이유**: 안내 화면의 시작 단추는 `UiKit.Button` 이라 `raycastTarget` 이
+        /// 켜져 있었다. 그래서 *"탭은 된다"* 로 보였다 — **되는 것 하나가 안 되는 것들을
+        /// 가렸다.** 그림으로도 안 보인다. 멀쩡한 단추와 죽은 단추는 **똑같이 생겼다.**
+        ///
+        /// 그래서 그림이 아니라 **uGUI 에게 묻는다**: `Button` 마다, 그 자신이나 자식 중에
+        /// `raycastTarget` 이 켜진 `Graphic` 이 하나라도 있는가. 없으면 그 단추는 화면에
+        /// 있지만 **존재하지 않는다**.
+        /// </summary>
+        static void AssertButtonsCanBeTapped(string where)
+        {
+            int n = 0, dead = 0;
+            foreach (var b in Object.FindObjectsByType<UnityEngine.UI.Button>(FindObjectsSortMode.None))
+            {
+                if (!b.isActiveAndEnabled) continue;
+                n++;
+                bool hit = false;
+                foreach (var g in b.GetComponentsInChildren<UnityEngine.UI.Graphic>(false))
+                    if (g.raycastTarget) { hit = true; break; }
+                if (hit) continue;
+                dead++;
+                Debug.LogError($"[CR-TEST] {where}: 단추 '{b.name}' 는 **보이는데 안 눌린다** — " +
+                               "자기도 자식도 raycastTarget 이 꺼져 있다 (UiKit.Panel 이 끄고 만든다). " +
+                               "UiKit.Tappable() 로 붙여라");
+            }
+            Debug.Log($"[CR-TEST] {where}: 단추 {n} 개 · 안 눌리는 것 {dead} 개");
+            Assert.AreEqual(0, dead, $"{where}: 보이는데 안 눌리는 단추가 {dead} 개다");
+            Assert.Greater(n, 0, $"{where}: 단추가 하나도 없다 — 화면이 안 세워졌을 수 있다");
         }
 
         /// <summary>
