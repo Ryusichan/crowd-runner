@@ -137,17 +137,44 @@ namespace CrowdRunner.Meta
             var scaler = GameBoot.Overlay != null ? GameBoot.Overlay.GetComponent<CanvasScaler>() : null;
             float refH = scaler != null && scaler.referenceResolution.y > 0f ? scaler.referenceResolution.y : ZqRefHeight;
             fontK = refH / ZqRefHeight;
-            // 쓸 수 있는 폭 = 기준 높이 × 화면비 (`W()` 설명 참고)
-            float aspect = Screen.height > 0 ? Screen.width / (float)Screen.height : 9f / 16f;
-            usableW = refH * aspect;
+            refHeight = refH;   // 쓸 수 있는 폭은 `usableW` 가 쓸 때마다 계산한다
             Debug.Log($"[CR] 캔버스 기준 높이 {refH:0} · 화면 {Screen.width}×{Screen.height} → 쓸 수 있는 폭 {usableW:0} 단위 · 글자 배율 {fontK:0.00} (본문 {UiKit.Body * UiKit.FontScale * fontK:0} px)");
         }
 
         /// <summary>`UiKit` 의 크기를 이 캔버스에 맞춰 키운다. **화면 코드는 이것만 쓴다**</summary>
         static int F(int uiKitSize) => Mathf.Max(1, Mathf.RoundToInt(uiKitSize * fontK));
 
-        /// <summary>캔버스 단위로 **실제로 쓸 수 있는 폭**. 기기 비율에 따라 달라진다</summary>
-        static float usableW = 1080f;
+        /// <summary>캔버스 기준 높이 (`CanvasScaler.referenceResolution.y`)</summary>
+        static float refHeight = 900f;
+
+        /// <summary>
+        /// **시험용 — 좁은 폰을 흉내 낸다.** 0 이면 `Screen` 에서 받는다.
+        ///
+        /// 세션 B 의 여러-비율 검사가 이것을 넣고 화면을 **다시 짓는다.** 없으면 그 검사는
+        /// **하드코딩된 폭만** 잡을 수 있고 적응형 코드는 못 본다 — 실제로 그랬다:
+        /// 내가 `W()` 로 고친 뒤에도 검사가 **고치기 전과 소수점까지 같은 수**를 냈다.
+        /// 배치 창이 640×480 **가로**라 게임이 폭 2560 단위로 짓고 있었고, 검사는 그
+        /// 넓게 지어진 것을 886 예산에 넣어 보고 있었다 (좁은 화면이었다면 애초에 좁게
+        /// 지어졌을 것을). **같은 수가 나오면 같은 것을 보고 있는 것이다.**
+        /// </summary>
+        internal static float ForceUsableWidth;
+
+        /// <summary>
+        /// 캔버스 단위로 **실제로 쓸 수 있는 폭**. 기기 비율에 따라 달라진다.
+        ///
+        /// ⚠ **쓸 때마다 계산한다.** 처음엔 `Awake` 에서 한 번 재서 담아 뒀는데, 그러면
+        /// 시험이 `ForceUsableWidth` 를 넣어도 **이미 지어진 뒤**라 아무 일도 안 난다 —
+        /// 오늘 `Awake` 가 `levelName` 을 미리 읽어 버린 것과 같은 모양이다.
+        /// </summary>
+        static float usableW
+        {
+            get
+            {
+                if (ForceUsableWidth > 0f) return ForceUsableWidth;
+                float aspect = Screen.height > 0 ? Screen.width / (float)Screen.height : 9f / 16f;
+                return refHeight * aspect;
+            }
+        }
 
         /// <summary>양옆에 남기는 여백 (캔버스 단위)</summary>
         const float Gutter = 24f;
