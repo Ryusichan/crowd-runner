@@ -102,19 +102,23 @@ namespace CrowdRunner
             // 그 자리에서 죽었다. 플레이 중에는 장면이 바뀌어도 살아야 하므로 조건으로 둔다
             if (Application.isPlaying) Object.DontDestroyOnLoad(go);
             var runner = go.AddComponent<LevelRunner>();
-            runner.levelName = level;
             // **`LevelView` 를 `LevelRunner` 뒤에 붙인다.** `LevelRunner.Awake` 가 `Load` 를
             // 부르므로 그때 뷰가 있어야 게이트·벽이 세워진다 — `AddComponent` 가 즉시
             // `Awake` 를 돌리기 때문에 순서가 결과를 바꾼다
             go.AddComponent<LevelView>();
-            // **다시 읽는다.** `AddComponent<LevelRunner>()` 는 그 자리에서 `Awake` 를 돌리고,
-            // `Awake` 는 **기본값** `levelName = "1-1"` 로 판을 읽는다. 위에서 `levelName` 에
-            // 넣은 값은 **이미 읽은 뒤**라 아무 일도 안 한다 — 그래서 어떤 판을 달라고 해도
-            // 늘 1-1 이 떴다.
+            // **판을 여는 문은 `Load` 하나다.** 여기서 `levelName` 에 값을 넣지 않는 이유:
+            // 넣어 봐야 아무 일도 안 일어난다. `Load` 가 그 필드를 쓰는 쪽이고, 필드는
+            // *"열 판"* 이 아니라 *"열려 있는 판"* 이다 (세션 A 가 그렇게 바꿨다).
             //
-            // 들키지 않은 이유가 더 나쁘다: 아래 로그가 **요청한 이름**을 1-1 의 숫자 옆에
-            // 찍었다. `level=1-10 units=10 road=7.0m events=2` 는 그럴듯하게 생겼고, 다섯 판이
-            // 전부 **똑같은 수**를 낸 뒤에야 보였다. 같은 수가 나오면 같은 것을 보고 있는 것이다.
+            // 전에는 `LevelRunner.Awake` 가 기본값 `"1-1"` 로 판을 읽었고, `AddComponent` 가
+            // 그 자리에서 `Awake` 를 돌리므로 **그 다음 줄에서 이름을 넣어도 늦었다** — 어떤
+            // 판을 달라고 해도 1-1 이 떴다. 안 들킨 이유가 더 나쁘다: 아래 로그가 **요청한
+            // 이름**을 1-1 의 숫자 옆에 찍었고, `level=1-10 units=10 events=2` 는 그럴듯하게
+            // 생겼다. 다섯 판이 전부 **똑같은 수**를 낸 뒤에야 보였다.
+            //
+            // 지금은 `Awake` 가 아무것도 안 읽고, 아무도 `Load` 를 안 불렀으면 `Start` 가
+            // 오류로 말한다. 그리고 아래 로그는 **읽힌 판**의 이름을 찍는다 — 요청한 쪽을
+            // 찍는 한 그 차이는 영원히 안 보인다.
             runner.Load(level);
             // **오버레이는 판보다 오래 산다.** 판 오브젝트의 자식으로 두면 다음 판을 띄울 때
             // 같이 죽고, 메타 화면(월드맵·카드·결과)은 **그 캔버스의 자식**이라 통째로 사라진다.
