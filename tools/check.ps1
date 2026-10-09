@@ -45,5 +45,11 @@ if ($errors.Count -gt 0) { $errors | ForEach-Object { $_.TrimEnd() } }
 $n = @(Get-ChildItem -Path (Join-Path $root "..\Assets\_Game\Scripts"), (Join-Path $root "..\Assets\Tests") -Filter *.cs -Recurse -File -ErrorAction SilentlyContinue).Count
 ""
 "오류 $($errors.Count)개 · 파일 $($n)개 · $([int]$sw.Elapsed.TotalSeconds)초"
+# **못 보는 것을 말한다.** 이 검사는 `Assets/**` 를 **한 프로젝트로 합쳐** 컴파일하므로
+# Unity 가 `asmdef` 로 세우는 벽(`CR` / `CR.Editor` / `CR.Tests.PlayMode`)이 **아예 없다.**
+# 그래서 *다른 어셈블리의 `internal` 에 손댔다* 같은 오류를 **통과시킨다** — Unity 에서만 깨진다.
+# 2026-10-09 에 그 자리를 밟았고(`MetaFlow.ForceUsableWidth`), 그날 이 검사를 열 번 넘게 쓰고도
+# 몰랐다. **못 보는 것을 말하지 않는 초록은 "봤다" 로 읽힌다** — 오늘 여러 번 치른 값이다.
+if ($errors.Count -eq 0) { "  (어셈블리 경계는 안 본다 — asmdef 가 나누는 것을 여기서는 하나로 컴파일한다. 패키지도 안 본다)" }
 if ($n -eq 0) { "파일이 0개다 — csproj 의 Compile Include 경로를 보라 (초록이 거짓이다)"; exit 1 }
 if ($errors.Count -gt 0) { exit 1 }
