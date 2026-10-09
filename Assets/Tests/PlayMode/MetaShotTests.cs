@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Linq;
 using System.IO;
 using CrowdRunner;
 using CrowdRunner.Core;
@@ -66,6 +67,7 @@ namespace CrowdRunner.Tests
             flow.Show(MetaScreen.WorldMap);
             yield return null;
             AssertButtonsCanBeTapped("월드맵");
+            AssertNoGameplayHudOnMeta("월드맵");
             float a = Shot("meta_worldmap");
 
             var lv = LevelCatalog.Find("1-3");
@@ -73,6 +75,7 @@ namespace CrowdRunner.Tests
             flow.OpenCard(lv);
             yield return null;
             AssertButtonsCanBeTapped("스테이지 카드");
+            AssertNoGameplayHudOnMeta("스테이지 카드");
             float b = Shot("meta_stagecard");
 
             flow.Show(MetaScreen.Result);
@@ -440,6 +443,43 @@ namespace CrowdRunner.Tests
             rt.Release();
             Object.DestroyImmediate(rt);
             return lit / (px.Length / 7f) * 100f;
+        }
+
+        /// <summary>
+        /// **게임 중에만 보여야 할 것이 메타 화면에 남아 있지 않은가.**
+        ///
+        /// 병력 수를 3D 에서 화면 UI 로 옮겼더니 겹침은 사라졌는데, **판 밖에서도 살아남았다** —
+        /// 월드맵 1-1 칸 위에 멈춰 있는 `10` 이 떠 있었다. `MetaFlow` 는 자기 `root` 만 껐다
+        /// 켜는데 `CountUi` 는 오버레이에 **바로** 붙어 있어서 그 손이 안 닿는다.
+        ///
+        /// **되는 것이 안 되는 것을 가린 자리다**: 화면 UI 로 옮긴 것이 맞았기 때문에
+        /// (게이트와 안 겹친다) 그 판단에서 멈췄고, 같은 변경이 만든 새 결함은 **게임 화면만
+        /// 찍는 한 영영 안 보인다.** 메타 화면을 찍어야 나온다.
+        ///
+        /// 그래서 **메타 화면마다** 묻는다: 게임용 물건이 보이나.
+        /// </summary>
+        static void AssertNoGameplayHudOnMeta(string where)
+        {
+            // **없는 것과 숨은 것을 가른다.** 찾은 것이 하나도 없으면 이 검사는 아무것도 안 하고
+            // 초록이 된다 — *숨겨져서 안 보인다* 와 *애초에 안 만들어졌다* 가 **같은 통과**로
+            // 보이는 것이다. 그러면 나중에 누가 `CountUi` 의 이름을 바꾸는 날, 이 검사는
+            // **조용히 아무것도 안 지키게** 된다. 오늘 하루 종일 본 그 모양이다
+            int found = 0, shown = 0;
+            foreach (var t in Object.FindObjectsByType<UnityEngine.UI.Text>(FindObjectsSortMode.None)
+                                    .Concat(Resources.FindObjectsOfTypeAll<UnityEngine.UI.Text>()))
+            {
+                if (t == null || t.gameObject.name != "CountUi") continue;
+                if (t.hideFlags != HideFlags.None) continue;      // 에디터가 들고 있는 사본
+                found++;
+                if (t.gameObject.activeInHierarchy) shown++;
+            }
+            Debug.Log($"[CR-TEST] {where}: 병력 수 UI {found} 개 중 떠 있는 것 {shown} 개");
+            Assert.Greater(found, 0,
+                $"{where}: 병력 수 UI 를 **아예 못 찾았다** — 숨은 것이 아니라 없는 것이다. " +
+                "이름이 바뀌었으면 이 검사는 지금부터 아무것도 안 지킨다");
+            Assert.AreEqual(0, shown,
+                $"{where}: 게임 중에만 보여야 할 병력 수가 메타 화면에 떠 있다 — " +
+                "오버레이에 바로 붙어 있어 MetaFlow 가 못 끈다 (LevelView 가 Paused 를 보고 숨긴다)");
         }
 
         /// <summary>

@@ -245,6 +245,19 @@ namespace CrowdRunner.View
             if (countUi == null) BuildCountUi();
             if (countUi != null)
             {
+                // **판이 도는 동안에만 보인다.** 오버레이 캔버스에 바로 붙어 있어서
+                // `MetaFlow` 가 자기 `root` 를 꺼도 이것은 남는다 — 월드맵 1-1 칸 위에
+                // 멈춰 있는 `10` 이 떠 있었다.
+                //
+                // 숨는 조건을 **메타가 아니라 여기서** 본다: *판이 도는 동안에만 보인다* 는
+                // 이 물건 자신의 성질이고, 메타가 알아야 할 일이 아니다. 메타 쪽에 참조를
+                // 내주면 **끄는 자리가 둘**이 되고, 그 둘이 어긋나는 날이 온다.
+                //
+                // `Paused` 는 멈춤 화면에서도 참이다 — 멈춤 중에 병력 수를 보여 줄지는
+                // 따로 정할 일이고, 지금은 **안 보인다**로 둔다 (멈춤 화면이 자기 수를 띄운다)
+                bool playing = !runner.Paused;
+                if (countUi.gameObject.activeSelf != playing) countUi.gameObject.SetActive(playing);
+
                 countUi.text = sim.Units.ToString();
                 countUi.color = sim.State == SimState.Lost ? new Color(0.92f, 0.46f, 0.44f) : Color.white;
             }
