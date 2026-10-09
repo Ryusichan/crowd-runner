@@ -55,8 +55,12 @@ $utf8 = New-Object System.Text.UTF8Encoding($false)
 $html = [System.IO.File]::ReadAllText($index, $utf8)
 
 # ① 캐시 무효화 — 빌드마다 다른 URL 이 되게
-$html = [regex]::Replace($html, '(Build/[A-Za-z0-9_.\-]+\.(?:data|wasm|js)(?:\.br|\.gz|\.unityweb)?)(?![?\w])', "`$1?v=$sha")
+# Unity 6 템플릿은 `buildUrl + "/WebGL.data.unityweb"` 처럼 **따옴표 안에** 적는다.
+# 좀비퀸 때의 `Build/...` 통짜 경로 정규식은 여기서 **0 곳**을 고쳤고, 그러면 캐시 무효화가
+# 조용히 아무 일도 안 한다 — 또 네 번째 칸이다. 그래서 아래에서 고친 수를 세고 0 이면 멈춘다.
+$html = [regex]::Replace($html, '("/[A-Za-z0-9_.\-]+\.(?:data|wasm|js|symbols\.json)(?:\.br|\.gz|\.unityweb)?)"', "`$1?v=$sha`"")
 $n = ([regex]::Matches($html, [regex]::Escape("?v=$sha"))).Count
+if ($n -eq 0) { throw "캐시 무효화가 한 곳도 안 붙었다 — index.html 모양이 바뀌었다. 정규식을 맞추기 전에는 올리지 않는다 (옛 파일과 새 파일이 섞여 로딩이 깨진다)" }
 
 # ② 버전 글자 — 지금 보고 있는 것이 어느 빌드인지 눈으로 안다.
 #    캐시에 옛 페이지가 남아 있으면 고친 것을 안 고쳐진 상태로 시험하게 되는데, 이 글자가 그걸 드러낸다
@@ -69,16 +73,28 @@ Write-Host "version: $ver ($sha) · cache-bust $n 곳"
     Set-Content -Encoding utf8 (Join-Path $work "README.md")
 
 # ── 올리기 ────────────────────────────────────────────────────────────────────
+# ⚠ **네이티브 명령의 실패는 `try/catch` 가 못 잡는다.** 좀비퀸에서 가져온 원본이
+# `try { gh repo view } catch { $exists = $false }` 였는데, `gh` 가 404 를 내도 **catch 가 안
+# 돌아** `$exists` 가 true 로 남았다. 그래서 리포를 안 만들고 push 로 직행해 실패했다.
+# PowerShell 에서 외부 프로그램의 성패는 **`$LASTEXITCODE`** 로 본다.
+# ⚠⚠ **그리고 `$ErrorActionPreference = 'Stop'` 이 켜져 있으면 네이티브 명령의 stderr 한 줄이
+# 통째로 종료 오류가 된다** (PowerShell 5.1 의 `NativeCommandError`). `gh` 가 "없는 리포" 를
+# 알리려고 stderr 에 쓰는 순간 스크립트가 죽는다 — **정상 흐름이 오류로 둔갑한다.**
+# 그래서 외부 프로그램을 부르는 동안만 'Continue' 로 내리고 `$LASTEXITCODE` 로 판단한다.
 $hasGh = [bool](Get-Command gh -ErrorAction SilentlyContinue)
-$exists = $true
-if ($hasGh) { try { gh repo view $Repo --json name | Out-Null } catch { $exists = $false } }
-else { git ls-remote "https://github.com/$Repo.git" HEAD *> $null; $exists = ($LASTEXITCODE -eq 0) }
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+if ($hasGh) { gh repo view $Repo --json name 2>&1 | Out-Null }
+else { git ls-remote "https://github.com/$Repo.git" HEAD 2>&1 | Out-Null }
+$exists = ($LASTEXITCODE -eq 0)
+$ErrorActionPreference = $prevEAP
 if (-not $exists) {
     if (-not $hasGh) { throw "$Repo 가 없고 gh 도 없다 — 리포를 먼저 만들어 주세요" }
     gh repo create $Repo --public --description "Crowd Runner — WebGL demo build (Unity)" | Out-Null
     Write-Host "created $Repo"
 }
 
+$ErrorActionPreference = 'Continue'   # 아래는 전부 외부 프로그램이다 (위 주석 참고)
 Push-Location $work
 git init -q
 git checkout -q -b main
@@ -86,7 +102,9 @@ git add -A
 git -c user.name="Ryusichan" -c user.email="godtheenell@gmail.com" commit -q -m "deploy: crowd-runner-unity @ $sha"
 git remote add origin "https://github.com/$Repo.git"
 git push -q -f origin main
+$pushed = ($LASTEXITCODE -eq 0)
 Pop-Location
+if (-not $pushed) { $ErrorActionPreference = $prevEAP; throw "push 실패 — 리포($Repo)가 있는지, 로그인됐는지 확인" }
 
 if ($hasGh) {
     try { gh api -X POST "repos/$Repo/pages" -f "source[branch]=main" -f "source[path]=/" | Out-Null; Write-Host "pages enabled" } catch { }
