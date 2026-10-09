@@ -47,6 +47,7 @@ namespace CrowdRunner.EditorTools
             // 에디터에서는 지난번에 구운 것이 남아 있어 멀쩡해 보인다 — 그게 이 줄의 전부다
             M0Assets.Bake(300, "_lo");
             VatBaker.Bake("_lo");
+            AssertTheCrowdExists();
             EnsureScene();
 
             PlayerSettings.companyName = "Ryusichan";
@@ -77,6 +78,33 @@ namespace CrowdRunner.EditorTools
             Debug.Log($"[CR] web build {s.result} size={s.totalSize / 1024 / 1024}MB " +
                       $"errors={s.totalErrors} time={s.totalTime.TotalMinutes:F1}min out={Out}");
             if (s.result != BuildResult.Succeeded) EditorApplication.Exit(1);
+        }
+
+        /// <summary>
+        /// **구운 것이 정말 거기 있는가.**
+        ///
+        /// 굽기를 빌드 안에 둔 것만으로는 부족하다는 지적이 있었다 (세션 A): *"굽는 코드가
+        /// 깨지면 빌드가 조용히 빈 게임을 낸다."* 맞는 말인데, 그건 **굽기를 빼야 할 이유가
+        /// 아니라 구운 뒤에 확인하지 않는 것**이 문제다.
+        ///
+        /// 없으면 `Resources.Load` 가 null 을 돌려주고, 게임은 **길과 게이트만 있고 사람이
+        /// 하나도 없는 채로** 멀쩡히 돈다 — 예외도 안 난다. 그 모양은 *"오늘따라 군중이 안
+        /// 보인다"* 로만 보이고, 원인은 빌드 **한참 전**에 있다.
+        ///
+        /// 여기서 보는 두 경로는 `LevelView`/`CasualtyFx` 가 **실제로 부르는 그 문자열**이어야
+        /// 한다. 다른 이름을 보면 이 검사는 통과하면서 게임은 빈다 — 검사가 재는 것과 코드가
+        /// 쓰는 것이 어긋나는, 오늘 여러 번 나온 그 자리다.
+        /// </summary>
+        static void AssertTheCrowdExists()
+        {
+            foreach (var path in new[] { "Assets/_Game/Resources/M0/standin_vat_mesh_lo.asset",
+                                         "Assets/_Game/Resources/M0/standin_vat_lo.mat" })
+            {
+                if (File.Exists(path)) { Debug.Log($"[CR] 군중 자산 있다: {Path.GetFileName(path)}"); continue; }
+                Debug.LogError($"[CR] 굽기가 {path} 를 안 만들었다 — 이대로 빌드하면 " +
+                               "**사람이 하나도 없는 게임**이 나간다 (예외는 안 난다). 빌드를 멈춘다");
+                EditorApplication.Exit(1);
+            }
         }
 
         /// <summary>
