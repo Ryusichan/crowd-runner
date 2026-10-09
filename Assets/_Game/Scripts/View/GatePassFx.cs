@@ -78,7 +78,10 @@ namespace CrowdRunner.View
             var at = chosen != null ? chosen.position : Vector3.zero;
             // **군중 위로 띄운다.** 2.2 m 는 사람 키 높이라 숫자가 떼 한가운데에 묻혔다 —
             // 첫 연출 사진에서 게이트 글자와도 겹쳤다
-            pops[slot].p0 = new Vector3(at.x, 4.6f, at.z);
+            // 게이트 글자(문에 붙어 있다)와 **겹치지 않게** 위로 더, 그리고 카메라 쪽으로.
+            // 4.6 m 로도 사진에서 문짝 글자와 붙어 보였다 — 둘 다 숫자라 겹치면 어느 쪽이
+            // 규칙이고 어느 쪽이 결과인지 못 읽는다
+            pops[slot].p0 = new Vector3(at.x, 5.8f, at.z - 1.6f);
             pops[slot].t = 0f;
             pops[slot].live = true;
             tm.transform.position = pops[slot].p0;

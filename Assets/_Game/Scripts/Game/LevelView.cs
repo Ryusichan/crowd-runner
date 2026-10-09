@@ -51,6 +51,8 @@ namespace CrowdRunner.View
         Transform[] zones = new Transform[0];
         TextMesh countLabel, countShadow;
         CasualtyFx fx;
+        RoadMarks marks;
+        BlobShadows shadows;
         Camera cam;
         float wallHp0;
 
@@ -64,6 +66,8 @@ namespace CrowdRunner.View
             allyView.Init(renderCap); foeView.Init(renderCap);
             allyView.SetActive(true); foeView.SetActive(true);
             fx = new CasualtyFx(); fx.Init();
+            marks = new RoadMarks();
+            shadows = new BlobShadows(); shadows.Init();
             fxGate = new GatePassFx(); fxGate.Init(Label);
             runner.OnTick += OnTick;
             BuildScene();
@@ -103,15 +107,19 @@ namespace CrowdRunner.View
             li.shadows = LightShadows.None;   // 400 개체의 그림자는 드로우를 두 배로 만든다 (§6b)
             li.transform.rotation = Quaternion.Euler(52f, -28f, 0f);
 
+            // 색은 **대비로** 고른다. 전에는 땅 0.30/0.38/0.28, 길 0.46/0.50/0.44 로 둘 다
+            // 어두운 회녹색이라 화면이 한 톤이었고, 그 위의 군중(어두운 몸)도 묻혔다.
+            // 지금은 **풀(녹) · 아스팔트(회) · 연석(흰)** 셋이 밝기로 갈린다 — 색상환이
+            // 아니라 **밝기**로 가르는 이유: 작은 화면에서 먼저 읽히는 것이 밝기다
             // **땅이 있어야 길이 길로 보인다.** 길만 그리면 하늘색 위에 떠 있는 리본이고,
             // 그러면 군단이 *어디를* 달리는지가 없다. 땅 한 장 + 연석 둘이면 끝난다 —
             // 광고형 러너가 옆을 비워 두지 않는 이유다
-            ground = Box("Ground", new Color(0.30f, 0.38f, 0.28f));
-            road = Box("Road", new Color(0.46f, 0.50f, 0.44f));
+            ground = Box("Ground", new Color(0.42f, 0.55f, 0.35f));
+            road = Box("Road", new Color(0.52f, 0.52f, 0.55f));
             // 연석은 길의 **가장자리를 말한다**. 갇힌 차선 칸막이(`divider`)와 달리 늘 서 있고,
             // 밝아서 길의 폭이 한눈에 읽힌다 — 폭이 좁아지는 구간이 눈에 걸려야 한다
-            curbL = Box("Curb", new Color(0.80f, 0.78f, 0.70f));
-            curbR = Box("Curb", new Color(0.80f, 0.78f, 0.70f));
+            curbL = Box("Curb", new Color(0.92f, 0.90f, 0.84f));
+            curbR = Box("Curb", new Color(0.92f, 0.90f, 0.84f));
             // **숫자 뒤에 어두운 사본을 깐다.** 이 게임에서 반드시 읽어야 하는 수는 이 하나인데,
             // 흰 글자가 밝은 길 위에 오면 **그려졌는데 안 보인다** — 첫 게임 화면이 그랬다.
             // 테두리를 주는 길도 있지만 `TextMesh` 에는 없고, 사본 한 장이 드로우 한 번으로 끝난다
@@ -159,6 +167,8 @@ namespace CrowdRunner.View
             // 안 보이면 플레이어는 **자기가 왜 못 넘어가는지 모른다** — 광고 그림처럼 벽이 서야 한다
             divider = Box("Divider", new Color(0.86f, 0.84f, 0.78f));
             divider.gameObject.SetActive(false);
+
+            marks.Build(level.length, level.roadWidth);
         }
 
         void Update()
@@ -217,6 +227,9 @@ namespace CrowdRunner.View
             fx.Tick(Time.deltaTime);
             fx.Draw();
             fxGate.Tick(Time.deltaTime, cam);
+            marks.Draw();
+            // 그림자는 **몸을 그린 뒤**에 — 땅 바로 위라 순서가 바뀌면 z 싸움이 보인다
+            shadows.Draw(allies, foes, fx);
 
             // **지나친 게이트를 가린다.** 안 가리면 뒤에 남은 게이트가 카메라에 가까워져
             // 글자가 거대해지고 서로 겹친다 — 첫 촬영에서 `×135` 와 `+30` 이 화면 아래를 덮었다.

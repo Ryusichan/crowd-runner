@@ -86,6 +86,10 @@ Shader "Game/CrowdVat"
                 // 그때 두 번째 텍스처를 굽는다
                 o.nrm = UnityObjectToWorldNormal(v.normal);
                 o.col = lerp(_Color, _EnemyColor, side);
+                // **개체마다 조금씩 다르게.** 400 명이 한 색이면 군중이 아니라 **덩어리**로
+                // 보인다 — 수가 많을수록 더 그렇다. 인스턴스 프로퍼티를 늘리지 않고
+                // 이미 있는 위상에서 뽑는다 (위상은 개체마다 다르다)
+                o.col.rgb *= 0.84 + 0.32 * frac(phase * 7.31);
                 return o;
             }
 

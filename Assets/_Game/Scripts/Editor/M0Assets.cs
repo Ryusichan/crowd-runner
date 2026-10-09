@@ -83,8 +83,7 @@ namespace CrowdRunner.EditorTools
             {
                 float t = r / (float)(rows - 1);
                 float y = t * height;
-                // 허리에서 가장 굵고 위아래로 가늘어진다 — 사람 실루엣의 최소치
-                float rad = Mathf.Lerp(0.16f, 0.26f, Mathf.Sin(t * Mathf.PI));
+                float rad = Radius(t);
                 boneNames[r] = "b" + r;
                 binds[r] = Matrix4x4.TRS(new Vector3(0f, -y, 0f), Quaternion.identity, Vector3.one);
                 for (int c = 0; c < ring; c++)
@@ -92,7 +91,7 @@ namespace CrowdRunner.EditorTools
                     float a = c / (float)ring * Mathf.PI * 2f;
                     int k = r * ring + c;
                     verts[k] = new Vector3(Mathf.Cos(a) * rad, y, Mathf.Sin(a) * rad);
-                    norms[k] = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                    norms[k] = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));   // 아래에서 다시 센다
                     weights[k] = new BoneWeight { boneIndex0 = r, weight0 = 1f };
                 }
             }
@@ -111,9 +110,41 @@ namespace CrowdRunner.EditorTools
             m.indexFormat = UnityEngine.Rendering.IndexFormat.UInt16;
             m.vertices = verts; m.normals = norms; m.boneWeights = weights;
             m.triangles = tris.ToArray();
+            // **법선을 다시 센다.** 위에서 넣은 것은 전부 **수평**(`y = 0`)이다. 그런데 셰이더의
+            // 빛은 위에서 내려오므로(`(0.3, 1.0, -0.2)`), 수평 법선은 어디서나 `dot ≈ 0.3` 이고
+            // **몸 전체가 가장 어두운 값**으로 칠해진다. 첫 게임 화면에서 군중이 커피콩처럼
+            // 보인 것의 절반이 이것이었다 — 실루엣만 고쳤으면 모양은 사람인데 여전히 까맸다.
+            //
+            // 측정에는 영향이 없다: 법선은 굽는 쪽이 아니라 원본 메시의 것을 셰이더가 그대로
+            // 쓰고(`CrowdVat` 주석), 정점 수도 본 수도 그대로다
+            m.RecalculateNormals();
             m.bindposes = binds;
             m.RecalculateBounds();
             return m;
+        }
+
+        /// <summary>
+        /// **사람으로 읽히는 옆모습.** 전에는 `Lerp(0.16, 0.26, sin(t·π))` — 허리에서 굵고
+        /// 위아래로 가늘어지는 **방추형**이었고, 화면에서 커피콩으로 보였다. 머리가 없으면
+        /// 사람으로 안 읽힌다. 그게 전부다.
+        ///
+        /// **정점 수도 본 수도 안 바뀐다** — 자리만 옮긴다. 그래서 `docs/M0_CROWD.md` 의
+        /// 측정치(방식 B · 저폴리 300 정점 · 상한 400)는 **그대로 유효하다.** 모양을 고치면서
+        /// 비용을 같이 올리면 그 표를 다시 재야 하고, 그러면 아트 예산의 근거가 사라진다.
+        ///
+        /// 행이 20 개(= 본 수)라 한 행이 키의 5 % 다. 머리·목·어깨가 그 해상도에 들어가도록
+        /// 구간을 잡았다 — 더 잘게 나누면 정점이 늘어난다.
+        /// </summary>
+        static float Radius(float t)
+        {
+            if (t < 0.46f) return Mathf.Lerp(0.13f, 0.17f, t / 0.46f);          // 다리
+            if (t < 0.54f) return Mathf.Lerp(0.17f, 0.23f, (t - 0.46f) / 0.08f); // 골반
+            if (t < 0.74f) return Mathf.Lerp(0.23f, 0.27f, (t - 0.54f) / 0.20f); // 몸통
+            if (t < 0.80f) return Mathf.Lerp(0.27f, 0.21f, (t - 0.74f) / 0.06f); // 어깨
+            if (t < 0.85f) return 0.10f;                                          // 목
+            // 머리 — 구에 가깝게. 정수리에서 0 으로 닫지 않는다 (한 행이 5 % 라 각져 보인다)
+            float u = (t - 0.85f) / 0.15f;                                        // 0..1
+            return 0.19f * Mathf.Sqrt(Mathf.Max(0.04f, 1f - (u - 0.45f) * (u - 0.45f) / 0.30f));
         }
 
         /// <summary>

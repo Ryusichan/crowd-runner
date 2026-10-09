@@ -106,6 +106,14 @@ namespace CrowdRunner.EditorTools
             var sh = Shader.Find("Game/CrowdVat");
             if (sh == null) { Debug.LogError("[M0] Game/CrowdVat 셰이더를 못 찾았다 — VAT 는 안 그려진다"); return; }
             var mat = new Material(sh) { name = "standin_vat" + suffix, enableInstancing = true };
+            // **군단과 적이 색으로 갈려야 한다.** 셰이더 기본값은 베이지/붉은색인데, 길이
+            // 회색이라 베이지 군중이 **길에 묻혔다** (첫 플레이 화면). 이 게임에서 한눈에
+            // 읽어야 하는 것은 *내 군단이 얼마나 큰가* 와 *앞의 것이 적인가* 둘뿐이다.
+            //
+            // 밝은 청록을 쓰는 이유: 길(회) · 풀(녹) · 연석(흰) 과 **색상으로** 갈리고,
+            // 적의 붉은색과는 **보색**이라 섞인 난전에서도 두 편이 구분된다
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", new Color(0.46f, 0.76f, 0.86f));
+            if (mat.HasProperty("_EnemyColor")) mat.SetColor("_EnemyColor", new Color(0.88f, 0.42f, 0.38f));
             mat.SetTexture("_Vat", tex);
             mat.SetFloat("_Frames", Frames);
             mat.SetFloat("_Verts", n);
