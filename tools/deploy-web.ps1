@@ -24,6 +24,21 @@ if (-not (Test-Path (Join-Path $src "index.html"))) {
     throw "WebGL 빌드가 없다: $src — 먼저 빌드해야 한다 (세션 B 의 Editor 빌드 경로)"
 }
 
+# ⚠ **낡은 빌드를 올리지 않는다.**
+# 오늘 하루 같은 결함류를 다섯 번 봤다: 재는 것이 생각한 것과 다른데 **수가 그럴듯해서**
+# 아무도 안 묻는다 (`DESIGN.md` §3i 네 번째 칸). 배포에도 그 자리가 있다 — 코드를 고치고
+# 빌드를 안 낸 채 올리면 **고쳐진 줄 알고 시험**하게 되고, 그 10 분은 통째로 버려진다.
+# 그래서 소스가 빌드보다 새로우면 멈춘다.
+$built = (Get-Item (Join-Path $src "index.html")).LastWriteTime
+$newer = @(Get-ChildItem (Join-Path $proj "Assets") -Recurse -File -Include *.cs,*.txt,*.jslib,*.shader -ErrorAction SilentlyContinue |
+           Where-Object { $_.LastWriteTime -gt $built })
+if ($newer.Count -gt 0) {
+    $top = ($newer | Sort-Object LastWriteTime -Descending | Select-Object -First 3 |
+            ForEach-Object { "  " + $_.FullName.Substring($proj.Length + 1) + "  (" + $_.LastWriteTime.ToString("HH:mm") + ")" }) -join "`n"
+    throw "빌드가 낡았다 — 빌드 시각 $($built.ToString('HH:mm')) 뒤에 바뀐 파일 $($newer.Count) 개:`n$top`n다시 빌드하고 올릴 것"
+}
+Write-Host "build: $($built.ToString('yyyy-MM-dd HH:mm')) · 그 뒤로 바뀐 소스 없음"
+
 $work = Join-Path $env:TEMP "cr-web-deploy"
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 New-Item -ItemType Directory -Force $work | Out-Null
