@@ -16,13 +16,19 @@ namespace CrowdRunner.Meta
 
         static string CityName(int city) => city >= 1 && city <= CityNames.Length ? CityNames[city - 1] : "도시 " + city;
 
-        /// <summary>☣ 를 글자로. `Grade.Max` 가 늘면 여기도 따라온다</summary>
-        static string Bio(int n)
-        {
-            var s = "";
-            for (int i = 0; i < n; i++) s += "☣";
-            return s;
-        }
+        /// <summary>
+        /// 등급을 **글자로** 말한다.
+        ///
+        /// ⚠ 처음에는 `☣` 를 반복해 썼는데, **번들 글꼴 둘 어디에도 그 글리프가 없다**
+        /// (U+2623 — Jua 2,521 자 · 폴백 3,021 자 중 없는 유일한 글자다. 웹에 올려 화면을
+        /// 재 보고 글꼴 파일을 뒤져서 확인했다). 그래서 결과 화면이 *"까지 2 명 더"* 로,
+        /// 카드가 *"기준 (남은 병력)"* 으로 **주어가 빠진 채** 떴다.
+        ///
+        /// 글리프를 넣는 대신 **글자로 바꾼다.** 등급은 이미 화면에 **초록 동그라미**로
+        /// 그려지므로 기호가 한 번 더 있을 필요가 없다 — 없는 기호를 넣으려고 글꼴을
+        /// 손보는 것보다, 있는 것으로 말하는 쪽이 싸다.
+        /// </summary>
+        static string Bio(int n) => n + " 단계";
 
         // ── 월드맵 ───────────────────────────────────────────────────────────────
         void BuildWorldMap()
@@ -238,7 +244,7 @@ namespace CrowdRunner.Meta
             Chip(card, 2, "최종 방어선", finalEnemies.ToString());
 
             // ☣ 기준 — **목표는 숨기지 않는다.** 모르면 다시 할 이유가 생기지 않는다
-            var rh = UiKit.Label("RateHead", card, "☣ 기준 (남은 병력)", F(UiKit.LabelPt), UiKit.Dim, TextAnchor.UpperLeft);
+            var rh = UiKit.Label("RateHead", card, "등급 기준 (남은 병력)", F(UiKit.LabelPt), UiKit.Dim, TextAnchor.UpperLeft);
             UiKit.Place(rh.rectTransform, new Vector2(0f, 1f), new Vector2(50f, -420f), new Vector2(500f, 34f));
 
             int mine = MetaSave.GradeOf(lv.Code);
@@ -269,7 +275,10 @@ namespace CrowdRunner.Meta
                                         delegate { StartLevel(lv); });
             UiKit.Place((RectTransform)startBtn.transform, new Vector2(0.5f, 0f), new Vector2(0f, 150f), new Vector2(620f, 112f));
 
-            var backBtn = UiKit.Button("Back", card, "돌아가기", F(UiKit.Caption), UiKit.Hex(0x3b2f4d), UiKit.Dim,
+            // ⚠ "돌아가기" 의 `돌` 이 웹 빌드에서 **네모(tofu)로 떴다.** 글꼴 둘 다에 그 글자가
+            // 윤곽까지 들어 있는데도 그렇다 — **원인을 모른다.** 런타임 글꼴 아틀라스 쪽으로
+            // 보이지만 확인하지 못했다. 지금은 짧은 말로 피해 간다. 다시 보이면 여기부터.
+            var backBtn = UiKit.Button("Back", card, "뒤로", F(UiKit.Caption), UiKit.Hex(0x3b2f4d), UiKit.Dim,
                                        delegate { Show(MetaScreen.WorldMap); });
             UiKit.Place((RectTransform)backBtn.transform, new Vector2(0.5f, 0f), new Vector2(0f, 62f), new Vector2(620f, 64f));
 
@@ -336,7 +345,7 @@ namespace CrowdRunner.Meta
             {
                 int need = lv.rating[resultGrade] - resultRemaining;
                 string more = need > 0
-                    ? Bio(resultGrade + 1) + " 까지 " + need + " 명 더"
+                    ? Bio(resultGrade + 1) + "까지 " + need + " 명 더"
                     : Bio(resultGrade + 1) + " 는 " + lv.rating[resultGrade] + " 명부터";
                 var hint = UiKit.Label("Hint", root, more, F(UiKit.Body), UiKit.Yellow, TextAnchor.MiddleCenter, true);
                 UiKit.Place(hint.rectTransform, mid, new Vector2(0f, -104f), new Vector2(900f, 52f));
