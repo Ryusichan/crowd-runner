@@ -137,11 +137,43 @@ namespace CrowdRunner.Meta
             var scaler = GameBoot.Overlay != null ? GameBoot.Overlay.GetComponent<CanvasScaler>() : null;
             float refH = scaler != null && scaler.referenceResolution.y > 0f ? scaler.referenceResolution.y : ZqRefHeight;
             fontK = refH / ZqRefHeight;
-            Debug.Log($"[CR] 캔버스 기준 높이 {refH:0} → 글자 배율 {fontK:0.00} · 본문이 화면에서 {UiKit.Body * UiKit.FontScale * fontK:0} px 로 그려진다");
+            // 쓸 수 있는 폭 = 기준 높이 × 화면비 (`W()` 설명 참고)
+            float aspect = Screen.height > 0 ? Screen.width / (float)Screen.height : 9f / 16f;
+            usableW = refH * aspect;
+            Debug.Log($"[CR] 캔버스 기준 높이 {refH:0} · 화면 {Screen.width}×{Screen.height} → 쓸 수 있는 폭 {usableW:0} 단위 · 글자 배율 {fontK:0.00} (본문 {UiKit.Body * UiKit.FontScale * fontK:0} px)");
         }
 
         /// <summary>`UiKit` 의 크기를 이 캔버스에 맞춰 키운다. **화면 코드는 이것만 쓴다**</summary>
         static int F(int uiKitSize) => Mathf.Max(1, Mathf.RoundToInt(uiKitSize * fontK));
+
+        /// <summary>캔버스 단위로 **실제로 쓸 수 있는 폭**. 기기 비율에 따라 달라진다</summary>
+        static float usableW = 1080f;
+
+        /// <summary>양옆에 남기는 여백 (캔버스 단위)</summary>
+        const float Gutter = 24f;
+
+        /// <summary>
+        /// **폭을 화면에 맞춘다.** 원하는 폭을 주면 화면 밖으로 안 나가는 폭을 돌려준다.
+        ///
+        /// ⚠ **기준 해상도가 1080 이라고 1080 을 다 쓸 수 있는 것이 아니다.**
+        /// `matchWidthOrHeight = 1`(높이 기준)이라 배율이 `화면높이 / 1920` 이고, 그러면
+        /// 캔버스 단위로 쓸 수 있는 폭은 **`1920 × 화면비`** 다:
+        ///
+        /// | 9:16 | 9:19.5 | 9:20 |
+        /// |---|---|---|
+        /// | 1080 | **886** | **864** |
+        ///
+        /// 긴 폰에서는 **216 단위가 아예 없다.** 나는 모든 화면을 1080 으로 짰고, 그래서
+        /// 머리글(980)·카드(900)가 좌우로 잘렸다 — 세션 B 가 폰으로 찍어 보고, 그다음
+        /// 여러 비율로 재는 검사를 세워 숫자로 보여 줬다 (가장 심한 것이 47 단위).
+        ///
+        /// **한 화면만 고치지 않는다.** 그러면 다음에 추가하는 화면이 또 1080 을 가정한다.
+        /// </summary>
+        static float W(float want)
+        {
+            float max = usableW - Gutter * 2f;
+            return want < max ? want : max;
+        }
 
         // ── 화면 전환 ────────────────────────────────────────────────────────────
         public void Show(MetaScreen s)
