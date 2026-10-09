@@ -34,12 +34,15 @@ namespace CrowdRunner.View
             mesh = tmp.GetComponent<MeshFilter>().sharedMesh;
             Object.DestroyImmediate(tmp);
 
-            var sh = Shader.Find("Legacy Shaders/Transparent/Diffuse")
-                  ?? Shader.Find("Legacy Shaders/Diffuse") ?? Shader.Find("Standard");
-            mat = new Material(sh) { name = "BlobShadow" };
-            if (mat.HasProperty("_Color")) mat.color = new Color(0.05f, 0.08f, 0.05f, 0.38f);
-            if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0f);
-            mat.enableInstancing = true;
+            // 위 `RoadMarks` 와 같은 이유로 **구워 둔 에셋**을 쓴다 (런타임 머티리얼은
+            // 빌드에서 인스턴싱 변형이 없어 조용히 안 그려진다)
+            mat = Resources.Load<Material>("M0/blobshadow");
+            if (mat == null)
+            {
+                Debug.LogError("[CR] M0/blobshadow.mat 이 없다 — 발밑 그림자가 안 그려지고, " +
+                               "그러면 군중이 땅에서 떠 보인다 (M0Assets.BakeFlatMaterials)");
+                return;
+            }
             rp = new RenderParams(mat)
             {
                 worldBounds = new Bounds(Vector3.zero, new Vector3(200f, 20f, 400f)),

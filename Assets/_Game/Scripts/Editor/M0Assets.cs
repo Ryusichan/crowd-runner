@@ -68,6 +68,45 @@ namespace CrowdRunner.EditorTools
         /// 가장 싼 쪽이다. 즉 이 측정은 **실제보다 유리하다**: 출하 아트가 정점당 2~4 가중치를 쓰면
         /// 더 비싸진다. 그래서 §4 의 통과선에 여유(절반 예산)를 둔 것이고, 그 여유의 일부가 이것이다.
         /// </summary>
+        /// <summary>
+        /// **길 표식과 발밑 그림자의 머티리얼을 에셋으로 굽는다.**
+        ///
+        /// 런타임에 `new Material(Shader.Find(...))` 로 만들고 `enableInstancing = true` 를
+        /// 켜면 **에디터에서는 그려지고 빌드에서는 안 그려진다.** 빌드는 쓰이는 셰이더 변형만
+        /// 남기는데, 런타임에 켜는 인스턴싱은 빌드 시점에 아무도 모르기 때문이다.
+        ///
+        /// 2026-10-09 에 그 값을 치렀다: 길 표식도 발밑 원반도 웹 빌드에서 **하나도 안 나왔다.**
+        /// 내 PNG 에는 보였다 — 에디터는 모든 변형을 들고 있으니까. **보는 쪽이 달라서 다른 것을
+        /// 보고 있던** 오늘 여섯 번째 자리다.
+        ///
+        /// 군중(`standin_vat*.mat`)이 멀쩡했던 것이 대조군이다. 그쪽은 처음부터 에셋이었다.
+        /// </summary>
+        public static void BakeFlatMaterials()
+        {
+            Directory.CreateDirectory(Dir);
+            var sh = Shader.Find("Game/FlatInstanced");
+            if (sh == null)
+            {
+                Debug.LogError("[M0] 셰이더 'Game/FlatInstanced' 를 못 찾았다 — 표식과 그림자가 안 그려진다");
+                return;
+            }
+            Save(sh, "roadmark", new Color(0.90f, 0.89f, 0.82f, 1.00f));
+            Save(sh, "blobshadow", new Color(0.05f, 0.08f, 0.05f, 0.38f));
+        }
+
+        static void Save(Shader sh, string name, Color c)
+        {
+            string path = Dir + "/" + name + ".mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null) { mat = new Material(sh); AssetDatabase.CreateAsset(mat, path); }
+            mat.shader = sh;
+            mat.color = c;
+            // **이 줄이 빌드에 인스턴싱 변형을 남긴다.** 에셋에 켜져 있어야 빌드가 안다
+            mat.enableInstancing = true;
+            EditorUtility.SetDirty(mat);
+            Debug.Log($"[M0] baked material {name}.mat instancing={mat.enableInstancing}");
+        }
+
         static Mesh BuildSkinnedMesh(int want, out string[] boneNames, out Matrix4x4[] binds)
         {
             int ring = Mathf.Max(3, want / Bones);          // 층마다 정점 수

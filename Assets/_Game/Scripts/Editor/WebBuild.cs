@@ -47,6 +47,8 @@ namespace CrowdRunner.EditorTools
             // 에디터에서는 지난번에 구운 것이 남아 있어 멀쩡해 보인다 — 그게 이 줄의 전부다
             M0Assets.Bake(300, "_lo");
             VatBaker.Bake("_lo");
+            M0Assets.BakeFlatMaterials();
+            AssetDatabase.SaveAssets();
             AssertEverythingLoadedByNameExists();
             EnsureScene();
 
@@ -112,6 +114,8 @@ namespace CrowdRunner.EditorTools
                 ("Assets/_Game/Resources/M0/standin_vat_lo.mat",        "군중의 재질 — 같은 결과"),
                 ("Assets/_Game/Resources/Fonts/Jua-Regular.ttf",        "본문 글꼴 — 없으면 웹에서 글자가 통째로 안 나온다 (OS 폰트가 없다)"),
                 ("Assets/_Game/Resources/Fonts/ZQFallbackGothic.ttf",   "대체 글꼴 — `·` `—` 같은 글리프가 여기로 넘어간다"),
+                ("Assets/_Game/Resources/M0/roadmark.mat",              "길 표식 — 없으면 달리는 것이 안 보인다"),
+                ("Assets/_Game/Resources/M0/blobshadow.mat",            "발밑 그림자 — 없으면 군중이 떠 보인다"),
             };
             bool bad = false;
             foreach (var (path, what) in must)

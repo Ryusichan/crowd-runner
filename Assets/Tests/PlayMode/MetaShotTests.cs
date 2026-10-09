@@ -6,6 +6,7 @@ using CrowdRunner.Game;
 using CrowdRunner.Meta;
 using CrowdRunner.View;
 using NUnit.Framework;
+using UnityEngine.Rendering;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
@@ -187,6 +188,7 @@ namespace CrowdRunner.Tests
             for (int i = 0; i < 60; i++) yield return null;
             Time.timeScale = prev;
 
+            AssertNumbersDoNotOverlapOnScreen(runner);
             MeasureGateLabels(runner);
             yield return ShootTheGatePass(runner);
 
@@ -301,8 +303,27 @@ namespace CrowdRunner.Tests
             var prevTarget = cam.targetTexture;
             int prevMask = cam.cullingMask;
             cam.targetTexture = rt;
-            cam.cullingMask = ~(1 << 5);        // UI 빼고 전부
+            // **UI 를 같이 찍는다.** 전에는 레이어 5 를 뺐는데, 병력 수가 화면 UI 로 옮겨 간
+            // 뒤로는 그러면 **플레이어가 보는 것과 다른 그림**이 나온다 — 고쳐 놓고도
+            // 사진에는 안 나오고, 그러면 사진으로 확인할 수가 없다.
+            // 오버레이 캔버스는 카메라 렌더 경로 밖이라 찍는 동안만 카메라에 물린다
+            cam.cullingMask = ~0;
+            var cv = GameBoot.Overlay;
+            RenderMode keepMode = RenderMode.ScreenSpaceOverlay; Camera keepCam = null; float keepPlane = 0f;
+            if (cv != null)
+            {
+                keepMode = cv.renderMode; keepCam = cv.worldCamera; keepPlane = cv.planeDistance;
+                cv.renderMode = RenderMode.ScreenSpaceCamera;
+                cv.worldCamera = cam;
+                cv.planeDistance = 1f;      // 3D 보다 앞 — 뒤에 두면 길에 가린다
+                Canvas.ForceUpdateCanvases();
+            }
             cam.Render();
+            if (cv != null)
+            {
+                // **되돌린다** — 안 되돌리면 그 다음 UI 촬영이 다른 모드에서 찍힌다
+                cv.renderMode = keepMode; cv.worldCamera = keepCam; cv.planeDistance = keepPlane;
+            }
 
             var tex = new Texture2D(W, H, TextureFormat.RGB24, false);
             var prevRt = RenderTexture.active;
@@ -401,6 +422,73 @@ namespace CrowdRunner.Tests
                 }
             }
             Debug.Log($"[CR-TEST] 차선 지정 지역 {lanes} 개 · 전부 자기 차선 안");
+        }
+
+        /// <summary>
+        /// **두 숫자가 화면에서 겹치지 않는가.**
+        ///
+        /// 병력 수(`32`)와 게이트 글자(`×3`)가 포개져 **둘 다 안 읽히는** 그림이 나왔다.
+        /// 세계 좌표에서는 높이가 달랐다 — 병력 수 4.4 m, 게이트 1.6 m. 그런데 게이트가
+        /// **더 멀리** 있어서 화면에서는 같은 높이로 올라온다. 이 구도(위에서 비스듬히)에서는
+        /// **'앞'과 '위'가 화면에서 같은 방향**이라 높이로 떼는 것이 듣지 않는다.
+        ///
+        /// 그리고 하필 **군단이 게이트에 다가가는 순간** 겹친다 — 즉 **고르는 순간**이고,
+        /// 두 숫자를 가장 읽어야 할 때다.
+        ///
+        /// 그래서 세계 좌표가 아니라 **화면 사각형**을 재서 겹치는지 묻는다. 눈으로 보면
+        /// 한 프레임만 보게 되고, 겹치는 구간은 몇 프레임뿐이라 그 프레임을 놓치면 통과한다.
+        /// </summary>
+        static void AssertNumbersDoNotOverlapOnScreen(LevelRunner runner)
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+            Rect? count = null;
+            var gates = new System.Collections.Generic.List<(string text, Rect r)>();
+            foreach (var tm in Object.FindObjectsByType<TextMesh>(FindObjectsSortMode.None))
+            {
+                if (!tm.gameObject.activeInHierarchy) continue;
+                var rend = tm.GetComponent<Renderer>();
+                if (rend == null) continue;
+                var r = ScreenRect(cam, rend.bounds);
+                if (r.width <= 0f) continue;                  // 카메라 뒤
+                if (tm.gameObject.name == "GateText") gates.Add((tm.text, r));
+            }
+            // 병력 수는 **화면 UI** 다 (`LevelView.BuildCountUi`). 오버레이 캔버스의
+            // `RectTransform` 월드 꼭짓점은 이미 화면 픽셀이라 그대로 쓴다
+            foreach (var t in Object.FindObjectsByType<UnityEngine.UI.Text>(FindObjectsSortMode.None))
+            {
+                if (t.gameObject.name != "CountUi" || !t.gameObject.activeInHierarchy) continue;
+                var c4 = new Vector3[4];
+                ((RectTransform)t.transform).GetWorldCorners(c4);
+                count = new Rect(c4[0].x, c4[0].y, c4[2].x - c4[0].x, c4[2].y - c4[0].y);
+            }
+            if (count == null) { Debug.LogWarning("[CR-TEST] 병력 수 UI 를 못 찾았다"); return; }
+
+            foreach (var (text, r) in gates)
+            {
+                if (!r.Overlaps(count.Value)) continue;
+                Debug.LogError($"[CR-TEST] 병력 수와 게이트 글자 '{text}' 가 **화면에서 겹친다** — " +
+                               "둘 다 안 읽힌다. 하필 고르는 순간이다");
+                Assert.Fail($"병력 수와 '{text}' 가 화면에서 겹친다");
+            }
+            Debug.Log($"[CR-TEST] 화면 글자 겹침 없음 (병력 수 1 · 게이트 글자 {gates.Count})");
+        }
+
+        /// <summary>월드 상자를 화면 사각형으로. 여덟 꼭짓점을 투영해 감싸는 상자를 만든다</summary>
+        static Rect ScreenRect(Camera cam, Bounds b)
+        {
+            float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
+            for (int i = 0; i < 8; i++)
+            {
+                var c = new Vector3(((i & 1) == 0 ? b.min : b.max).x,
+                                    ((i & 2) == 0 ? b.min : b.max).y,
+                                    ((i & 4) == 0 ? b.min : b.max).z);
+                var p = cam.WorldToScreenPoint(c);
+                if (p.z <= 0f) return new Rect(0, 0, -1, -1);   // 카메라 뒤 — 잴 수 없다
+                x0 = Mathf.Min(x0, p.x); x1 = Mathf.Max(x1, p.x);
+                y0 = Mathf.Min(y0, p.y); y1 = Mathf.Max(y1, p.y);
+            }
+            return new Rect(x0, y0, x1 - x0, y1 - y0);
         }
 
         /// <summary>

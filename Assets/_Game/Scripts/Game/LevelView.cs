@@ -49,7 +49,7 @@ namespace CrowdRunner.View
         /// </summary>
         public int GatePops => fxGate != null ? fxGate.Popped : 0;
         Transform[] zones = new Transform[0];
-        TextMesh countLabel, countShadow;
+        UnityEngine.UI.Text countUi;
         CasualtyFx fx;
         RoadMarks marks;
         BlobShadows shadows;
@@ -120,12 +120,6 @@ namespace CrowdRunner.View
             // 밝아서 길의 폭이 한눈에 읽힌다 — 폭이 좁아지는 구간이 눈에 걸려야 한다
             curbL = Box("Curb", new Color(0.92f, 0.90f, 0.84f));
             curbR = Box("Curb", new Color(0.92f, 0.90f, 0.84f));
-            // **숫자 뒤에 어두운 사본을 깐다.** 이 게임에서 반드시 읽어야 하는 수는 이 하나인데,
-            // 흰 글자가 밝은 길 위에 오면 **그려졌는데 안 보인다** — 첫 게임 화면이 그랬다.
-            // 테두리를 주는 길도 있지만 `TextMesh` 에는 없고, 사본 한 장이 드로우 한 번으로 끝난다
-            countShadow = Label("CountShadow", 0.5f);
-            countShadow.color = new Color(0.06f, 0.05f, 0.09f, 0.85f);
-            countLabel = Label("Count", 0.5f);
         }
 
         /// <summary>`LevelRunner` 가 레벨을 띄운 뒤 부른다 — 게이트·지역·벽을 레벨대로 세운다</summary>
@@ -244,17 +238,70 @@ namespace CrowdRunner.View
                 if (gates[i].gameObject.activeSelf != ahead) gates[i].gameObject.SetActive(ahead);
             }
 
-            countLabel.text = sim.Units.ToString();
-            // 군단보다 **앞에 그리고 위로** — 머리 위에 겹치면 숫자도 군중도 둘 다 안 읽힌다
-            countLabel.transform.position = new Vector3(sim.X, 4.4f, sim.Z + 7.5f);
-            countLabel.transform.rotation = cam.transform.rotation;
-            countLabel.color = sim.State == SimState.Lost ? new Color(0.8f, 0.3f, 0.3f) : Color.white;
-            // 그림자는 **카메라 쪽으로** 조금 당겨 깐다 — 뒤로 밀면 길에 묻힌다
-            countShadow.text = countLabel.text;
-            countShadow.transform.position = countLabel.transform.position + new Vector3(0.10f, -0.12f, -0.02f);
-            countShadow.transform.rotation = countLabel.transform.rotation;
+            // **있을 때 만든다.** `GameBoot.Go` 는 `LevelView` 를 붙인 **뒤에** 오버레이를
+            // 세우고(`AddComponent` 가 즉시 `Awake` 를 돌린다), `GameBoot.Reset` 은 오버레이를
+            // 통째로 지운다. 둘 다 "만드는 시점"을 고정할 수 없게 만든다 — 그래서 **없으면
+            // 만든다**로 둔다. 순서에 기대면 그 순서를 바꾸는 사람이 조용히 깨뜨린다
+            if (countUi == null) BuildCountUi();
+            if (countUi != null)
+            {
+                countUi.text = sim.Units.ToString();
+                countUi.color = sim.State == SimState.Lost ? new Color(0.92f, 0.46f, 0.44f) : Color.white;
+            }
 
             cam.transform.position = new Vector3(0f, 19f, sim.Z - 26f);
+        }
+
+        /// <summary>
+        /// **병력 수는 화면 UI 다 — 3D 안이 아니다.**
+        ///
+        /// 처음에는 군단 머리 위에 `TextMesh` 로 띄웠다. 그랬더니 **게이트 글자와 화면에서
+        /// 겹쳤다** — 세계 좌표 높이는 달랐지만(4.4 m vs 1.6 m) 게이트가 더 멀리 있어 화면에서는
+        /// 같은 높이로 올라온다. 이 구도에서 **'앞'과 '위'는 화면에서 같은 방향**이다.
+        ///
+        /// 그래서 군단 **뒤로** 옮겼더니 이번엔 **거대해졌다.** 카메라가 군단 뒤 26 m 에 있으니
+        /// 뒤로 보내는 것은 **카메라에 가까워지는 것**이고, 가까우면 크다. 3D 안에는
+        /// *작으면서 게이트를 피하는 자리가 없다* — 두 번 옮겨 보고 알았다.
+        ///
+        /// 화면 UI 면 **원근이 없다.** 크기가 거리와 무관하고, 자리도 고정이라 무엇과도
+        /// 안 겹친다. 이 장르가 전부 이렇게 하는 데는 이유가 있었다.
+        ///
+        /// 캔버스는 `GameBoot.Overlay` 를 쓴다 — 판보다 오래 사는 것이라, 이 뷰가 죽을 때
+        /// **자식만 지운다**(`OnDestroy`). 안 지우면 판을 바꿀 때마다 숫자가 하나씩 쌓인다.
+        /// </summary>
+        void BuildCountUi()
+        {
+            var canvas = GameBoot.Overlay;
+            if (canvas == null) return;    // 아직 안 섰다 — 다음 프레임에 다시 본다
+
+            var go = new GameObject("CountUi");
+            go.transform.SetParent(canvas.transform, false);
+            var rt = go.AddComponent<RectTransform>();
+            // 아래 가운데. 게이트는 늘 화면 위쪽에 있으므로 여기면 만날 일이 없다
+            rt.anchorMin = new Vector2(0.5f, 0f);
+            rt.anchorMax = new Vector2(0.5f, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.anchoredPosition = new Vector2(0f, 110f);
+            rt.sizeDelta = new Vector2(600f, 190f);
+
+            countUi = go.AddComponent<UnityEngine.UI.Text>();
+            countUi.font = Resources.Load<Font>("Fonts/Jua-Regular")
+                        ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (countUi.font == null) Debug.LogError("[CR] 글꼴을 못 찾았다 — 병력 수가 안 나온다");
+            countUi.fontSize = 150;
+            countUi.alignment = TextAnchor.LowerCenter;
+            countUi.color = Color.white;
+            countUi.raycastTarget = false;   // 손가락은 이 아래 길까지 닿아야 한다
+            // **테두리.** 길도 군중도 밝기가 제각각이라, 흰 글자 하나로는 어딘가에서 묻힌다
+            var o = go.AddComponent<UnityEngine.UI.Outline>();
+            o.effectColor = new Color(0.05f, 0.04f, 0.08f, 0.92f);
+            o.effectDistance = new Vector2(3.5f, -3.5f);
+        }
+
+        void OnDestroy()
+        {
+            // 캔버스는 판보다 오래 산다 — 내 자식만 치운다
+            if (countUi != null) Destroy(countUi.gameObject);
         }
 
         /// <summary>

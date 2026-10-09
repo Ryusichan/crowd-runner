@@ -50,12 +50,17 @@ namespace CrowdRunner.View
             }
             if (mat == null)
             {
-                var sh = Shader.Find("Legacy Shaders/Diffuse") ?? Shader.Find("Standard");
-                mat = new Material(sh) { name = "RoadMark" };
-                if (mat.HasProperty("_Color")) mat.color = new Color(0.86f, 0.85f, 0.78f);
-                if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0f);
-                // **인스턴싱을 켜지 않으면 `RenderMeshInstanced` 가 조용히 한 개만 그린다**
-                mat.enableInstancing = true;
+                // **구워 둔 에셋을 쓴다.** 런타임에 `new Material(Shader.Find(...))` 로 만들고
+                // `enableInstancing` 을 켜면 **에디터에서는 그려지고 빌드에서는 안 그려진다** —
+                // 빌드는 쓰이는 셰이더 변형만 남기는데, 런타임에 켜는 인스턴싱은 빌드 시점에
+                // 아무도 모른다. 2026-10-09 웹 빌드에서 표식이 통째로 사라졌던 자리다
+                mat = Resources.Load<Material>("M0/roadmark");
+                if (mat == null)
+                {
+                    Debug.LogError("[CR] M0/roadmark.mat 이 없다 — 길 표식이 안 그려지고, " +
+                                   "그러면 달리고 있다는 것이 화면에 없다 (M0Assets.BakeFlatMaterials)");
+                    return;
+                }
                 rp = new RenderParams(mat)
                 {
                     worldBounds = new Bounds(new Vector3(0f, 0f, length * 0.5f),
