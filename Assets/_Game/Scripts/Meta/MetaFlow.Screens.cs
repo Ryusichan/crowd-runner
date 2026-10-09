@@ -172,13 +172,34 @@ namespace CrowdRunner.Meta
             }
 
             // 카드 전체가 버튼이다 — 작은 과녁을 겨누게 하면 엄지로 누르기 어렵다
-            var btn = card.gameObject.AddComponent<Button>();
-            btn.targetGraphic = card;
             var captured = lv;
-            btn.onClick.AddListener(delegate { OpenCard(captured); });
+            Tappable(card, delegate { OpenCard(captured); });
 
             // **"짜잔" 이 있어야 한다** (오너 2026-09-26) — 아래에서부터 차례로 뜬다
             if (!Instant) UiAnim.PopIn(card.rectTransform, Mathf.Min(order, UiAnim.CascadeMax) * UiAnim.CascadeStep);
+        }
+
+        /// <summary>
+        /// 그림을 **누를 수 있게** 만든다.
+        ///
+        /// ⚠ **`UiKit.Panel` 은 `raycastTarget = false` 로 만든다** (`Capsule`·`Scrim` 도 그것으로
+        /// 짜여 있다). 바탕 그림이 클릭을 먹지 않게 하려는 것인데, 거기에 `Button` 만 붙이면
+        /// **클릭이 애초에 닿지 않는다** — 단추는 멀쩡히 보이고 눌리지 않는다.
+        ///
+        /// 실제로 그랬다: 월드맵의 칸을 눌러도 스테이지 카드가 안 떴다. 안내 화면의 시작
+        /// 단추(`UiKit.Button` — 그쪽은 `raycastTarget = true`)는 멀쩡했기 때문에
+        /// **"탭은 된다"** 로 보였고, 그래서 더 안 찾았다. 웹에 올려 헤드리스로 눌러 보고서야
+        /// 나왔다 (2026-10-09).
+        ///
+        /// 그래서 **그림에 단추를 붙이는 길을 하나로** 만든다. 손으로 두 줄 쓰면 다음에 또
+        /// 한 줄을 빠뜨린다.
+        /// </summary>
+        static void Tappable(Graphic g, UnityEngine.Events.UnityAction onClick)
+        {
+            g.raycastTarget = true;
+            var btn = g.gameObject.AddComponent<Button>();
+            btn.targetGraphic = g;
+            btn.onClick.AddListener(onClick);
         }
 
         // ── 스테이지 카드 ────────────────────────────────────────────────────────
@@ -189,9 +210,7 @@ namespace CrowdRunner.Meta
 
             var scrim = UiKit.Scrim("Scrim", root, 0.7f);
             UiKit.Stretch(scrim.rectTransform);
-            var back = scrim.gameObject.AddComponent<Button>();
-            back.targetGraphic = scrim;
-            back.onClick.AddListener(delegate { Show(MetaScreen.WorldMap); });
+            Tappable(scrim, delegate { Show(MetaScreen.WorldMap); });
 
             var cardImg = UiKit.Panel("Card", root, UiKit.Hex(0x2a2138));
             var card = cardImg.rectTransform;
