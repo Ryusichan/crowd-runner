@@ -15,8 +15,12 @@ namespace CrowdRunner.Game
     /// </summary>
     public class LevelRunner : MonoBehaviour
     {
-        [Tooltip("Resources/Levels 안의 이름 — 예: \"1-1\"")]
-        public string levelName = "1-1";
+        /// <summary>
+        /// **지금 열려 있는 판**의 이름. `Load` 가 쓴다 — 여기에 넣는다고 판이 바뀌지 않는다.
+        /// (예전에는 `Awake` 가 이 값을 읽어서 바뀌는 것처럼 보였고, 그것이 결함이었다.)
+        /// </summary>
+        [Tooltip("지금 열려 있는 판 (읽기용). 판을 바꾸려면 Load(이름)")]
+        public string levelName = "";
 
         [Tooltip("손가락 한 번 움직인 거리가 길 폭의 몇 배로 환산되나")]
         public float dragGain = 2.2f;
@@ -31,10 +35,29 @@ namespace CrowdRunner.Game
         bool dragging;
         float lastPointerX;
 
-        void Awake()
+        /// <summary>
+        /// ⚠ **`Awake` 에서 판을 열지 않는다.** 예전에는 `Load(levelName)` 을 여기서 불렀는데,
+        /// `AddComponent<LevelRunner>()` 가 **그 자리에서** `Awake` 를 돌리므로 **그 다음 줄에서
+        /// `levelName` 에 넣는 값은 이미 읽은 뒤**가 된다. 그래서 `GameBoot.Go("1-5")` 가
+        /// 1-1 을 띄웠다 (세션 B 가 찾았다, 2026-10-09).
+        ///
+        /// 더 나쁜 것은 **조용했다**는 점이다. 로그는 요청한 이름을 1-1 의 숫자 옆에 찍었고,
+        /// `level=1-10 units=10 road=7.0m events=2` 는 그럴듯하게 생겼다. 다섯 판이 전부
+        /// **똑같은 수**를 낸 뒤에야 보였다.
+        ///
+        /// 그 결함은 호출 쪽에서 고쳤지만(`GameBoot.Go` 가 `Load` 를 다시 부른다) **함정은
+        /// 여기 있었다.** 나는 `Load` 주석에 *"바깥에서 판을 여는 길은 이것 하나뿐"* 이라고
+        /// 적어 놓고, `Awake` 라는 **두 번째 문을 암묵적으로 열어 두었다.** 적어 둔 규칙과
+        /// 코드가 다르면 다음 사람은 적어 둔 쪽을 믿는다.
+        ///
+        /// 이제 **진짜로 하나다.** 아무도 안 열면 돌지 않고, 조용히 1-1 로 때우지 않는다.
+        /// </summary>
+        void Start()
         {
-            // 인스펙터에 적힌 판으로 시작한다. 바깥(메타 화면·Boot)에서는 `Load(name)` 을 부른다
-            Load(levelName);
+            // **조용한 빈 화면을 만들지 않는다.** 아무도 `Load` 를 안 불렀으면 그 사실을
+            // 말한다 — 기본값으로 때우면 "왜 늘 1-1 이지" 를 다시 만든다
+            if (Sim == null && Error == null)
+                Debug.LogError("[CR] 판을 열지 않은 채로 돌고 있다 — LevelRunner.Load(\"1-3\") 을 불러야 한다");
         }
 
         /// <summary>
