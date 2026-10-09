@@ -106,7 +106,7 @@ namespace CrowdRunner.Tests
             Assert.Greater(n, 10, "월드맵에 그려진 것이 거의 없다");
             Assert.LessOrEqual(maxY - minY, H, "경로가 기준 높이를 넘는다 — 노드 간격을 줄여야 한다");
             Assert.LessOrEqual(maxX - minX, W, "경로가 기준 폭을 넘는다 — 좌우 흔들림을 줄여야 한다");
-            AssertFitsEveryPhone(cv, "월드맵");
+            yield return AssertFitsEveryPhone(cv, "월드맵", () => flow.Show(MetaScreen.WorldMap));
 
             var lv = LevelCatalog.Find("1-3");
             flow.OpenCard(lv);
@@ -115,85 +115,99 @@ namespace CrowdRunner.Tests
             var (cy0, cy1, cx0, cx1, cn) = Span(cv.transform);
             Debug.Log($"[CR-TEST] ② 카드: 자식 {cn} 개 · 세로 {cy1 - cy0:F0} / {H}");
             Assert.LessOrEqual(cy1 - cy0, H, "카드가 기준 높이를 넘는다 — ☣ 세 줄 + 버튼 둘이 안 들어간다");
-            AssertFitsEveryPhone(cv, "스테이지 카드");
+            yield return AssertFitsEveryPhone(cv, "스테이지 카드", () => flow.OpenCard(lv));
         }
 
         /// <summary>
-        /// **가장 좁은 폰에서도 들어가는가** — 그리고 **지금은 그걸 못 본다.**
+        /// **가장 좁은 폰에서도 들어가는가** — 이제 진짜로 잰다.
         ///
-        /// 세션 A 가 실제 폰에서 머리글 좌우가 잘리는 것을 찾았는데 제 검사는 통과시켰다.
-        /// 1080x1920 한 폭만 쟀기 때문이다. 그래서 세 비율로 재게 고쳤더니 — **이번엔 거짓으로
-        /// 떨어뜨렸다.**
+        /// ## 두 번 틀렸다
         ///
-        /// ## 왜 거짓인가
+        /// ① **한 폭만 쟀다.** 1080x1920 에서만 보고 통과시켰고, 세션 A 가 실제 폰에서
+        ///    머리글이 잘리는 것을 찾았다. 한 폭만 재는 검사는 *그 폭에서는 맞다* 만 말하는데
+        ///    읽는 사람은 *맞다* 로 읽는다.
         ///
-        /// 레이아웃이 **적응형**이다. `MetaFlow` 가 `Screen.width/Screen.height` 로 쓸 수 있는
-        /// 폭을 계산해 그 안에서 짓는다. 그런데 **배치 창은 640x480 가로**라 게임이
-        /// `쓸 수 있는 폭 2560 단위` 로 보고 아무것도 안 깎는다. 즉 이 검사는 **넓게 지어진
-        /// 레이아웃을 좁은 예산에 넣어 보고 있었다** — 좁은 화면이었다면 애초에 좁게 지어졌을 것을.
+        /// ② 그래서 세 비율로 쟀더니 **거짓으로 떨어뜨렸다.** 레이아웃이 적응형이라
+        ///    `Screen` 에서 폭을 받아 짓는데, 배치 창이 640x480 **가로**라 게임은 폭을
+        ///    2560 으로 보고 아무것도 안 깎는다. 즉 **넓게 지어진 것을 좁은 예산에 넣어
+        ///    보고 있었다.** 세션 A 가 고친 뒤에도 `Head 47 단위` 가 **고치기 전과 똑같이**
+        ///    나온 것이 단서였다 — 같은 수가 나오면 같은 것을 보고 있는 것이다.
         ///
-        /// 증거는 수였다: 세션 A 가 고친 **뒤에도** `Head 47 단위` 가 **고치기 전과 똑같이**
-        /// 나왔다. 같은 수가 나오면 같은 것을 보고 있는 것이다.
+        ///    그 상태가 특히 나빴던 이유: **고치면 눈이 머는 검사**였다. 하드코딩을 규칙으로
+        ///    바꾸는 순간 잡을 것이 없어졌는데도 빨간색이라 믿음직해 보였고, 그 빨간색을 보고
+        ///    더 깎았으면 **멀쩡한 레이아웃을 망가뜨렸을** 것이다.
         ///
-        /// ## 그래서 지금 하는 일
+        /// ## 지금
         ///
-        /// **실제로 쓰고 있는 폭**(게임이 계산한 그 수)으로만 잰다. 그 아래로는 못 본다 —
-        /// 적응형 레이아웃을 재려면 **화면 비율 자체를 바꿔서 다시 지어야** 하는데, 배치
-        /// 에디터에서는 `Screen` 을 못 바꾼다.
+        /// `MetaFlow.ForceUsableWidth` 로 폭을 넣고 **화면을 다시 지어** 잰다. 그래야 그
+        /// 폭에서 *실제로 지어진* `RectTransform` 을 보는 것이다. 세션 A 가 그 값을
+        /// **속성**으로 둔 것이 핵심이다 — `Awake` 에서 한 번 계산했으면 검사가 값을 넣어도
+        /// 화면은 이미 지어진 뒤라 **조용히 초록**이 나왔을 것이다.
         ///
-        /// 못 보는 것은 **못 본다고 크게 적는다.** 틀린 검사는 없는 검사보다 나쁘고
-        /// (`modcheck.py` 를 그래서 지웠다), *조용히 통과하는* 검사도 같다 — 둘 다
-        /// "확인했다" 로 읽힌다.
+        /// 끝나고 **되돌린다.** 안 되돌리면 다음 검사가 좁은 폭으로 짓는다 — 오늘 두 번 겪은
+        /// *"앞엣것이 안 지워진다"* 자리다.
         ///
-        /// 제대로 재려면 `MetaFlow` 에 **시험용 폭 주입**이 한 줄 필요하다 (세션 A 레인):
-        /// `ForceUsableWidth(864)` 뒤에 화면을 다시 지으면 그때는 진짜 9:20 레이아웃이다.
+        /// 앵커는 세 경우고, 묻는 것이 다르다:
+        /// 늘어남(min≠max) 화면과 같이 커진다 → 묻지 않는다 ·
+        /// 가운데(0.5) 제자리에서 잘린다 → `|x| ≤ 폭/2` ·
+        /// 가장자리(0·1) 가장자리를 따라온다 → 자기 폭만.
+        /// 첫 판에 이것을 안 걸러 `MetaRoot`(화면 전체 뿌리)를 지목했었다.
         /// </summary>
-        static void AssertFitsEveryPhone(Canvas cv, string where)
+        static IEnumerator AssertFitsEveryPhone(Canvas cv, string where, System.Action rebuild)
         {
-            // 게임이 쓰는 것과 **같은 식**으로 센다 — 다른 식으로 세면 이 검사가 재는 것과
-            // 화면이 쓰는 것이 어긋나고, 그 어긋남이 오늘 여러 번 본 모양이다
-            var sc = cv.GetComponent<CanvasScaler>();
-            float refH = sc != null && sc.referenceResolution.y > 0f ? sc.referenceResolution.y : 1920f;
-            float aspect = Screen.height > 0 ? Screen.width / (float)Screen.height : 9f / 16f;
-            float usable = refH * aspect;
-            float half = usable * 0.5f;
-
+            var phones = new (string name, float usable)[]
+            {
+                ("9:16", 1920f * 9f / 16f),      // 1080 — 구형
+                ("9:19.5", 1920f * 9f / 19.5f),  //  886 — 아이폰
+                ("9:20", 1920f * 9f / 20f),      //  864 — 긴 안드로이드
+            };
             var root = cv.transform as RectTransform;
             var corners = new Vector3[4];
-            int over = 0; string worst = null; float worstBy = 0f;
 
-            foreach (var rt in cv.GetComponentsInChildren<RectTransform>(false))
+            string fail = null;
             {
-                if (rt == root) continue;
-                // **늘어나는 것은 묻지 않는다** (`anchorMin.x != anchorMax.x`): 화면과 같이
-                // 커진다. 첫 판에 이것을 안 걸러서 `MetaRoot` 를 "1480 단위 넘친다" 로
-                // 지목했다 — 거짓 양성이 눈에 뻔한 것이라 다행이었다
-                if (Mathf.Abs(rt.anchorMax.x - rt.anchorMin.x) > 0.01f) continue;
-                rt.GetWorldCorners(corners);
-                float x0 = root.InverseTransformPoint(corners[0]).x;
-                float x1 = root.InverseTransformPoint(corners[2]).x;
-                bool centred = Mathf.Abs(rt.anchorMin.x - 0.5f) < 0.01f;
-                float by = centred
-                    ? Mathf.Max(Mathf.Abs(x0), Mathf.Abs(x1)) - half   // 제자리 — 잘린다
-                    : (x1 - x0) - usable;                              // 가장자리를 따라온다
-                if (by <= 0.5f) continue;
-                over++;
-                if (by > worstBy) { worstBy = by; worst = rt.name + (centred ? " (가운데)" : " (가장자리)"); }
+                foreach (var (name, usable) in phones)
+                {
+                    MetaFlow.ForceUsableWidth = usable;
+                    rebuild();
+                    // **한 프레임 기다린다.** `Show` 는 앞 화면을 `Destroy` 로 지우는데 그건
+                    // 프레임 끝까지 미뤄진다. 같은 프레임에 재면 **옛 화면과 새 화면이 둘 다**
+                    // 잡히고, 넘치는 개수가 정확히 두 배로 나온다 (4 → 8 로 그렇게 나왔다).
+                    // 오늘 `GameBoot.Reset` 에서 겪은 것과 같은 자리다
+                    yield return null;
+                    Canvas.ForceUpdateCanvases();
+
+                    float half = usable * 0.5f;
+                    int over = 0; string worst = null; float worstBy = 0f;
+                    foreach (var rt in cv.GetComponentsInChildren<RectTransform>(false))
+                    {
+                        if (rt == root) continue;
+                        if (Mathf.Abs(rt.anchorMax.x - rt.anchorMin.x) > 0.01f) continue;  // 늘어남
+                        rt.GetWorldCorners(corners);
+                        float x0 = root.InverseTransformPoint(corners[0]).x;
+                        float x1 = root.InverseTransformPoint(corners[2]).x;
+                        bool centred = Mathf.Abs(rt.anchorMin.x - 0.5f) < 0.01f;
+                        float by = centred ? Mathf.Max(Mathf.Abs(x0), Mathf.Abs(x1)) - half
+                                           : (x1 - x0) - usable;
+                        if (by <= 0.5f) continue;
+                        over++;
+                        if (by > worstBy) { worstBy = by; worst = rt.name + (centred ? " (가운데)" : " (가장자리)"); }
+                    }
+
+                    if (over == 0) { Debug.Log($"[CR-TEST] {where} · {name} ({usable:F0}단위): 들어간다"); continue; }
+                    Debug.LogError($"[CR-TEST] {where} · {name}({usable:F0}단위)에서 **{over} 개가 밖으로 나간다** — " +
+                                   $"가장 심한 것 '{worst}' 가 {worstBy:F0} 단위");
+                    // **바로 안 떨어뜨린다**: 되돌리는 일이 남아 있고, `yield` 가 있는 메서드는
+                    // `finally` 를 못 쓴다. 안 되돌리면 다음 검사가 좁은 폭으로 짓는다
+                    if (fail == null) fail = $"{where}: {name} 에서 {over} 개가 화면 밖 (최대 {worstBy:F0} 단위)";
+                }
             }
-
-            Assert.AreEqual(0, over,
-                $"{where}: 지금 쓰는 폭 {usable:F0} 단위에서 {over} 개가 밖으로 나간다 " +
-                $"(가장 심한 것 '{worst}' {worstBy:F0} 단위)");
-
-            // **여기부터가 못 보는 것.** 조용히 넘기지 않는다
-            const float Narrowest = 1920f * 9f / 20f;   // 864 — 긴 안드로이드
-            if (usable > Narrowest + 1f)
-                Debug.LogWarning($"[CR-TEST] 경고 {where}: **좁은 폰은 못 쟀다.** 지금 화면이 " +
-                                 $"{Screen.width}x{Screen.height} 라 게임이 폭 {usable:F0} 단위로 짓는다. " +
-                                 $"실제 폰은 9:19.5 에서 886, 9:20 에서 {Narrowest:F0} 단위다 — " +
-                                 "레이아웃이 적응형이라 **좁게 지어 봐야** 알 수 있고, 배치 " +
-                                 "에디터에서는 Screen 을 못 바꾼다. `MetaFlow` 에 시험용 폭 주입이 " +
-                                 "있으면 여기서 진짜로 잴 수 있다");
+            // **되돌린다** — 안 되돌리면 다음 검사가 좁은 폭으로 짓고, 그건 "왜 갑자기
+            // 다 통과하지" 로만 보인다
+            MetaFlow.ForceUsableWidth = 0f;
+            rebuild();
+            yield return null;
+            if (fail != null) Assert.Fail(fail);
         }
 
         /// <summary>
