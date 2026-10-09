@@ -29,8 +29,20 @@ if (-not (Test-Path (Join-Path $src "index.html"))) {
 # 아무도 안 묻는다 (`DESIGN.md` §3i 네 번째 칸). 배포에도 그 자리가 있다 — 코드를 고치고
 # 빌드를 안 낸 채 올리면 **고쳐진 줄 알고 시험**하게 되고, 그 10 분은 통째로 버려진다.
 # 그래서 소스가 빌드보다 새로우면 멈춘다.
-$built = (Get-Item (Join-Path $src "index.html")).LastWriteTime
-$newer = @(Get-ChildItem (Join-Path $proj "Assets") -Recurse -File -Include *.cs,*.txt,*.jslib,*.shader -ErrorAction SilentlyContinue |
+# ⚠ **`index.html` 의 시각은 빌드 시각이 아니다.** Unity 는 내용이 같으면 그 파일을 다시
+# 쓰지 않는다 — 3 차 빌드에서 `Build/WebGL.data` 는 15:32 인데 `index.html` 은 15:21 로
+# 남아 있었고, 그래서 **멀쩡한 빌드를 낡았다고 막았다.** 낡은 것을 막으려고 만든 검사가
+# 정작 **틀린 파일을 쟀다** (`DESIGN.md` §3i 네 번째 칸, 내가 만든 검사에서).
+# 그러니 **산출물 중 가장 새것**을 빌드 시각으로 본다.
+$built = (Get-ChildItem $src -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
+
+# 그리고 **테스트는 빼고 센다.** `Assets/Tests` 는 플레이어 빌드에 안 들어가므로, 거기서
+# 바뀐 것 때문에 배포가 막히면 그 빗장은 곧 꺼진다 — 틀린 경고가 검사를 죽인다
+# 그리고 **플레이어 빌드에 들어가는 폴더만 본다.** `Assets/Tests` 는 빌드에 안 들어가므로
+# 거기서 바뀐 것 때문에 배포가 막히면 그 빗장은 곧 꺼진다 — **틀린 경고가 검사를 죽인다.**
+$watch = @('_Game/Scripts','_Game/Resources','_Game/Shaders','_Game/Plugins') |
+         ForEach-Object { Join-Path $proj (Join-Path 'Assets' $_) } | Where-Object { Test-Path $_ }
+$newer = @($watch | ForEach-Object { Get-ChildItem $_ -Recurse -File -Include *.cs,*.txt,*.jslib,*.shader -ErrorAction SilentlyContinue } |
            Where-Object { $_.LastWriteTime -gt $built })
 if ($newer.Count -gt 0) {
     $top = ($newer | Sort-Object LastWriteTime -Descending | Select-Object -First 3 |
