@@ -326,6 +326,128 @@ namespace CrowdRunner.Tests
         }
 
         /// <summary>
+        /// **차선이 정해진 것은 가운데 선을 안 넘는가.**
+        ///
+        /// 1-7 의 지역은 `lane L` 이라 **왼쪽에서만** 녹는데 (`Sim`: `Side != e.lane` 이면
+        /// 건너뛴다), 화면은 길 **전체**를 칠하고 있었다. 그러면 화면이 *"어느 쪽으로 가도
+        /// 녹는다"* 라고 말하고, 플레이어는 **있지도 않은 위험을 피한다.**
+        ///
+        /// 그건 틀린 그림이 아니라 **없어진 선택**이다. 1-7 의 선택은 *"`×3` 을 먹고 녹을래,
+        /// `+25` 로 안전할래"* 인데 양쪽을 칠하면 그 질문이 화면에서 사라진다 — 이 게임의
+        /// 조작이 그 하나뿐이라 더 그렇다.
+        ///
+        /// 표현이 규칙보다 **좁게** 말하면 플레이어가 속고, **넓게** 말하면 선택이 죽는다.
+        /// 어느 쪽이든 수로 잡을 수 있는 것은 *가운데 선을 넘었나* 하나다.
+        /// </summary>
+        static void AssertLaneThingsStayInTheirLane()
+        {
+            var runner = GameBoot.Runner;
+            var lvl = runner != null ? runner.Level : null;
+            if (lvl == null) return;
+            int lanes = 0;
+            foreach (var e in lvl.events)
+            {
+                if (e.kind != EventKind.Zone || e.lane == 0) continue;
+                lanes++;
+                foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+                {
+                    if (t.name != "Zone" && t.name != "ZoneMark") continue;
+                    if (Mathf.Abs(t.position.z - (e.z + (t.name == "Zone" ? e.zoneLength * 0.5f : 0f))) > 1f) continue;
+                    float near = t.position.x - t.localScale.x * 0.5f;
+                    float far = t.position.x + t.localScale.x * 0.5f;
+                    // 왼쪽(-1) 것이면 오른쪽 끝이 0 을 넘으면 안 된다. 기둥은 경계에 서므로 여유를 둔다
+                    float over = e.lane < 0 ? far : -near;
+                    Assert.LessOrEqual(over, 0.4f,
+                        $"{t.name} 이 lane {(e.lane < 0 ? "L" : "R")} 인데 가운데 선을 {over:F2} m 넘었다 — " +
+                        "화면이 규칙보다 넓게 말하면 있지도 않은 위험을 피하게 되고, 그 판의 선택이 사라진다");
+                }
+            }
+            Debug.Log($"[CR-TEST] 차선 지정 지역 {lanes} 개 · 전부 자기 차선 안");
+        }
+
+        /// <summary>
+        /// **글자가 자기 문 안에 들어가는가** — 두 선택지가 겹치지 않는다는 것을 *배수*가 아니라
+        /// **구조**로 보장한다.
+        ///
+        /// 처음에는 "1.88 배까지 안 붙는다" 를 재서 그 배수를 쓰려 했다. 그 수는 `×2`/`+35`
+        /// (두세 글자, 길 7 m)에서 나온 것이고, 세션 A 가 전 경로를 돌려 잰 **최대 증감은
+        /// `+100`(네 글자, 1-5)** 이다. 길 폭도 판마다 다르다. **상수 하나는 어느 판에서는
+        /// 붙고, 그 판이 어디인지는 아무도 모른다** — 그래서 글자를 자기 네모에 맞추고
+        /// (`LevelView.FitLabel`) 여기서는 *정말 들어갔는지* 를 전 판에서 확인한다.
+        ///
+        /// 네모끼리 안 겹치므로, 글자가 네모 안이면 글자도 안 겹친다. 재는 쪽이 아니라
+        /// **못 틀리게 만드는 쪽**이다.
+        /// </summary>
+        static void AssertGateLabelsFitTheirGate(string code)
+        {
+            int n = 0; float worst = 0f; string worstText = "";
+            foreach (var tm in Object.FindObjectsByType<TextMesh>(FindObjectsSortMode.None))
+            {
+                if (tm.gameObject.name != "GateText") continue;
+                var r = tm.GetComponent<Renderer>();
+                var box = tm.transform.parent;
+                if (r == null || box == null) continue;
+                float share = r.bounds.size.x / Mathf.Max(0.01f, box.localScale.x);
+                n++;
+                if (share > worst) { worst = share; worstText = tm.text; }
+                Assert.LessOrEqual(share, 0.92f,
+                    $"{code}: 게이트 글자 '{tm.text}' 가 자기 네모의 {share * 100f:F0}% 를 차지한다 — " +
+                    "두 선택지가 붙어 보인다 (LevelView.FitLabel / GateCharWidth 를 보라)");
+            }
+            // **레벨이 말하는 수와 맞는가.** 이 한 줄이 없어서 다섯 판이 전부 '글자 2 개' 를
+            // 찍는 것을 보고도 한참 뒤에야 알았다 — `GameBoot.Go` 가 어떤 이름을 받든 1-1 을
+            // 띄우고 있었다. 세 판이 **똑같은 수**를 낸 것이 유일한 단서였다
+            var lvl = GameBoot.Runner != null ? GameBoot.Runner.Level : null;
+            int want = 0;
+            if (lvl != null)
+                foreach (var e in lvl.events)
+                    if (e.kind == EventKind.Gate) want += e.options.Length;
+            Debug.Log($"[CR-TEST] {code}: 게이트 글자 {n} 개 (레벨이 말하는 수 {want}) · " +
+                      $"가장 꽉 찬 것 '{worstText}' {worst * 100f:F0}%");
+            Assert.AreEqual(want, n,
+                $"{code}: 레벨에는 선택지가 {want} 개인데 화면에 글자는 {n} 개다 — " +
+                "띄운 판이 달라졌거나 게이트를 덜 세웠다");
+        }
+
+        /// <summary>
+        /// 가장 긴 글자가 있는 판들에서 맞춤 규칙을 확인하고, **1-7 의 지역 표식**을 한 장 찍는다.
+        ///
+        /// 1-7 은 게이트를 고르고 2.2 초 뒤에 지역이 시작한다 — 바닥 색판만으로는 고를 때
+        /// 앞에 무엇이 있는지 모른다. 표식이 **고르는 순간 보이는지**는 그림으로만 알 수 있다.
+        /// </summary>
+        [UnityTest, Timeout(300000)]
+        public IEnumerator Gate_Labels_Fit_And_The_Zone_Is_Announced()
+        {
+            foreach (var code in new[] { "1-5", "1-10", "1-7" })
+            {
+                GameBoot.Go(code);
+                yield return null;
+                yield return null;
+                AssertGateLabelsFitTheirGate(code);
+            }
+
+            var runner = GameBoot.Runner;      // 마지막은 1-7
+            Assert.IsNotNull(runner.Sim, "1-7 을 못 띄웠다 — " + runner.Error);
+            float zoneZ = float.NaN;
+            foreach (var e in runner.Level.events)
+                if (e.kind == EventKind.Zone) { zoneZ = e.z; break; }
+            if (float.IsNaN(zoneZ)) { Debug.LogWarning("[CR-TEST] 1-7 에 지역이 없다"); yield break; }
+
+            float prev = Time.timeScale;
+            Time.timeScale = 20f;
+            // **고르는 자리에서 찍는다.** 지역 바로 앞이 아니라 43 m 뒤 — 게이트 숫자가
+            // 읽히기 시작하는 그 거리다. 거기서 표식이 보여야 "알고 들어간다" 가 된다
+            for (int i = 0; i < 30000 && runner.Sim != null && runner.Sim.Z < zoneZ - 43f; i++)
+                yield return null;
+            Time.timeScale = prev;
+            yield return null;
+            AssertLaneThingsStayInTheirLane();
+            float share = ShotWorld("zone_mark", runner);
+            Debug.Log($"[CR-TEST] 1-7 지역 표식: 지역 z={zoneZ:F0} · 지금 z={runner.Sim.Z:F0} " +
+                      $"(43m 앞) · 그려진 화소 {share:F1}%");
+        }
+
+        /// <summary>
         /// **게이트 글자를 키워도 되는가** — 세션 A 가 물은 것에 짐작 말고 수로 답한다.
         ///
         /// 읽히는 거리(43 m)는 **글자 크기가 정한다.** 키우면 더 멀리서 읽히지만, 한 게이트의

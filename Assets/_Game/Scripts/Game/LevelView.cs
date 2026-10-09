@@ -138,7 +138,10 @@ namespace CrowdRunner.View
                 if (e.kind == EventKind.Gate)
                     foreach (var o in e.options) { g.Add(Gate(e.z, o)); gz.Add(e.z); gl.Add(o.lane); }
                 else if (e.kind == EventKind.Zone)
+                {
                     z.Add(Zone(e));
+                    ZoneMarks(e, z);
+                }
                 else if (e.kind == EventKind.Wall)
                 {
                     wall = Box("Wall", new Color(0.52f, 0.46f, 0.40f));
@@ -347,7 +350,40 @@ namespace CrowdRunner.View
             lab.transform.localScale = new Vector3(0.55f / Mathf.Max(0.1f, t.localScale.x),
                                                    0.55f / t.localScale.y, 1f);
             lab.text = Sign(o.op) + o.value;
+            FitLabel(lab, t.localScale.x * 0.80f);
             return t;
+        }
+
+        /// <summary>
+        /// **글자를 자기 문 안에 맞춘다** — 배수 하나를 고르지 않는 이유.
+        ///
+        /// 읽히는 거리(43 m)는 글자 크기가 정하므로 키우고 싶다. 그런데 한 게이트의 두 선택지는
+        /// 몇 m 밖에 안 떨어져 있고, **붙으면 둘 다 못 읽는다** — 멀리서 읽히게 만든 대가로
+        /// 가까이서 못 읽게 되는 것이다.
+        ///
+        /// 처음에는 "1.88 배까지 안 붙는다" 를 재서 1.5 배를 쓰려 했다. **그 방식이 틀렸다.**
+        /// 그 1.88 은 `×2`/`+35`(두세 글자, 길 7 m)에서 나온 수인데, 세션 A 가 전 경로를 돌려
+        /// 잰 최대 증감은 **`+100`(네 글자, 1-5)** 이고 길 폭도 판마다 다르다. 상수 하나는
+        /// *어느 판에서는* 붙고, 그 판이 어디인지는 아무도 모른다.
+        ///
+        /// 그래서 **글자가 자기 네모의 80 % 안에 들어가게** 한다. 그러면 두 글자가 겹치는 일이
+        /// **구조적으로 없다** — 네모끼리 안 겹치니까. 글자 수가 늘면 저절로 작아지고 길이
+        /// 좁아져도 저절로 맞는다. 짧은 글자(`×2`)는 커져서 더 멀리서 읽힌다.
+        ///
+        /// 글자당 폭 `0.68 m` 는 **잰 수**다 (`+35` 세 글자 = 2.04 m, `MetaShotTests` 가
+        /// `Renderer.bounds` 로 다시 확인한다). 글꼴을 바꾸면 이 수도 다시 재야 한다.
+        /// </summary>
+        const float GateCharWidth = 0.68f;
+
+        static void FitLabel(TextMesh lab, float maxWidth)
+        {
+            int chars = Mathf.Max(1, lab.text.Length);
+            float want = chars * GateCharWidth;
+            // 키우는 쪽은 1.8 배에서 멈춘다 — `×2` 가 문을 넘칠 만큼 커지면 숫자가 아니라
+            // 무늬로 보이고, 두 선택지의 **크기 차이**가 값의 차이로 오해된다
+            float k = Mathf.Clamp(maxWidth / Mathf.Max(0.01f, want), 0.45f, 1.8f);
+            var sc = lab.transform.localScale;
+            lab.transform.localScale = new Vector3(sc.x * k, sc.y * k, sc.z);
         }
 
         static string Sign(GateOp op) =>
@@ -357,10 +393,53 @@ namespace CrowdRunner.View
         {
             // 지역은 머릿수에 비례해 깎는다 (세션 A) — **큰 군단이 지나갈 때 눈에 보이게 많이
             // 녹아야** 대가가 느껴진다. 그 연출은 다음 단위이고, 지금은 *바닥이 보이는 것*까지다
+            // **차선이 정해진 지역은 그 차선만 칠한다.** 길 전체를 칠하면 화면이
+            // *"어느 쪽으로 가도 녹는다"* 라고 말하는데, 규칙은 `Side != e.lane` 이면
+            // 안 녹는다 (`Sim`). 1-7 이 바로 그 판이다: `zone 35 … lane L` 이라
+            // **`×3` 쪽만 녹는데** 양쪽을 칠해서 그 선택이 화면에서 지워져 있었다.
+            //
+            // 표현이 규칙보다 **넓게** 말하면 플레이어는 있지도 않은 위험을 피한다. 그건
+            // 틀린 그림이 아니라 **없어진 선택**이다 — 이 게임의 조작이 그 하나뿐이라 더 그렇다.
+            float rw = runner.Level != null ? runner.Level.roadWidth : 8f;
+            float zw = e.lane != 0 ? rw * 0.5f : rw;
+            float zx = e.lane != 0 ? e.lane * rw * 0.25f : 0f;
             var t = Box("Zone", new Color(0.66f, 0.38f, 0.56f, 1f));
-            t.localScale = new Vector3(runner.Level != null ? runner.Level.roadWidth : 8f, 0.06f, e.zoneLength);
-            t.position = new Vector3(0f, 0.01f, e.z + e.zoneLength * 0.5f);
+            t.localScale = new Vector3(zw, 0.06f, e.zoneLength);
+            t.position = new Vector3(zx, 0.01f, e.z + e.zoneLength * 0.5f);
             return t;
+        }
+
+        /// <summary>
+        /// **녹는 구간을 멀리서 보이게 한다** — 바닥 색판은 가까이 와야 길과 구분된다.
+        ///
+        /// 1-7 은 게이트를 고르고 **2.2 초 뒤**에 지역이 시작한다 (세션 A 측정). 그 판이
+        /// 가르치려는 것은 *녹는 길* 인데, **가르쳐지기 전에 벌어진다** — 플레이어는 고를 때
+        /// 앞에 무엇이 있는지 모르고, 그러면 손해가 *선택의 결과*가 아니라 *사고*가 된다.
+        ///
+        /// 세워 두면 고르는 **그 순간에** 보인다. 2.2 초는 그대로지만 *예고 없이 당한다* 가
+        /// *알고 들어간다* 로 바뀐다 — 페이싱을 안 건드리고 그 몫을 줄이는 길이다.
+        /// 지역과 **같은 색**을 쓴다: 표식과 바닥이 다른 색이면 둘이 같은 것임을 못 배운다.
+        /// </summary>
+        void ZoneMarks(LevelEvent e, System.Collections.Generic.List<Transform> into)
+        {
+            float rw = runner.Level != null ? runner.Level.roadWidth : 8f;
+            // 바닥과 **같은 폭·같은 자리**에 선다 — 표식이 바닥보다 넓으면 표식 쪽이 거짓말을
+            // 하고, 플레이어는 멀리서 표식부터 본다
+            float w = e.lane != 0 ? rw * 0.5f : rw;
+            float cx = e.lane != 0 ? e.lane * rw * 0.25f : 0f;
+            var col = new Color(0.66f, 0.38f, 0.56f, 1f);
+            for (int i = 0; i < 2; i++)
+            {
+                var post = Box("ZoneMark", col);
+                post.localScale = new Vector3(0.30f, 3.4f, 0.30f);
+                post.position = new Vector3(cx + (i == 0 ? -1f : 1f) * w * 0.5f, 1.7f, e.z);
+                into.Add(post);
+            }
+            // 가로대 — 그 차선 위를 가로지르므로 **거기로 들어간다**는 것이 모양으로 읽힌다
+            var bar = Box("ZoneMark", col);
+            bar.localScale = new Vector3(w, 0.40f, 0.30f);
+            bar.position = new Vector3(cx, 3.2f, e.z);
+            into.Add(bar);
         }
 
         Transform Box(string name, Color c)
