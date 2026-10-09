@@ -1,0 +1,23 @@
+fileFormatVersion: 2
+guid: ebb8ae1fc6de4c4580c98a09c5119b4b
+TrueTypeFontImporter:
+  externalObjects: {}
+  serializedVersion: 4
+  fontSize: 16
+  forceTextureCase: -2
+  characterSpacing: 0
+  characterPadding: 1
+  includeFontData: 1
+  fontNames:
+  - Jua
+  - NanumGothic
+  fallbackFontReferences:
+  - {fileID: 12800000, guid: cc7886ffaf9148241a5ae9db826fae97, type: 3}
+  customCharacters: 
+  fontRenderingMode: 0
+  ascentCalculationMode: 1
+  useLegacyBoundsCalculation: 0
+  shouldRoundAdvanceValue: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

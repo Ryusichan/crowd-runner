@@ -62,7 +62,31 @@ $html = [regex]::Replace($html, '("/[A-Za-z0-9_.\-]+\.(?:data|wasm|js|symbols\.j
 $n = ([regex]::Matches($html, [regex]::Escape("?v=$sha"))).Count
 if ($n -eq 0) { throw "캐시 무효화가 한 곳도 안 붙었다 — index.html 모양이 바뀌었다. 정규식을 맞추기 전에는 올리지 않는다 (옛 파일과 새 파일이 섞여 로딩이 깨진다)" }
 
-# ② 버전 글자 — 지금 보고 있는 것이 어느 빌드인지 눈으로 안다.
+# ② **폰에서 놀 수 있게 만든다.** Unity 기본 템플릿은 데스크톱용이라 그대로 올리면 못 논다.
+#    헤드리스 크롬으로 열어 보고 찾은 셋이다 (2026-10-09, 첫 배포):
+#
+#    ⓐ **`viewport` 메타가 아예 없다** → 폰이 데스크톱 너비로 그리고 전체를 축소한다.
+#    ⓑ **캔버스가 960×600 고정 가로**다 → 세로 화면에 가로 상자가 앉고 스크롤바가 생긴다.
+#    ⓒ **`touch-action` 이 없다** → 손가락을 끌면 **게임이 아니라 페이지가 스크롤된다.**
+#       이 게임의 **유일한 조작이 드래그**라 이것 하나로 못 노는 게임이 된다.
+#
+#    ⓒ 가 제일 조용하다 — 화면은 멀쩡히 떠 있으니 "왜 안 움직이지" 로만 보인다.
+$fit = @'
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<style>
+  html,body{margin:0;padding:0;height:100%;background:#1b1426;overflow:hidden;overscroll-behavior:none}
+  #unity-container{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  /* 9:16 을 지키며 화면에 꽉 채운다 — 가로가 넓으면 높이에 맞춰 좌우를 비운다 */
+  #unity-canvas{width:min(100vw,56.25vh);height:min(177.78vw,100vh);display:block;background:#1b1426;
+                touch-action:none;-ms-touch-action:none}
+  #unity-footer{display:none}
+  #unity-loading-bar{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%)}
+</style>
+'@
+if ($html -match '</head>') { $html = $html -replace '</head>', ($fit + '</head>') }
+else { throw "index.html 에 </head> 가 없다 — 템플릿이 바뀌었다" }
+
+# ③ 버전 글자 — 지금 보고 있는 것이 어느 빌드인지 눈으로 안다.
 #    캐시에 옛 페이지가 남아 있으면 고친 것을 안 고쳐진 상태로 시험하게 되는데, 이 글자가 그걸 드러낸다
 $stamp = '<div style="position:fixed;right:6px;bottom:4px;z-index:9999;font:10px/1 monospace;color:#6b5a85;pointer-events:none">v' + $ver + ' ' + $sha + '</div>'
 if ($html -match '</body>') { $html = $html -replace '</body>', ($stamp + '</body>') }
