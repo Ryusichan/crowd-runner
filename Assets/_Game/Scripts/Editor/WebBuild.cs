@@ -47,12 +47,17 @@ namespace CrowdRunner.EditorTools
             // 에디터에서는 지난번에 구운 것이 남아 있어 멀쩡해 보인다 — 그게 이 줄의 전부다
             M0Assets.Bake(300, "_lo");
             VatBaker.Bake("_lo");
-            AssertTheCrowdExists();
+            AssertEverythingLoadedByNameExists();
             EnsureScene();
 
             PlayerSettings.companyName = "Ryusichan";
             PlayerSettings.productName = "Crowd Runner";
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
+            // **세로 캔버스.** 기본값은 960×600 **가로**다 — 폰에서 열면 세로 화면에 가로
+            // 상자가 앉고 가로 스크롤바가 생긴다. 세션 A 가 배포 쪽 CSS 로 덮어 두었지만
+            // 근본은 여기다: CSS 로만 고치면 **다음에 다른 곳에 올릴 때 또 가로로 나간다**
+            PlayerSettings.defaultWebScreenWidth = 540;
+            PlayerSettings.defaultWebScreenHeight = 960;
 
             // **Gzip + 로더 쪽 해제.** 정적 호스팅(GitHub Pages)은 `Content-Encoding` 헤더를 못
             // 주므로 `decompressionFallback` 이 켜져 있어야 로더가 JS 로 직접 푼다.
@@ -81,30 +86,66 @@ namespace CrowdRunner.EditorTools
         }
 
         /// <summary>
-        /// **구운 것이 정말 거기 있는가.**
+        /// **이름으로 찾는 것이 정말 거기 있는가.**
         ///
-        /// 굽기를 빌드 안에 둔 것만으로는 부족하다는 지적이 있었다 (세션 A): *"굽는 코드가
-        /// 깨지면 빌드가 조용히 빈 게임을 낸다."* 맞는 말인데, 그건 **굽기를 빼야 할 이유가
-        /// 아니라 구운 뒤에 확인하지 않는 것**이 문제다.
+        /// `Resources.Load("...")` 는 없으면 **null 을 돌려주고 끝난다.** 예외도 경고도 없다.
+        /// 그래서 빠진 자산은 *오류*가 아니라 **조용한 빈칸**으로 나타난다:
+        /// 군중이 없으면 길과 게이트만 달리고, 글꼴이 없으면 단추가 빈 네모다.
         ///
-        /// 없으면 `Resources.Load` 가 null 을 돌려주고, 게임은 **길과 게이트만 있고 사람이
-        /// 하나도 없는 채로** 멀쩡히 돈다 — 예외도 안 난다. 그 모양은 *"오늘따라 군중이 안
-        /// 보인다"* 로만 보이고, 원인은 빌드 **한참 전**에 있다.
+        /// 그리고 **둘 다 에디터에서는 멀쩡해 보인다** — 군중은 지난번에 구운 것이 남아 있고,
+        /// 글꼴은 OS 폰트로 떨어진다. **WebGL 엔 OS 폰트가 없다.** 그래서 이 결함류는
+        /// *웹에 올려야만* 드러나고, 그때는 이미 오너가 열어 본 뒤다.
         ///
-        /// 여기서 보는 두 경로는 `LevelView`/`CasualtyFx` 가 **실제로 부르는 그 문자열**이어야
-        /// 한다. 다른 이름을 보면 이 검사는 통과하면서 게임은 빈다 — 검사가 재는 것과 코드가
-        /// 쓰는 것이 어긋나는, 오늘 여러 번 나온 그 자리다.
+        /// 실제로 두 번 그랬다. 군중은 빌드에 굽기를 넣어 막았고, 한글 글꼴은 **오너가
+        /// *"플레이 할 수가 없어"* 라고 하신 뒤에** 찾았다 (2026-10-09). 그래서 하나씩 막는
+        /// 대신 **이름으로 찾는 것 전부**를 여기서 센다.
+        ///
+        /// 있어야 하는 것은 빌드를 **멈추고**, `??` 로 대안이 적힌 것은 **경고만** 한다 —
+        /// 코드가 없어도 된다고 말하는 것을 검사가 반대로 말하면 그 검사는 곧 꺼진다.
         /// </summary>
-        static void AssertTheCrowdExists()
+        static void AssertEverythingLoadedByNameExists()
         {
-            foreach (var path in new[] { "Assets/_Game/Resources/M0/standin_vat_mesh_lo.asset",
-                                         "Assets/_Game/Resources/M0/standin_vat_lo.mat" })
+            // 없으면 게임이 **조용히 빈다**
+            var must = new (string path, string what)[]
             {
-                if (File.Exists(path)) { Debug.Log($"[CR] 군중 자산 있다: {Path.GetFileName(path)}"); continue; }
-                Debug.LogError($"[CR] 굽기가 {path} 를 안 만들었다 — 이대로 빌드하면 " +
-                               "**사람이 하나도 없는 게임**이 나간다 (예외는 안 난다). 빌드를 멈춘다");
-                EditorApplication.Exit(1);
+                ("Assets/_Game/Resources/M0/standin_vat_mesh_lo.asset", "군중의 몸 — 없으면 길과 게이트만 달린다"),
+                ("Assets/_Game/Resources/M0/standin_vat_lo.mat",        "군중의 재질 — 같은 결과"),
+                ("Assets/_Game/Resources/Fonts/Jua-Regular.ttf",        "본문 글꼴 — 없으면 웹에서 글자가 통째로 안 나온다 (OS 폰트가 없다)"),
+                ("Assets/_Game/Resources/Fonts/ZQFallbackGothic.ttf",   "대체 글꼴 — `·` `—` 같은 글리프가 여기로 넘어간다"),
+            };
+            bool bad = false;
+            foreach (var (path, what) in must)
+            {
+                if (File.Exists(path)) { Debug.Log($"[CR] 있다: {Path.GetFileName(path)}"); continue; }
+                Debug.LogError($"[CR] **{path} 가 없다** — {what}. 이대로 빌드하면 예외 없이 " +
+                               "그 부분만 비어서 나간다. 빌드를 멈춘다");
+                bad = true;
             }
+
+            // `UiKit` 이 `??` 로 대안을 적어 둔 것들 — 없어도 돌지만, 없는 줄 모르고 쓰면
+            // *"아이콘이 왜 네모지"* 가 된다
+            foreach (var (path, what) in new (string, string)[]
+            {
+                ("Assets/_Game/Resources/Fonts/ZQIcons.ttf", "아이콘 글꼴 (UiKit.Icon)"),
+                ("Assets/_Game/Resources/UI",                "UI/icon · UI/frame 그림"),
+                ("Assets/_Game/Resources/Owner",             "오너 시안 그림 (UiKit 의 Owner/UI/*)"),
+            })
+            {
+                if (File.Exists(path) || Directory.Exists(path)) continue;
+                Debug.LogWarning($"[CR] {path} 가 없다 — {what}. `UiKit` 이 그 경로를 부르는데 " +
+                                 "대안이 적혀 있어 돌기는 한다 (좀비퀸에서 코드만 가져온 자리)");
+            }
+
+            // 열 판 — 하나라도 없으면 그 판에서 멈춘다
+            for (int i = 1; i <= 10; i++)
+            {
+                string p = $"Assets/_Game/Resources/Levels/1-{i}.txt";
+                if (File.Exists(p)) continue;
+                Debug.LogError($"[CR] **{p} 가 없다** — 그 판을 못 연다");
+                bad = true;
+            }
+
+            if (bad) EditorApplication.Exit(1);
         }
 
         /// <summary>
