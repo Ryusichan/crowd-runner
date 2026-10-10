@@ -392,6 +392,41 @@ namespace CrowdRunner.Tests
             }
         }
 
+        /// <summary>
+        /// **한 명을 크게 찍는다** — 군중 사진으로는 사람이 사람인지 알 수 없다.
+        ///
+        /// 세션 A 가 한 명을 6 배로 확대해서 *"팔도 다리도 없다"* 를 잡았다. 그 전에는 0.12 초
+        /// 간격 다섯 장을 화소로 비교했는데 110~150 % 가 바뀌었다 — 그런데 그건 **몸이 통째로
+        /// 전진**해서지 다리가 움직여서가 아니었다. **그 측정으로는 둘을 못 가린다.**
+        ///
+        /// 확대 한 장이 바로 답했다. 그래서 그 한 장을 매번 찍는다 — 군중 사진에서 사람은 늘
+        /// 10 px 짜리라, **고쳤는지 망가뜨렸는지가 거기선 안 보인다.**
+        /// </summary>
+        void ShotOneUnit(LevelRunner runner)
+        {
+            var cam = Camera.main;
+            if (cam == null || runner.Sim == null) return;
+            var keepPos = cam.transform.position;
+            var keepRot = cam.transform.rotation;
+            float keepFov = cam.fieldOfView;
+
+            // **옆에서, 떼 밖에서.** 처음엔 떼 한가운데 2.4 m 앞에 뒀더니 **다른 사람 몸 속**이
+            // 나왔다 — 떼가 ±1.8 m 로 퍼져 있으니 그 안은 전부 누군가의 안이다.
+            //
+            // 옆에서 보는 이유가 하나 더 있다: **팔다리 교차는 옆모습에서 가장 잘 보인다.**
+            // 뒤에서 보면 앞뒤로 흔드는 것이 전부 겹쳐 보인다
+            var target = new Vector3(runner.Sim.X, 0.95f, runner.Sim.Z + 0.6f);
+            cam.transform.position = new Vector3(runner.Sim.X + 6.5f, 1.45f, runner.Sim.Z - 0.4f);
+            cam.transform.rotation = Quaternion.LookRotation(target - cam.transform.position);
+            cam.fieldOfView = 26f;
+            ShotWorld("unit_closeup", runner);
+
+            // **되돌린다** — 안 되돌리면 뒤이어 찍는 게임 화면이 이 구도로 나간다
+            cam.transform.position = keepPos;
+            cam.transform.rotation = keepRot;
+            cam.fieldOfView = keepFov;
+        }
+
         /// <summary>3D 카메라를 뜬다. UI 는 뺀다 (HUD 가 덮으면 게임이 안 보인다)</summary>
         float ShotWorld(string name, LevelRunner runner)
         {
@@ -768,6 +803,7 @@ namespace CrowdRunner.Tests
             var runner = GameBoot.Runner;
             Assert.IsNotNull(runner.Sim, "1-1 을 못 띄웠다 — " + runner.Error);
             float share = ShotWorld("game_opening", runner);
+            ShotOneUnit(runner);
             Debug.Log($"[CR-TEST] 시작 화면: 병력 {runner.Sim.Units} · z {runner.Sim.Z:F0} · 그려진 화소 {share:F1}%");
         }
 

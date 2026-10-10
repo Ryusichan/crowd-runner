@@ -63,12 +63,6 @@ namespace CrowdRunner.EditorTools
         }
 
         /// <summary>
-        /// 본 하나를 한 층으로 보는 **원통 사슬**. 층마다 고리 하나, 고리의 정점은 **그 층 본에
-        /// 100 % 로 묶는다** — 스킨닝 비용은 가중치의 **수**가 정하므로(정점당 1 개) 가중치 1 개가
-        /// 가장 싼 쪽이다. 즉 이 측정은 **실제보다 유리하다**: 출하 아트가 정점당 2~4 가중치를 쓰면
-        /// 더 비싸진다. 그래서 §4 의 통과선에 여유(절반 예산)를 둔 것이고, 그 여유의 일부가 이것이다.
-        /// </summary>
-        /// <summary>
         /// **길 표식과 발밑 그림자의 머티리얼을 에셋으로 굽는다.**
         ///
         /// 런타임에 `new Material(Shader.Find(...))` 로 만들고 `enableInstancing = true` 를
@@ -108,136 +102,250 @@ namespace CrowdRunner.EditorTools
             Debug.Log($"[M0] baked material {name}.mat instancing={mat.enableInstancing}");
         }
 
+        /// <summary>
+        /// **골격.** 전에는 본 20 개가 **한 줄 사슬**(b0→b1→…)이었다 — 그래서 각 본을 조금씩
+        /// 돌리면 *흔들리는 기둥*이 나왔고, **팔다리를 붙일 자리가 구조적으로 없었다.**
+        /// 세션 A 가 한 명을 6 배로 확대해서 잡았다: *"걷는 게 안 보이는 게 아니라 걸을 수가 없다."*
+        ///
+        /// 이제 가지를 친다 — 척추 · 다리 둘 · 팔 둘. **본 수는 20 그대로**라
+        /// `docs/M0_CROWD.md` 의 상한(정점 300/1,500 · 본 20)이 그대로 유효하다. 모양을 고치면서
+        /// 비용을 올리면 그 표를 다시 재야 하고, 그러면 아트 예산의 근거가 사라진다.
+        ///
+        /// 17~19 는 **일부러 남긴 여분**이다. 정점이 하나도 안 묶이지만 커브는 준다 — §7 의
+        /// 규칙이 *"커브 없는 본은 평가되지 않아 측정이 더 싼 클립을 잰다"* 이기 때문이다.
+        /// </summary>
+        struct BoneDef { public string name; public int parent; public Vector3 off; }
+
+        static readonly BoneDef[] Rig =
+        {
+            new BoneDef { name = "hips",   parent = -1, off = new Vector3(0f, 0.86f, 0f) },
+            new BoneDef { name = "spine",  parent = 0,  off = new Vector3(0f, 0.22f, 0f) },
+            new BoneDef { name = "chest",  parent = 1,  off = new Vector3(0f, 0.26f, 0f) },
+            new BoneDef { name = "neck",   parent = 2,  off = new Vector3(0f, 0.20f, 0f) },
+            new BoneDef { name = "head",   parent = 3,  off = new Vector3(0f, 0.14f, 0f) },
+
+            new BoneDef { name = "lhip",   parent = 0,  off = new Vector3(-0.10f, -0.04f, 0f) },
+            new BoneDef { name = "lknee",  parent = 5,  off = new Vector3(0f, -0.42f, 0f) },
+            new BoneDef { name = "lfoot",  parent = 6,  off = new Vector3(0f, -0.36f, 0f) },
+            new BoneDef { name = "rhip",   parent = 0,  off = new Vector3(0.10f, -0.04f, 0f) },
+            new BoneDef { name = "rknee",  parent = 8,  off = new Vector3(0f, -0.42f, 0f) },
+            new BoneDef { name = "rfoot",  parent = 9,  off = new Vector3(0f, -0.36f, 0f) },
+
+            // 어깨는 **몸통 반지름 밖**에 둔다. 0.23 이었는데 가슴 반지름이 0.25 라 팔이
+            // 몸 **안쪽**에 묻혔다 — 화면에서는 몸통 밖으로 삐져나온 조각이 *망토* 처럼 보였다
+            new BoneDef { name = "lsh",    parent = 2,  off = new Vector3(-0.27f, 0.12f, 0f) },
+            new BoneDef { name = "lelb",   parent = 11, off = new Vector3(0f, -0.28f, 0f) },
+            new BoneDef { name = "lhand",  parent = 12, off = new Vector3(0f, -0.26f, 0f) },
+            new BoneDef { name = "rsh",    parent = 2,  off = new Vector3(0.27f, 0.12f, 0f) },
+            new BoneDef { name = "relb",   parent = 14, off = new Vector3(0f, -0.28f, 0f) },
+            new BoneDef { name = "rhand",  parent = 15, off = new Vector3(0f, -0.26f, 0f) },
+
+            new BoneDef { name = "x0",     parent = 0,  off = Vector3.zero },
+            new BoneDef { name = "x1",     parent = 17, off = Vector3.zero },
+            new BoneDef { name = "x2",     parent = 18, off = Vector3.zero },
+        };
+
+        /// <summary>쉬는 자세에서 본이 서 있는 **월드 좌표**. 바인드포즈와 메시가 둘 다 이것을 쓴다</summary>
+        static Vector3[] RestPositions()
+        {
+            var p = new Vector3[Rig.Length];
+            for (int i = 0; i < Rig.Length; i++)
+                p[i] = Rig[i].parent < 0 ? Rig[i].off : p[Rig[i].parent] + Rig[i].off;
+            return p;
+        }
+
+        /// <summary>
+        /// 몸을 **다섯 조각**으로 짓는다 — 몸통 · 머리 · 다리 둘 · 팔 둘. 조각마다 고리를 쌓은
+        /// 원통이고, 고리의 정점은 **그 높이에 해당하는 본에 100 % 로** 묶는다 (정점당 가중치 1 —
+        /// 스킨닝 비용은 가중치의 수가 정한다).
+        ///
+        /// 목표 정점 수(`want`)에 맞춰 고리 수와 층 수를 **같은 비율로** 키운다. 정점은 둘의
+        /// 곱이므로 배율은 `sqrt(want / 기준)` 이다.
+        /// </summary>
         static Mesh BuildSkinnedMesh(int want, out string[] boneNames, out Matrix4x4[] binds)
         {
-            int ring = Mathf.Max(3, want / Bones);          // 층마다 정점 수
-            int rows = Bones;
-            var verts = new Vector3[ring * rows];
-            var norms = new Vector3[verts.Length];
-            var weights = new BoneWeight[verts.Length];
-            boneNames = new string[rows];
-            binds = new Matrix4x4[rows];
+            boneNames = new string[Rig.Length];
+            for (int i = 0; i < Rig.Length; i++) boneNames[i] = Rig[i].name;
+            var rest = RestPositions();
+            binds = new Matrix4x4[Rig.Length];
+            for (int i = 0; i < Rig.Length; i++) binds[i] = Matrix4x4.Translate(-rest[i]);
 
-            float height = 1.8f;
-            for (int r = 0; r < rows; r++)
+            var verts = new System.Collections.Generic.List<Vector3>(want + 64);
+            var weights = new System.Collections.Generic.List<BoneWeight>(want + 64);
+            var tris = new System.Collections.Generic.List<int>(want * 6);
+
+            // **예산을 넘기지 않는다.** 반올림 때문에 한 번에 안 맞는다 — 300 을 달라고 했는데
+            // 320 이 나왔고, `M0_CROWD` 의 상한(300/1,500)이 그 수에 걸려 있다. 넘으면 **줄여
+            // 다시 짓는다**: 짐작한 배율을 쓰는 것보다 세어 보는 쪽이 확실하다
+            float k = Mathf.Clamp(Mathf.Sqrt(want / 226f), 0.5f, 6f);
+            for (int tries = 0; tries < 20; tries++)
             {
-                float t = r / (float)(rows - 1);
-                float y = t * height;
-                float rad = Radius(t);
-                boneNames[r] = "b" + r;
-                binds[r] = Matrix4x4.TRS(new Vector3(0f, -y, 0f), Quaternion.identity, Vector3.one);
-                for (int c = 0; c < ring; c++)
-                {
-                    float a = c / (float)ring * Mathf.PI * 2f;
-                    int k = r * ring + c;
-                    verts[k] = new Vector3(Mathf.Cos(a) * rad, y, Mathf.Sin(a) * rad);
-                    norms[k] = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));   // 아래에서 다시 센다
-                    weights[k] = new BoneWeight { boneIndex0 = r, weight0 = 1f };
-                }
-            }
+                verts.Clear(); weights.Clear(); tris.Clear();
+                float kk = k;
+                int R(int n) => Mathf.Max(4, Mathf.RoundToInt(n * kk));
 
-            var tris = new System.Collections.Generic.List<int>((rows - 1) * ring * 6);
-            for (int r = 0; r < rows - 1; r++)
-                for (int c = 0; c < ring; c++)
+                // 몸통 — 골반에서 목까지. 어깨에서 가장 넓다
+                Part(verts, weights, tris, R(12), R(5), rest[0], rest[3],
+                     new[] { 0, 0, 1, 2, 3 }, new[] { 0.17f, 0.145f, 0.165f, 0.205f, 0.105f });
+                // 머리 — 목 위의 공
+                Part(verts, weights, tris, R(12), R(4), rest[4] + new Vector3(0f, -0.06f, 0f),
+                     rest[4] + new Vector3(0f, 0.20f, 0f),
+                     new[] { 4, 4, 4, 4 }, new[] { 0.085f, 0.125f, 0.125f, 0.05f });
+                // 다리 둘 — 엉덩이에서 발까지
+                for (int sgn = 0; sgn < 2; sgn++)
                 {
-                    int c2 = (c + 1) % ring;
-                    int a = r * ring + c, b = r * ring + c2, d = (r + 1) * ring + c, e = (r + 1) * ring + c2;
-                    tris.Add(a); tris.Add(d); tris.Add(b);
-                    tris.Add(b); tris.Add(d); tris.Add(e);
+                    int h = sgn == 0 ? 5 : 8;
+                    Part(verts, weights, tris, R(7), R(5), rest[h], rest[h + 2] + new Vector3(0f, -0.04f, 0f),
+                         new[] { h, h, h + 1, h + 1, h + 2 }, new[] { 0.11f, 0.09f, 0.08f, 0.07f, 0.06f });
                 }
+                // 팔 둘 — 어깨에서 손까지
+                for (int sgn = 0; sgn < 2; sgn++)
+                {
+                    int sh = sgn == 0 ? 11 : 14;
+                    Part(verts, weights, tris, R(6), R(4), rest[sh], rest[sh + 2] + new Vector3(0f, -0.04f, 0f),
+                         new[] { sh, sh, sh + 1, sh + 2 }, new[] { 0.075f, 0.065f, 0.055f, 0.05f });
+                }
+
+                if (verts.Count <= want) break;
+                k *= 0.96f;
+            }
+            if (verts.Count > want)
+                Debug.LogError($"[M0] 정점이 {verts.Count} 로 예산 {want} 를 넘는다 — M0 표의 상한이 깨진다");
 
             var m = new Mesh { name = "standin" };
             m.indexFormat = UnityEngine.Rendering.IndexFormat.UInt16;
-            m.vertices = verts; m.normals = norms; m.boneWeights = weights;
-            m.triangles = tris.ToArray();
-            // **법선을 다시 센다.** 위에서 넣은 것은 전부 **수평**(`y = 0`)이다. 그런데 셰이더의
-            // 빛은 위에서 내려오므로(`(0.3, 1.0, -0.2)`), 수평 법선은 어디서나 `dot ≈ 0.3` 이고
-            // **몸 전체가 가장 어두운 값**으로 칠해진다. 첫 게임 화면에서 군중이 커피콩처럼
-            // 보인 것의 절반이 이것이었다 — 실루엣만 고쳤으면 모양은 사람인데 여전히 까맸다.
-            //
-            // 측정에는 영향이 없다: 법선은 굽는 쪽이 아니라 원본 메시의 것을 셰이더가 그대로
-            // 쓰고(`CrowdVat` 주석), 정점 수도 본 수도 그대로다
+            m.SetVertices(verts);
+            m.boneWeights = weights.ToArray();
+            m.SetTriangles(tris, 0);
+            // 법선은 **수평이 아니라** 실제 면에서 센다. 전부 수평이면 위에서 내려오는 빛과
+            // 늘 같은 각이라 **몸 전체가 가장 어두운 값**으로 칠해진다 (2026-10-09 에 겪었다)
             m.RecalculateNormals();
             m.bindposes = binds;
             m.RecalculateBounds();
             return m;
         }
 
-        /// <summary>
-        /// **사람으로 읽히는 옆모습.** 전에는 `Lerp(0.16, 0.26, sin(t·π))` — 허리에서 굵고
-        /// 위아래로 가늘어지는 **방추형**이었고, 화면에서 커피콩으로 보였다. 머리가 없으면
-        /// 사람으로 안 읽힌다. 그게 전부다.
-        ///
-        /// **정점 수도 본 수도 안 바뀐다** — 자리만 옮긴다. 그래서 `docs/M0_CROWD.md` 의
-        /// 측정치(방식 B · 저폴리 300 정점 · 상한 400)는 **그대로 유효하다.** 모양을 고치면서
-        /// 비용을 같이 올리면 그 표를 다시 재야 하고, 그러면 아트 예산의 근거가 사라진다.
-        ///
-        /// 행이 20 개(= 본 수)라 한 행이 키의 5 % 다. 머리·목·어깨가 그 해상도에 들어가도록
-        /// 구간을 잡았다 — 더 잘게 나누면 정점이 늘어난다.
-        /// </summary>
-        static float Radius(float t)
+        /// <summary>원통 한 조각. `boneOf`/`radius` 는 층을 **비율로** 읽으므로 길이가 달라도 된다</summary>
+        static void Part(System.Collections.Generic.List<Vector3> verts,
+                         System.Collections.Generic.List<BoneWeight> weights,
+                         System.Collections.Generic.List<int> tris,
+                         int ring, int rows, Vector3 from, Vector3 to, int[] boneOf, float[] radius)
         {
-            if (t < 0.46f) return Mathf.Lerp(0.13f, 0.17f, t / 0.46f);          // 다리
-            if (t < 0.54f) return Mathf.Lerp(0.17f, 0.23f, (t - 0.46f) / 0.08f); // 골반
-            if (t < 0.74f) return Mathf.Lerp(0.23f, 0.27f, (t - 0.54f) / 0.20f); // 몸통
-            if (t < 0.80f) return Mathf.Lerp(0.27f, 0.21f, (t - 0.74f) / 0.06f); // 어깨
-            if (t < 0.85f) return 0.10f;                                          // 목
-            // 머리 — 구에 가깝게. 정수리에서 0 으로 닫지 않는다 (한 행이 5 % 라 각져 보인다)
-            float u = (t - 0.85f) / 0.15f;                                        // 0..1
-            return 0.19f * Mathf.Sqrt(Mathf.Max(0.04f, 1f - (u - 0.45f) * (u - 0.45f) / 0.30f));
+            ring = Mathf.Max(4, ring);
+            rows = Mathf.Max(2, rows);
+            int baseIndex = verts.Count;
+            for (int r = 0; r < rows; r++)
+            {
+                float t = rows == 1 ? 0f : r / (float)(rows - 1);
+                var c = Vector3.Lerp(from, to, t);
+                int b = boneOf[Mathf.Clamp(Mathf.RoundToInt(t * (boneOf.Length - 1)), 0, boneOf.Length - 1)];
+                float rad = radius[Mathf.Clamp(Mathf.RoundToInt(t * (radius.Length - 1)), 0, radius.Length - 1)];
+                for (int i = 0; i < ring; i++)
+                {
+                    float a = i / (float)ring * Mathf.PI * 2f;
+                    verts.Add(c + new Vector3(Mathf.Cos(a) * rad, 0f, Mathf.Sin(a) * rad));
+                    weights.Add(new BoneWeight { boneIndex0 = b, weight0 = 1f });
+                }
+            }
+            for (int r = 0; r < rows - 1; r++)
+                for (int i = 0; i < ring; i++)
+                {
+                    int i2 = (i + 1) % ring;
+                    int a = baseIndex + r * ring + i, b2 = baseIndex + r * ring + i2;
+                    int d = baseIndex + (r + 1) * ring + i, e = baseIndex + (r + 1) * ring + i2;
+                    tris.Add(a); tris.Add(d); tris.Add(b2);
+                    tris.Add(b2); tris.Add(d); tris.Add(e);
+                }
         }
 
         /// <summary>
-        /// 달리는 클립 — 본마다 **같은 주기, 다른 위상**으로 흔든다. 모양이 달리기처럼 보이는 것은
-        /// 중요하지 않다. 중요한 것은 **본 20 개 전부에 커브가 있는 것**이다: 커브가 없는 본은
-        /// 평가되지 않아서, 커브를 몇 개만 두면 측정이 **더 싼 클립**을 재게 된다.
+        /// 달리는 클립. 전에는 본 20 개를 **같은 주기, 다른 위상**으로 흔들었다 — 모양이
+        /// 달리기처럼 보이는 것은 중요하지 않다고 적어 뒀는데, **보이는 쪽이 중요해졌다.**
+        ///
+        /// 이제 팔다리가 **엇갈린다**: 왼다리가 앞이면 오른팔이 앞이다. 그 교차 하나가
+        /// *걷는 것*과 *미끄러지는 것*을 가른다.
+        ///
+        /// **본 20 개 전부에 커브를 준다** (여분 셋 포함) — 커브가 없는 본은 평가되지 않아
+        /// 측정이 **더 싼 클립**을 재게 된다 (`M0_CROWD` §7).
         /// </summary>
         static AnimationClip BuildRunClip(string[] boneNames)
         {
             var clip = new AnimationClip { name = "standin_run", frameRate = 30f };
             clip.legacy = false;
-            for (int i = 0; i < boneNames.Length; i++)
+            const float Len = 0.8f;
+
+            void Curve(int bone, System.Func<float, float> fx, System.Func<float, float> fz)
             {
-                string path = Path(boneNames, i);
-                float ph = i / (float)boneNames.Length * Mathf.PI * 2f;
                 var cx = new AnimationCurve();
                 var cz = new AnimationCurve();
                 for (int f = 0; f <= 16; f++)
                 {
                     float t = f / 16f;
-                    float a = t * Mathf.PI * 2f + ph;
-                    cx.AddKey(t * 0.8f, Mathf.Sin(a) * 0.06f);
-                    cz.AddKey(t * 0.8f, Mathf.Cos(a) * 0.04f);
+                    cx.AddKey(t * Len, fx(t));
+                    cz.AddKey(t * Len, fz(t));
                 }
+                string path = Path(bone);
                 clip.SetCurve(path, typeof(Transform), "localEulerAngles.x", cx);
                 clip.SetCurve(path, typeof(Transform), "localEulerAngles.z", cz);
             }
-            var s = new AnimationClipSettings { loopTime = true };
-            AnimationUtility.SetAnimationClipSettings(clip, s);
+
+            float Sin(float t, float off) => Mathf.Sin((t + off) * Mathf.PI * 2f);
+
+            Curve(0, t => Sin(t, 0f) * 2.5f, t => 0f);                      // 골반이 조금 흔들린다
+            Curve(1, t => 3f, t => Sin(t, 0.25f) * 1.5f);                   // 살짝 앞으로 기운다
+            Curve(2, t => 0f, t => Sin(t, 0.5f) * 2f);
+            Curve(3, t => Sin(t, 0.5f) * 2f, t => 0f);
+            Curve(4, t => Sin(t, 0.5f) * 2f, t => 0f);
+
+            // 다리 — 반 주기 엇갈림. 무릎은 **뒤로만** 접힌다
+            Curve(5, t => Sin(t, 0f) * 26f, t => 0f);
+            Curve(6, t => Mathf.Max(0f, -Sin(t, 0.15f)) * 42f, t => 0f);
+            Curve(7, t => Sin(t, 0.5f) * 10f, t => 0f);
+            Curve(8, t => Sin(t, 0.5f) * 26f, t => 0f);
+            Curve(9, t => Mathf.Max(0f, -Sin(t, 0.65f)) * 42f, t => 0f);
+            Curve(10, t => Sin(t, 0f) * 10f, t => 0f);
+
+            // 팔 — 다리와 **반대쪽**. 왼다리가 앞이면 오른팔이 앞이다
+            Curve(11, t => Sin(t, 0.5f) * 22f, t => Sin(t, 0f) * 4f);
+            Curve(12, t => -18f - Mathf.Max(0f, Sin(t, 0.5f)) * 14f, t => 0f);
+            Curve(13, t => 0f, t => 0f);
+            Curve(14, t => Sin(t, 0f) * 22f, t => Sin(t, 0.5f) * 4f);
+            Curve(15, t => -18f - Mathf.Max(0f, Sin(t, 0f)) * 14f, t => 0f);
+            Curve(16, t => 0f, t => 0f);
+
+            // 여분 셋 — 정점은 안 묶였지만 **평가는 된다**
+            for (int i = 17; i < Rig.Length; i++)
+            {
+                int bi = i;
+                Curve(bi, t => Sin(t, bi * 0.1f) * 1f, t => 0f);
+            }
+
+            var set = new AnimationClipSettings { loopTime = true };
+            AnimationUtility.SetAnimationClipSettings(clip, set);
             return clip;
         }
 
-        /// <summary>본은 사슬이므로 경로가 `b0/b1/b2/...` 로 깊어진다 — 깊이도 평가 비용이다</summary>
-        static string Path(string[] names, int i)
+        /// <summary>본까지의 경로. 가지가 생겼으므로 **부모를 거슬러** 만든다 (전에는 한 줄이라 0..i 였다)</summary>
+        static string Path(int i)
         {
-            var sb = new System.Text.StringBuilder();
-            for (int k = 0; k <= i; k++) { if (k > 0) sb.Append('/'); sb.Append(names[k]); }
-            return sb.ToString();
+            var parts = new System.Collections.Generic.List<string>();
+            for (int k = i; k >= 0; k = Rig[k].parent) parts.Add(Rig[k].name);
+            parts.Reverse();
+            return string.Join("/", parts);
         }
 
         static GameObject BuildPrefab(Mesh mesh, Matrix4x4[] binds, string[] boneNames, AnimatorController ctrl, string suffix)
         {
             var root = new GameObject("StandIn");
-            var bones = new Transform[boneNames.Length];
-            Transform parent = root.transform;
-            float step = 1.8f / (boneNames.Length - 1);
-            for (int i = 0; i < boneNames.Length; i++)
+            var bones = new Transform[Rig.Length];
+            for (int i = 0; i < Rig.Length; i++)
             {
-                var go = new GameObject(boneNames[i]);
-                go.transform.SetParent(parent, false);
-                go.transform.localPosition = i == 0 ? Vector3.zero : new Vector3(0f, step, 0f);
+                var go = new GameObject(Rig[i].name);
+                // **표가 정한 자리에 둔다.** 메시의 바인드포즈가 같은 표에서 나왔으므로
+                // 둘이 어긋날 수가 없다 — 전에는 본이 일정 간격으로 쌓이고 메시는 따로 계산했다
+                go.transform.SetParent(Rig[i].parent < 0 ? root.transform : bones[Rig[i].parent], false);
+                go.transform.localPosition = Rig[i].off;
                 bones[i] = go.transform;
-                parent = go.transform;
             }
             var smr = root.AddComponent<SkinnedMeshRenderer>();
             smr.sharedMesh = mesh;
