@@ -310,10 +310,21 @@ namespace CrowdRunner.Tests
             // 화면 검사가 밸런스를 단언하면, 레벨을 바꾸는 사람이 **표현 쪽 검사가 빨개지는 것**을
             // 보게 된다. 그러면 둘 중 하나가 일어난다: 멀쩡한 레벨을 되돌리거나, 이 검사를 끈다.
             // 둘 다 나쁘다. 그래서 **수는 찍고 판단은 레벨 쪽에 넘긴다**
-            if (runner.Sim.PeakUnits <= lv.initialUnits)
-                Debug.LogWarning($"[CR-TEST] ⚠ 1-3: 최고 병력 {runner.Sim.PeakUnits} 이 " +
-                                 $"시작 {lv.initialUnits} 을 **못 넘었다** — 잘 골라도 군단이 한 번도 " +
-                                 "안 커지는 판이다. 레벨 쪽에서 볼 자리 (게이트가 적의 소모를 못 따라간다)");
+            //
+            // ⚠ 그리고 **`lv` 가 아니라 지금 떠 있는 판을 본다.** 위의 `ShootTheOpeningFrame` 이
+            // **1-1 로 갈아치운다** — 그래서 여기 수는 전부 1-1 인데 `lv` 는 1-3 이었다.
+            // 그 어긋남이 *"1-3 은 최고 병력이 시작값을 못 넘는다(30 → 27)"* 라는 **없는 결함**을
+            // 만들었다. 세션 A 가 1-3 을 직접 돌려(최고 97 · 잔여 46, `tools/sim` 과 한 숫자도
+            // 안 다름) 멀쩡한 것을 확인하고서야 측정 쪽이라는 게 드러났다.
+            //
+            // `27` 의 정체도 거기 있다: **1-1 은 20 으로 시작하고 게이트가 `+25 / +7`** 이다.
+            // `ShootTheGatePass` 는 조작을 안 넣으니 나쁜 쪽으로 들어가 20 + 7 = 27 이 된다.
+            // **그럴듯한 수였다** — 두 자리고, 시작값보다 작고, 설명이 되는 모양이었다
+            var now = runner.Level;
+            if (now != null && runner.Sim.PeakUnits <= now.initialUnits)
+                Debug.LogWarning($"[CR-TEST] ⚠ {runner.levelName}: 최고 병력 {runner.Sim.PeakUnits} 이 " +
+                                 $"시작 {now.initialUnits} 을 **못 넘었다** — 잘 골라도 군단이 한 번도 " +
+                                 "안 커지는 판이다. 레벨 쪽에서 볼 자리");
             Assert.Greater(share, 3f, "게임 화면이 거의 비었다 — 군중이 안 그려지는지 보라");
         }
 
@@ -853,6 +864,7 @@ namespace CrowdRunner.Tests
             float prev = Time.timeScale;
             Time.timeScale = 30f;
             int shot = 0, frame = 0, sinceShot = 0;
+            bool wasFighting = false;
             float nextShotZ = 0f;
             float every = Mathf.Max(6f, lv.length / 13f);
 
@@ -862,8 +874,14 @@ namespace CrowdRunner.Tests
                 runner.TargetX = PickLane(runner);
                 sinceShot++;
 
-                // 거리로 왔거나, **200 프레임째 제자리면** (= 막혀서 싸우는 중이면) 찍는다
-                if (shot < 16 && (runner.Sim.Z >= nextShotZ || sinceShot > 200))
+                // **붙는 순간을 놓치지 않는다.** 거리로만 찍으면 교전 중엔 전진이 멈춰 영영
+                // 못 찍고, 시간으로만 찍으면 **짧은 전투**(16 명이면 1.4 초)를 지나쳐 버린다 —
+                // 1-8 이 그래서 교전 프레임이 한 장도 안 걸렸다. 그래서 **사건으로** 찍는다:
+                // 막는 적이 0 에서 0 이 아닌 것으로 바뀌는 그 프레임
+                bool clash = runner.Sim.BlockingEnemies > 0.5f && !wasFighting;
+                wasFighting = runner.Sim.BlockingEnemies > 0.5f;
+
+                if (shot < 16 && (clash || runner.Sim.Z >= nextShotZ || sinceShot > 200))
                 {
                     Time.timeScale = 1f;      // 찍는 동안은 멈춰 세운다 — 흐린 프레임을 안 남긴다
                     yield return null;
