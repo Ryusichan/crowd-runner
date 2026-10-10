@@ -10,11 +10,14 @@ name Haeundae Police Station
 teaches 녹는 길 위에서도 적은 온다 — 머릿수에 비례해 잃는다
 units 45
 road 7
-speed 6.0
+speed 7.0
 length 255
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
-rating 29 39 50
+rating 33 44 56
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다

@@ -10,11 +10,14 @@ name Choryang Houses
 teaches 좋은 쪽이 번갈아 온다 — 붙어 있지 말고 옮겨 다녀라
 units 25
 road 7
-speed 6.0
+speed 7.0
 length 195
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 rating 10 25 43
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다

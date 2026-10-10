@@ -10,11 +10,14 @@ name Busan Station Line
 teaches 좁은 길에서는 앞줄만 싸운다 — 큰 군단도 네 명씩만 붙는다
 units 55
 road 9
-speed 6.0
+speed 7.0
 length 268
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 rating 49 72 98
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다

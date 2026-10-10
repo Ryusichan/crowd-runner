@@ -10,11 +10,14 @@ name Haeundae Patrol
 teaches 전투로 줄어든 군단을 뒤쪽 줄에서 다시 늘린다
 units 40
 road 7
-speed 6.0
+speed 7.0
 length 250
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 rating 3 38 77
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
