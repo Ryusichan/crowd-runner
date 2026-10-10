@@ -435,7 +435,7 @@ namespace CrowdRunner.View
                 if (n <= 0) continue;
                 n = Mathf.Min(n, budget);
                 budget -= n;
-                AddCluster(foes, n, e.lane * w * 0.25f, e.z, w, 1);
+                AddCluster(foes, n, e.lane * w * 0.25f, e.z, w, 1, e.isFinal);
             }
             foeView.Sync(foes); foeView.Draw();
         }
@@ -445,11 +445,45 @@ namespace CrowdRunner.View
         /// 적은 여러 무리가 **동시에 화면에 있을 수 있어서** 필요한 것이다 — 그게 이 게임의
         /// 원칙(*무수히 많은 적을 막아낸다*)이 화면에서 성립하는 조건이다.
         /// </summary>
-        void AddCluster(CrowdField f, int n, float cx, float cz, float w, byte side)
+        void AddCluster(CrowdField f, int n, float cx, float cz, float w, byte side, bool final = false)
         {
             int from = f.Count;
             f.Add(n, side, 0f, 1f);
-            Disc(f, from, f.Count, cx, cz, w);
+            if (final) Band(f, from, f.Count, cz, w);
+            else Disc(f, from, f.Count, cx, cz, w);
+        }
+
+        /// <summary>
+        /// **마지막 적은 덩어리가 아니라 벽이다.**
+        ///
+        /// 장르 규칙은 *"끝에서 보스와 최후의 일전"* 인데(`docs/REF_TOPWAR.md` §4), 우리
+        /// 마지막 무리는 **앞의 것들과 똑같이 생겼다** — 수만 많을 뿐 *마지막* 이라는 표시가 없다.
+        ///
+        /// 둥근 덩어리로 두면 더 큰 덩어리일 뿐이다. **길을 가로로 꽉 막는 줄**로 세우면
+        /// *뚫어야 하는 것* 으로 읽힌다 — 같은 수로 뜻을 바꾸는 쪽이라 비용이 0 이다.
+        ///
+        /// 세션 A 가 `Sim.BlockingIsFinal` 을 열어 줬지만 여기서는 안 쓴다: 이 함수는 **아직
+        /// 안 닿은 무리도** 그리므로 레벨의 `isFinal` 이 필요하고, 그 둘은 같은 값이다.
+        /// </summary>
+        void Band(CrowdField f, int from, int to, float cz, float w)
+        {
+            int n = Mathf.Max(1, to - from);
+            float lim = w * 0.5f - 0.35f;
+            // 가로로 먼저 채우고 뒤로 쌓는다 — 줄 수는 수가 많아질수록 는다
+            int perRow = Mathf.Max(4, Mathf.CeilToInt(w / 0.55f));
+            int rows = Mathf.CeilToInt(n / (float)perRow);
+            for (int i = from; i < to; i++)
+            {
+                int k = i - from;
+                int row = k / perRow, col = k % perRow;
+                float t = perRow == 1 ? 0.5f : col / (float)(perRow - 1);
+                float jx = (f.Phase[i] - 0.5f) * 0.22f;
+                float jz = (f.SpeedMul[i] - 1f) * 1.6f;
+                f.X[i] = Mathf.Clamp(Mathf.Lerp(-lim, lim, t) + jx, -lim, lim);
+                f.Z[i] = cz + row * 0.5f - rows * 0.25f + jz;
+                f.Phase[i] += Time.deltaTime * 1.4f;
+                if (f.Phase[i] >= 1f) f.Phase[i] -= 1f;
+            }
         }
 
         /// <summary>

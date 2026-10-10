@@ -359,6 +359,8 @@ namespace CrowdRunner.Tests
 
             var keepPos = cam.transform.position;
             float keepAspect = cam.aspect;
+            // 지금 카메라가 군단에 대해 **어디에 있는지**를 그대로 쓴다 (박아 두지 않는다)
+            var camOff = keepPos - new Vector3(0f, 0f, runner.Sim != null ? runner.Sim.Z : 0f);
             cam.aspect = 1080f / 1920f;       // 세로 기기의 화각으로 — 배치 창(가로)이 아니라
 
             try
@@ -366,23 +368,47 @@ namespace CrowdRunner.Tests
                 foreach (var e in lv.events)
                 {
                     if (e.kind != EventKind.Gate || e.options.Length == 0) continue;
-                    float laneX = e.options[0].lane * 2.1f;
+                    // **게임이 쓰는 그 자리**를 쓴다. 전에는 `(0, 19, z-26)` 을 박아 뒀는데
+                    // 그건 **옛 카메라**다 — 그 뒤로 9.2 m 높이 · 10.5 m 뒤로 당겼고, 이 식은
+                    // 그대로였다. 그래서 *게이트를 키웠는데 읽히는 거리가 43 → 39 m 로 줄었다*
+                    // 는 **말이 안 되는 수**가 나왔고, 그 말이 안 되는 것이 단서였다.
+                    //
+                    // 재는 쪽이 게임과 어긋나면 수는 그럴듯하게 틀린다 — 오늘 몇 번째인지 모르겠다
+                    float laneX = e.options[0].lane * (lv.roadWidth * 0.5f) * 0.60f;
+                    // 그 게이트의 **실제 글자 높이**(m). 그려진 것을 재므로 글자 크기 규칙이
+                    // 바뀌어도 같이 따라간다 — 숫자를 박아 두면 그 순간 또 어긋난다
+                    float labelH = 0.55f;
+                    foreach (var tm in Object.FindObjectsByType<TextMesh>(FindObjectsSortMode.None))
+                    {
+                        if (tm.gameObject.name != "GateText") continue;
+                        var rr = tm.GetComponent<Renderer>();
+                        if (rr == null || Mathf.Abs(tm.transform.position.z - e.z) > 1f) continue;
+                        labelH = rr.bounds.size.y;
+                        break;
+                    }
                     var target = new Vector3(laneX, 1.0f, e.z);
 
                     bool found = false; float seen = 0f, readable = 0f; bool readFound = false;
                     for (float z = e.z; z > e.z - 160f; z -= 0.25f)
                     {
-                        cam.transform.position = new Vector3(0f, 19f, z - 26f);
+                        cam.transform.position = new Vector3(camOff.x, camOff.y, z + camOff.z);
                         var vp = cam.WorldToViewportPoint(target);
                         bool on = vp.z > 0.1f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
                         if (!on) break;
                         found = true; seen = z;      // 아직 보인다 — 더 뒤로
-                        // **읽히는 크기인가.** 게이트 네모는 2 m 높이고, 그 안의 숫자가 그 절반쯤
-                        // 된다. 1920 px 중 60 px 미만이면 두 글자짜리 숫자는 뭉개진다
-                        var top = cam.WorldToViewportPoint(target + new Vector3(0f, 1.0f, 0f));
-                        var bot = cam.WorldToViewportPoint(target + new Vector3(0f, -1.0f, 0f));
-                        float h = Mathf.Abs(top.y - bot.y) * 1920f;
-                        if (h >= 60f) { readFound = true; readable = z; }
+                        // ⚠ **네모가 아니라 글자를 잰다.**
+                        //
+                        // 전에는 게이트 네모의 높이로 쟀다. 그때는 네모가 2 m 고 글자가 그
+                        // 절반이라 비례가 맞았는데, 네모를 3.2 m 로 키우고 문틀을 달면서
+                        // **글자는 네모의 17 % 가 됐다.** 그래서 "107 m 에서 읽힌다" 가 나왔는데
+                        // 그 거리에서 네모는 63 px 이고 **글자는 11 px** 이다 — 못 읽는다.
+                        //
+                        // 비례가 깨졌는데 식은 그대로였다. 수는 **더 좋아진 것처럼** 나왔고
+                        // (43 m → 107 m), 하마터면 그 수로 전진 속도를 올릴 뻔했다.
+                        float h = labelH * Mathf.Abs(
+                            cam.WorldToViewportPoint(target + new Vector3(0f, 0.5f, 0f)).y -
+                            cam.WorldToViewportPoint(target - new Vector3(0f, 0.5f, 0f)).y) * 1920f;
+                        if (h >= 22f) { readFound = true; readable = z; }
                     }
 
                     if (!found)
@@ -396,9 +422,13 @@ namespace CrowdRunner.Tests
                     // **두 수는 다른 것을 말한다.** 화면에 있는 시간은 길어도 (22 초) 숫자가
                     // 읽히는 크기가 되는 것은 훨씬 늦다. 플레이어가 *고를 수 있는* 시간은
                     // 뒤쪽이다 — 앞의 수만 보면 "시간은 충분하다" 는 **틀린 안심**이 된다
+                    // **글자 높이를 같이 찍는다.** 이 수가 없으면 "107 m 에서 읽힌다" 가
+                    // 그럴듯한지 아닌지를 읽는 사람이 **검산할 수 없다**. 네모로 재던 때와
+                    // 글자로 재는 지금이 **공교롭게 같은 107 m** 를 냈는데, 그걸 가른 것이
+                    // 바로 이 수였다 (네모 3.2 m / 글자 1.2 m)
                     Debug.Log($"[CR-TEST] 게이트 z={e.z:F0}: 화면 진입 {lead:F2}초 전 ({e.z - seen:F0}m) · " +
-                              $"**숫자가 읽히는 크기 {readLead:F2}초 전** ({e.z - readable:F0}m) · " +
-                              $"전진 {lv.forwardSpeed:F1} m/s");
+                              $"**숫자가 읽히는 크기 {readLead:F2}초 전** ({e.z - readable:F0}m · " +
+                              $"글자 {labelH:F2}m) · 전진 {lv.forwardSpeed:F1} m/s");
                     if (!readFound)
                         Debug.LogError("[CR-TEST] 게이트 숫자가 **끝까지 읽을 크기가 안 된다** — " +
                                        "닿는 순간에도 60px 미만이다");
