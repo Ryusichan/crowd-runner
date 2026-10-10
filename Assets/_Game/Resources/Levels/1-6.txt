@@ -1,19 +1,24 @@
-# 탑워 광고 구조 (`docs/REF_TOPWAR.md`): 게이트가 복도를 따라 줄지어 선다.
-# 고르는 순간이 아니라 **머무는 시간**이 보상을 정한다.
+# 오너 2026-10-10: *"무수히 많은 적을 막아내는 게 게임의 원칙인데"*
+# 적은 끝에 한 덩어리가 아니라 **복도 내내 흘러든다**(`enemies`). 게이트는 *더 가기 위해서*가
+# 아니라 **더 버티기 위해** 붙는다 — 무리 하나당 잃는 수는 군단 크기와 거의 무관하므로,
+# 작은 군단은 같은 수를 잃고 먼저 바닥난다.
+#
+# ⚠ 좋은 쪽은 판마다 다르다. 전부 한쪽이면 거기 붙어 있는 것만으로 챕터가 깨진다.
 chapter 1
 index 6
 name Haeundae Patrol
 teaches 전투로 줄어든 군단을 뒤쪽 줄에서 다시 늘린다
-units 35
+units 40
 road 7
-length 235
+length 250
 
-# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
-rating 11 32 56
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
+rating 10 48 92
 
 
-gates 45..75 every 30 | L add 30 | R add 6
-enemy 115 count 90
-gates 155..185 every 30 | R add 38 | L add 8
+gates 45..75 every 30 | L add 32 | R add 8
+enemies 95..140 every 22 count 15
+gates 165..195 every 30 | R add 40 | L add 9
+enemies 205..235 every 15 count 16
 
-enemy 228 count 150 final
+enemy 245 count 80 final

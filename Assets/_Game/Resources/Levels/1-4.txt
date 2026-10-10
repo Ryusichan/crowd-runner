@@ -1,21 +1,24 @@
-# 탑워 광고 구조 (`docs/REF_TOPWAR.md`): 게이트가 복도를 따라 줄지어 선다.
-# 고르는 순간이 아니라 **머무는 시간**이 보상을 정한다.
+# 오너 2026-10-10: *"무수히 많은 적을 막아내는 게 게임의 원칙인데"*
+# 적은 끝에 한 덩어리가 아니라 **복도 내내 흘러든다**(`enemies`). 게이트는 *더 가기 위해서*가
+# 아니라 **더 버티기 위해** 붙는다 — 무리 하나당 잃는 수는 군단 크기와 거의 무관하므로,
+# 작은 군단은 같은 수를 잃고 먼저 바닥난다.
 #
-# ⚠ **좋은 쪽은 판마다 다르다.** 전부 L 로 두면 왼쪽에 붙어 있는 것만으로 챕터가 깨진다
-# (어제 고친 결함 — `DESIGN.md` §3f). 검증기의 장 단위 판정이 그것을 본다.
+# ⚠ 좋은 쪽은 판마다 다르다. 전부 한쪽이면 거기 붙어 있는 것만으로 챕터가 깨진다.
 chapter 1
 index 4
 name Yongdusan Park
-teaches 바리케이드는 병력이 많을수록 빨리 부순다
-units 30
+teaches 바리케이드 앞에서도 적은 온다 — 병력이 많을수록 빨리 부순다
+units 35
 road 7
-length 215
+length 235
 
-# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
-rating 24 39 57
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
+rating 21 37 56
 
 
-gates 45..105 every 30 | R add 28 | L add 6
-wall 135 hp 2000
+gates 45..105 every 30 | R add 30 | L add 7
+enemies 62..120 every 20 count 13
+wall 140 hp 1800
+enemies 160..205 every 22 count 15
 
-enemy 195 count 110 final
+enemy 220 count 75 final

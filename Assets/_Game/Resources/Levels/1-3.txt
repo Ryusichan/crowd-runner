@@ -1,19 +1,25 @@
-# 탑워 광고 구조 (`docs/REF_TOPWAR.md`): 게이트가 복도를 따라 줄지어 선다.
-# 고르는 순간이 아니라 **머무는 시간**이 보상을 정한다.
+# 오너 2026-10-10: *"무수히 많은 적을 막아내는 게 게임의 원칙인데"*
+# 적은 끝에 한 덩어리가 아니라 **복도 내내 흘러든다**(`enemies`). 게이트는 *더 가기 위해서*가
+# 아니라 **더 버티기 위해** 붙는다 — 무리 하나당 잃는 수는 군단 크기와 거의 무관하므로,
+# 작은 군단은 같은 수를 잃고 먼저 바닥난다.
+#
+# ⚠ 좋은 쪽은 판마다 다르다. 전부 한쪽이면 거기 붙어 있는 것만으로 챕터가 깨진다.
 chapter 1
 index 3
 name Nampo-dong Street
-teaches 한 번 부딪힌 뒤 좋은 쪽이 반대로 바뀐다
-units 25
+teaches 한 번 크게 부딪힌 뒤 좋은 쪽이 반대로 바뀐다
+units 30
 road 7
-length 205
+length 225
 
-# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
-rating 8 33 62
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
+rating 6 40 78
 
 
-gates 45..105 every 30 | L add 22 | R add 4
-enemy 130 count 70
-gates 150..180 every 30 | R add 34 | L add 7
+gates 45..105 every 30 | L add 26 | R add 6
+enemies 60..100 every 20 count 12
+enemy 125 count 60
+gates 150..180 every 30 | R add 36 | L add 8
+enemies 160..205 every 22 count 14
 
-enemy 198 count 120 final
+enemy 218 count 70 final

@@ -1,19 +1,23 @@
+# 오너 2026-10-10: *"무수히 많은 적을 막아내는 게 게임의 원칙인데"*
+# 적은 끝에 한 덩어리가 아니라 **복도 내내 흘러든다**(`enemies`). 게이트는 *더 가기 위해서*가
+# 아니라 **더 버티기 위해** 붙는다 — 무리 하나당 잃는 수는 군단 크기와 거의 무관하므로,
+# 작은 군단은 같은 수를 잃고 먼저 바닥난다.
+#
+# ⚠ 좋은 쪽은 판마다 다르다. 전부 한쪽이면 거기 붙어 있는 것만으로 챕터가 깨진다.
 chapter 1
 index 2
 name Choryang Houses
 teaches 좋은 쪽이 번갈아 온다 — 붙어 있지 말고 옮겨 다녀라
-units 10
+units 25
 road 7
-length 170
+length 195
 
-# ☣ 기준: tools/sim 이 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
-rating 5 26 50
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
+rating 8 33 62
 
 
-# 줄지어 선 게이트 두 벌을 **엇갈리게** 깐다 (REF_TOPWAR 2②).
-# 40·72·104 는 왼쪽이 크고, 56·88·120 은 오른쪽이 크다.
-# 한쪽에 붙어 있으면 큰 것과 작은 것을 번갈아 먹고, 옮겨 다니면 큰 것만 먹는다.
-gates 40..104 every 32 | L add 14 | R add 2
-gates 56..120 every 32 | R add 14 | L add 2
+gates 40..104 every 32 | L add 16 | R add 4
+gates 56..120 every 32 | R add 16 | L add 4
+enemies 70..160 every 22 count 12
 
-enemy 155 count 70 final
+enemy 188 count 55 final

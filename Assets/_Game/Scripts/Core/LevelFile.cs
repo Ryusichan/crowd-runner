@@ -198,6 +198,42 @@ namespace CrowdRunner.Core
                     return null;
                 }
 
+                case "enemies":
+                {
+                    // **끊임없이 오는 적** — `enemies 60..200 every 20 count 15`
+                    //
+                    // 오너 2026-10-10: *"무수히 많은 적을 막아내는 게 게임의 원칙인데"*.
+                    // 지금까지는 적이 **끝에 한 덩어리**였다. 그건 *치우는* 게임이지
+                    // *막아내는* 게임이 아니다.
+                    //
+                    // `gates` 와 같은 수다 — 한 줄이 **진짜 적 무리 여럿**으로 펼쳐진다.
+                    // 무리를 작게·촘촘하게 두면 **짧게 여러 번** 부딪히고, 그 리듬이
+                    // "밀고 나간다" 가 된다. 크게·드물게 두면 지금처럼 *벽을 치우는* 느낌이다.
+                    //
+                    // ⚠ 전투 중에는 전진이 멈춘다(`Sim.TickBlocking`). 그래서 무리 크기가
+                    // **멈춰 서는 시간**을 정한다 — 15 명이면 1.4 초, 100 명이면 9 초다.
+                    if (head.Count < 2) return "줄 적에 구간이 없다 — `enemies 60..200 every 20 count 15`";
+                    var sp = head[1].Split(new[] { ".." }, StringSplitOptions.None);
+                    float f2, t2, st2;
+                    if (sp.Length != 2 || !TryNum(sp[0], out f2) || !TryNum(sp[1], out t2))
+                        return "구간은 `처음..끝` 이다: " + head[1];
+                    int e2 = head.IndexOf("every");
+                    if (e2 < 0 || e2 + 1 >= head.Count || !TryNum(head[e2 + 1], out st2)) return "`every <간격>` 이 없다";
+                    if (st2 <= 0f) return "간격이 " + st2 + " 다 — 0 이하면 끝없이 펼쳐진다";
+                    if (t2 < f2) return "구간이 거꾸로다 (" + f2 + ".." + t2 + ")";
+                    if ((t2 - f2) / st2 > 200f) return "한 줄이 무리 " + (int)((t2 - f2) / st2) + " 개로 펼쳐진다 — 200 개가 상한이다";
+                    int cnt2;
+                    if (!TryKeyInt(head, "count", out cnt2)) return "`count <수>` 가 없다";
+                    if (cnt2 <= 0) return "무리의 수가 " + cnt2 + " 다";
+                    int lane3; TryKeyLane(head, out lane3);
+                    // **`final` 은 줄에 못 쓴다.** 최종 방어선은 하나여야 한다 — 줄이 전부
+                    // 최종이면 첫 무리를 넘는 순간 판이 끝난다
+                    if (head.Contains("final")) return "줄 적에는 `final` 을 못 쓴다 — 최종 방어선은 `enemy` 한 줄로 따로 둔다";
+                    for (float z3 = f2; z3 <= t2 + 0.001f; z3 += st2)
+                        l.events.Add(LevelEvent.Enemy(z3, cnt2, false, lane3));
+                    return null;
+                }
+
                 case "wall":
                 {
                     float z, hp;

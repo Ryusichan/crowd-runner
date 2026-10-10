@@ -1,21 +1,25 @@
-# 탑워 광고 구조 (`docs/REF_TOPWAR.md`): 게이트가 복도를 따라 줄지어 선다.
-# 고르는 순간이 아니라 **머무는 시간**이 보상을 정한다.
+# 오너 2026-10-10: *"무수히 많은 적을 막아내는 게 게임의 원칙인데"*
+# 적은 끝에 한 덩어리가 아니라 **복도 내내 흘러든다**(`enemies`). 게이트는 *더 가기 위해서*가
+# 아니라 **더 버티기 위해** 붙는다 — 무리 하나당 잃는 수는 군단 크기와 거의 무관하므로,
+# 작은 군단은 같은 수를 잃고 먼저 바닥난다.
+#
+# ⚠ 좋은 쪽은 판마다 다르다. 전부 한쪽이면 거기 붙어 있는 것만으로 챕터가 깨진다.
 chapter 1
 index 10
 name Busan Port Last Stand
 teaches 최종 방어선 — 배운 것을 전부 쓴다
 units 60
 road 9
-length 305
+length 320
 
-# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
-rating 14 72 139
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
+rating 11 95 192
 
 
-gates 45..105 every 30 | L add 52 | R add 11
-enemy 135 count 110
-gates 170..200 every 30 commit 270 | R add 64 | L add 13
-wall 222 hp 2600 lane R
-zone 222 dps 0.4 len 45 lane L
+gates 45..105 every 30 | L add 55 | R add 12
+enemies 120..165 every 22 count 18
+gates 180..210 every 30 | R add 70 | L add 14
+wall 230 hp 2200
+enemies 245..295 every 16 count 22
 
-enemy 290 count 280 final
+enemy 308 count 160 final
