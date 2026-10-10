@@ -100,7 +100,13 @@ else { throw "index.html 에 </head> 가 없다 — 템플릿이 바뀌었다" }
 
 # ③ 버전 글자 — 지금 보고 있는 것이 어느 빌드인지 눈으로 안다.
 #    캐시에 옛 페이지가 남아 있으면 고친 것을 안 고쳐진 상태로 시험하게 되는데, 이 글자가 그걸 드러낸다
-$stamp = '<div style="position:fixed;right:6px;bottom:4px;z-index:9999;font:10px/1 monospace;color:#6b5a85;pointer-events:none">v' + $ver + ' ' + $sha + '</div>'
+# ⚠ **길 위에 겹쳐 보였다** (오너 2026-10-10 폰 사진). 캔버스가 화면을 꽉 채우므로
+# "오른쪽 아래" 가 곧 **게임 화면 위**다. 지울 수는 없다 — 캐시에 옛 페이지가 남으면
+# 고친 것을 안 고쳐진 상태로 시험하게 되고, 이 글자가 그걸 드러내는 유일한 것이다.
+# 그래서 **어두운 알약 안에 넣고 흐리게** 한다: 찾으면 읽히고, 안 찾으면 안 보인다.
+$stamp = '<div style="position:fixed;right:5px;bottom:4px;z-index:9999;font:9px/1 monospace;' +
+         'color:#9a8bb4;background:rgba(14,10,20,.55);border-radius:6px;padding:2px 5px;' +
+         'opacity:.45;pointer-events:none">v' + $ver + ' ' + $sha + '</div>'
 if ($html -match '</body>') { $html = $html -replace '</body>', ($stamp + '</body>') }
 [System.IO.File]::WriteAllText($index, $html, $utf8)
 Write-Host "version: $ver ($sha) · cache-bust $n 곳"
