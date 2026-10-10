@@ -33,10 +33,11 @@ namespace CrowdRunner.View
         const float PostEvery = 11f;
 
         Mesh mesh;
-        Material mat;
-        RenderParams rp;
+        Material mat, treeMat;
+        RenderParams rp, treeRp;
         Matrix4x4[] mats = new Matrix4x4[0];
-        int count;
+        Matrix4x4[] trees = new Matrix4x4[0];
+        int count, treeCount;
 
         public int Count => count;
 
@@ -72,6 +73,21 @@ namespace CrowdRunner.View
                 };
             }
 
+            if (treeMat == null)
+            {
+                treeMat = Resources.Load<Material>("M0/roadtree");
+                if (treeMat != null)
+                    treeRp = new RenderParams(treeMat)
+                    {
+                        worldBounds = new Bounds(new Vector3(0f, 0f, length * 0.5f),
+                                                 new Vector3(240f, 30f, length + 120f)),
+                        shadowCastingMode = ShadowCastingMode.Off,
+                        receiveShadows = false,
+                        lightProbeUsage = LightProbeUsage.Off,
+                        reflectionProbeUsage = ReflectionProbeUsage.Off,
+                    };
+            }
+
             // 판 앞뒤로 조금 넘겨 깐다 — 시작 지점 뒤가 비어 있으면 **출발하는 순간** 표식이
             // 없어서 그 몇 초가 가장 안 움직이는 것처럼 보인다
             float from = -40f, to = length + 60f;
@@ -83,6 +99,7 @@ namespace CrowdRunner.View
             for (int i = 0; i < dashes; i++)
                 mats[count++] = Matrix4x4.TRS(new Vector3(0f, 0.03f, from + i * DashEvery),
                                               Quaternion.identity, new Vector3(0.22f, 0.04f, 2.6f));
+            BuildTrees(from, to, roadWidth);
             float side = roadWidth * 0.5f + 1.35f;
             for (int i = 0; i < posts / 2; i++)
             {
@@ -94,10 +111,46 @@ namespace CrowdRunner.View
             }
         }
 
+        /// <summary>
+        /// **길 밖이 허공이면 세상이 아니다.** 초록 벌판만 있으면 달리는 곳에 *바깥* 이 없고,
+        /// 그러면 길이 공중에 떠 있는 띠로 돌아간다 (땅을 깔기 전과 같은 증상이 색만 바뀐 것).
+        ///
+        /// 나무는 **기둥보다 띄엄띄엄, 더 멀리, 더 크게** 둔다. 가까이 촘촘히 두면 길을
+        /// 가리고, 기둥과 주기가 같으면 하나로 보인다 (기둥 11 m · 나무 19 m).
+        /// 드로우 **한 번** 더 — 색이 달라 같은 묶음에 못 넣는다.
+        /// </summary>
+        void BuildTrees(float from, float to, float roadWidth)
+        {
+            const float Every = 19f;
+            int rows = Mathf.Max(0, Mathf.CeilToInt((to - from) / Every));
+            if (trees.Length < rows * 2) trees = new Matrix4x4[rows * 2];
+            treeCount = 0;
+            var rng = new System.Random(4711);
+            for (int i = 0; i < rows; i++)
+            {
+                float z = from + i * Every;
+                for (int sgn = -1; sgn <= 1; sgn += 2)
+                {
+                    // 자리와 크기를 조금씩 흔든다 — 같은 간격·같은 크기면 **울타리**로 보인다
+                    // **멀리, 낮게.** 처음엔 길에서 5.5 m 에 최대 6 m 높이로 뒀더니 화면 위
+                    // 가장자리에서 **잘린 검은 덩어리**로 보였고, 일시정지 단추까지 덮었다.
+                    // 배경은 배경으로 읽혀야지 앞에 나서면 안 된다
+                    float off = roadWidth * 0.5f + 8.5f + (float)rng.NextDouble() * 6f;
+                    float h = 2.6f + (float)rng.NextDouble() * 1.8f;
+                    float wdt = 1.6f + (float)rng.NextDouble() * 1.2f;
+                    trees[treeCount++] = Matrix4x4.TRS(
+                        new Vector3(sgn * off, h * 0.5f, z + (float)rng.NextDouble() * 8f),
+                        Quaternion.Euler(0f, (float)rng.NextDouble() * 90f, 0f),
+                        new Vector3(wdt, h, wdt));
+                }
+            }
+        }
+
         public void Draw()
         {
-            if (mesh == null || count == 0) return;
-            Graphics.RenderMeshInstanced(rp, mesh, 0, mats, count);
+            if (mesh == null) return;
+            if (count > 0) Graphics.RenderMeshInstanced(rp, mesh, 0, mats, count);
+            if (treeCount > 0 && treeMat != null) Graphics.RenderMeshInstanced(treeRp, mesh, 0, trees, treeCount);
         }
     }
 }

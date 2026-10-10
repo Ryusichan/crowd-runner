@@ -52,6 +52,7 @@ namespace CrowdRunner.View
         UnityEngine.UI.Text countUi;
         CasualtyFx fx;
         RoadMarks marks;
+        float spreadNow = -1f;
         BlobShadows shadows;
         Camera cam;
         float wallHp0;
@@ -87,7 +88,9 @@ namespace CrowdRunner.View
             }
             // 세로형 러너 — 뒤에서 내려다본다. 각도가 **겹쳐 그리기**를 정하므로 (§6b 마지막 경고)
             // 더 눕히면 군중이 화면에 더 넓게 퍼져 GPU 가 싸진다. 지금은 보이는 쪽을 먼저 맞춘다
-            cam.transform.rotation = Quaternion.Euler(34f, 0f, 0f);
+            // 34° 였는데 군단이 화면 **중간**에 앉고 그 아래가 빈 아스팔트였다. 조금 세우면
+            // (= 숙이는 각을 줄이면) 화면의 것들이 전부 아래로 내려오고, 앞쪽이 더 보인다
+            cam.transform.rotation = Quaternion.Euler(30f, 0f, 0f);
             cam.fieldOfView = 52f;
             cam.farClipPlane = 300f;
             cam.clearFlags = CameraClearFlags.SolidColor;
@@ -262,7 +265,12 @@ namespace CrowdRunner.View
                 countUi.color = sim.State == SimState.Lost ? new Color(0.92f, 0.46f, 0.44f) : Color.white;
             }
 
-            cam.transform.position = new Vector3(0f, 19f, sim.Z - 26f);
+            // **당긴다.** 19 m 높이 · 26 m 뒤였는데, 시작 지점(10 명)에서 화면의 80 % 가
+            // 빈 아스팔트였다 — 군단이 점처럼 작고 길이 화면을 지배했다. 1.5 배 가까이
+            // 오면 사람이 1.5 배 커지고 길이 차지하는 비율이 줄어든다.
+            //
+            // 각도는 그대로 34°다. 각도를 눕히면 겹쳐 그리기가 늘어 GPU 가 비싸진다 (§6b)
+            cam.transform.position = new Vector3(0f, 9.2f, sim.Z - 10.5f);
         }
 
         /// <summary>
@@ -384,18 +392,28 @@ namespace CrowdRunner.View
         void Formation(CrowdField f, int n, float cx, float cz, float w, byte side)
         {
             n = Mathf.Min(n, renderCap);
-            if (f.Count != n)
+            // **머릿수에 맞춰 뭉친다.** 전에는 몇 명이든 길 폭(6.4 m)에 흩었다 — 10 명이면
+            // 사람 사이가 2 m 씩 벌어져 **떼가 아니라 흩어진 점**으로 보인다. 시작 지점이
+            // 늘 그 모양이었고, 그게 *"퀄리티가 심각하다"* 의 절반이었다.
+            //
+            // `sqrt(n)` 에 비례시키는 이유: 사람이 **면적**을 차지하므로 폭은 수의 제곱근으로
+            // 자란다. 10 명 → 3.6 m · 40 명 → 7.2 m(길 폭에서 잘림) 으로, 적을 때 뭉치고
+            // 많을 때 길을 꽉 채운다
+            float spread = Mathf.Min(w * 0.92f, 1.15f * Mathf.Sqrt(Mathf.Max(1, n)));
+            if (f.Count != n || Mathf.Abs(spreadNow - spread) > 0.25f)
             {
                 f.Clear();
-                f.Add(n, side, 0f, w * 0.92f);
+                f.Add(n, side, 0f, spread);
+                spreadNow = spread;
             }
+            float depth = Mathf.Min(8.5f, 0.95f * Mathf.Sqrt(Mathf.Max(1, n)));
             // 중심을 옮긴다 — 개체마다의 흩어짐은 `CrowdField` 가 만든 것을 그대로 쓴다
             for (int i = 0; i < f.Count; i++)
             {
                 f.X[i] = cx + f.SideTarget[i];
                 // **떼는 깊이가 있어야 떼다.** 3.2 m 로는 한 줄로 서 있고, 그러면 42 명이
                 // 42 명으로 안 읽힌다 (앞줄만 보인다). 뒤로 늘리면 수가 눈에 쌓인다
-                f.Z[i] = cz + (f.Phase[i] - 0.5f) * 8.5f + (f.SpeedMul[i] - 1f) * 18f;
+                f.Z[i] = cz + (f.Phase[i] - 0.5f) * depth + (f.SpeedMul[i] - 1f) * depth * 2.1f;
                 f.Phase[i] += Time.deltaTime * 1.4f;
                 if (f.Phase[i] >= 1f) f.Phase[i] -= 1f;
             }
@@ -412,9 +430,24 @@ namespace CrowdRunner.View
             // 지나가는 표지판처럼 보였다 — 첫 연출 사진에서 그게 그대로 드러났다. 차선 폭을
             // 거의 채우고 사람 키보다 높게 두면 **통과한다**는 것이 모양만으로 읽힌다
             float lane = (runner.Level != null ? runner.Level.roadWidth : 8f) * 0.5f;
+            // **둘 사이를 벌린다.** 전에는 폭 0.90 · 중심 0.50 이라 틈이 0.35 m 뿐이었고,
+            // 멀리서 보면 **두 문이 아니라 간판 하나**로 읽혔다 (오너 폰 사진). 이 게임의
+            // 조작이 *둘 중 하나* 라서, 둘로 안 보이면 조작이 화면에서 사라진 것이다
             var t = Box("Gate", col);
-            t.localScale = new Vector3(lane * 0.90f, 3.2f, 0.25f);
-            t.position = new Vector3(o.lane * lane * 0.5f, 1.6f, z);
+            t.localScale = new Vector3(lane * 0.78f, 3.2f, 0.25f);
+            t.position = new Vector3(o.lane * lane * 0.60f, 1.6f, z);
+            // **테두리.** 색판만 있으면 공중에 뜬 종이로 보인다. 뒤에 조금 큰 어두운 판을
+            // 깔면 가장자리가 생겨 *문틀* 로 읽힌다 — 드로우 하나 값이다
+            //
+            // **문의 자식으로 붙인다.** 따로 두면 `gates[]` 가 모르니 지나간 뒤에도 남고,
+            // 연출(`GatePassFx`)이 문을 터뜨려도 테두리만 제자리에 서 있다 — 문이 사라진
+            // 자리에 틀만 남는 그림이다
+            var frame = Box("GateFrame", new Color(0.16f, 0.17f, 0.22f));
+            frame.SetParent(t, false);
+            frame.localScale = new Vector3(1f + 0.34f / t.localScale.x,
+                                           1f + 0.30f / t.localScale.y,
+                                           0.16f / t.localScale.z);
+            frame.localPosition = new Vector3(0f, 0.01f, 0.4f);
             var lab = Label("GateText", 0.34f);
             lab.transform.SetParent(t, false);
             lab.transform.localPosition = new Vector3(0f, 0.06f, -0.6f);

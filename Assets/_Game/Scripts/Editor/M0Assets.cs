@@ -92,6 +92,7 @@ namespace CrowdRunner.EditorTools
             }
             Save(sh, "roadmark", new Color(0.90f, 0.89f, 0.82f, 1.00f));
             Save(sh, "blobshadow", new Color(0.05f, 0.08f, 0.05f, 0.38f));
+            Save(sh, "roadtree", new Color(0.30f, 0.50f, 0.30f, 1.00f));
         }
 
         static void Save(Shader sh, string name, Color c)

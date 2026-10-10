@@ -116,6 +116,7 @@ namespace CrowdRunner.EditorTools
                 ("Assets/_Game/Resources/Fonts/ZQFallbackGothic.ttf",   "대체 글꼴 — `·` `—` 같은 글리프가 여기로 넘어간다"),
                 ("Assets/_Game/Resources/M0/roadmark.mat",              "길 표식 — 없으면 달리는 것이 안 보인다"),
                 ("Assets/_Game/Resources/M0/blobshadow.mat",            "발밑 그림자 — 없으면 군중이 떠 보인다"),
+                ("Assets/_Game/Resources/M0/roadtree.mat",              "길가 나무 — 없으면 길 밖이 초록 허공이다"),
             };
             bool bad = false;
             foreach (var (path, what) in must)

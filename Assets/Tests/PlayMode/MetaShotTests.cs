@@ -286,6 +286,7 @@ namespace CrowdRunner.Tests
             Time.timeScale = prev;
 
             AssertNumbersDoNotOverlapOnScreen(runner);
+            yield return ShootTheOpeningFrame();
             MeasureGateLabels(runner);
             yield return ShootTheGatePass(runner);
 
@@ -745,6 +746,29 @@ namespace CrowdRunner.Tests
                 return;
             }
             Debug.LogWarning("[CR-TEST] 선택지 둘인 게이트를 못 찾았다 — 글자 폭을 못 쟀다");
+        }
+
+        /// <summary>
+        /// **시작하는 순간을 찍는다** — 오너가 보는 첫 화면.
+        ///
+        /// 지금까지 게임 화면을 **군단이 67 명일 때** 찍었다. 그 그림은 길이 꽉 차서
+        /// 좋아 보였는데, 오너가 폰에서 본 것은 **시작 지점의 10 명**이었고 화면의 80 % 가
+        /// 빈 아스팔트였다. *"퀄리티가 심각하다"* 가 거기서 나왔다.
+        ///
+        /// **가장 좋은 순간을 찍으면 가장 좋은 순간만 안다.** 이 게임에서 사람이 가장 먼저
+        /// 보는 것은 10 명이고, 그 한 장이 첫인상 전부다. 그래서 그 프레임을 따로 찍는다.
+        /// </summary>
+        IEnumerator ShootTheOpeningFrame()
+        {
+            var lv = LevelCatalog.Find("1-1");
+            Assert.IsNotNull(lv, "1-1 을 목록에서 못 찾았다");
+            flow.StartLevel(lv);
+            yield return null;
+            yield return null;
+            var runner = GameBoot.Runner;
+            Assert.IsNotNull(runner.Sim, "1-1 을 못 띄웠다 — " + runner.Error);
+            float share = ShotWorld("game_opening", runner);
+            Debug.Log($"[CR-TEST] 시작 화면: 병력 {runner.Sim.Units} · z {runner.Sim.Z:F0} · 그려진 화소 {share:F1}%");
         }
 
         /// <summary>
