@@ -468,7 +468,10 @@ namespace CrowdRunner.View
         void Disc(CrowdField f, int from, int to, float cx, float cz, float w)
         {
             int n = Mathf.Max(1, to - from);
-            const float PerPerson = 0.42f;                    // m² — 어깨가 거의 닿는다
+            // **작아진 몸에 맞춰 더 빽빽하게.** 캐릭터가 키 1.86 m → 1.2 m 로 작아졌으니
+            // (오너: *"아주 작고 귀엽게"*) 한 사람이 차지하는 면적도 그만큼 준다. 전 수치를
+            // 그대로 두면 **작아진 만큼 덩어리에 빈 틈이 생겨** 오히려 덜 많아 보인다
+            const float PerPerson = 0.19f * 0.78f * 0.78f;   // 배율의 **제곱** — 면적이라서                    // m² — 어깨가 거의 닿는다
             float r = Mathf.Sqrt(n * PerPerson / Mathf.PI);
             float lim = w * 0.5f - 0.35f;
             const float Golden = 2.39996323f;                 // 라디안 — 황금각

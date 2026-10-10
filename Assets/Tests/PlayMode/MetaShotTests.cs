@@ -446,10 +446,25 @@ namespace CrowdRunner.Tests
             //
             // 옆에서 보는 이유가 하나 더 있다: **팔다리 교차는 옆모습에서 가장 잘 보인다.**
             // 뒤에서 보면 앞뒤로 흔드는 것이 전부 겹쳐 보인다
-            var target = new Vector3(runner.Sim.X, 0.95f, runner.Sim.Z + 0.6f);
-            cam.transform.position = new Vector3(runner.Sim.X + 6.5f, 1.45f, runner.Sim.Z - 0.4f);
+            //
+            // **벽 위에서 내려다본다.** 길 옆 6.5 m 에 눈높이로 뒀더니 복도 벽을 세운 뒤로
+            // **벽 뒷면만** 찍혔다 — 사진이 통째로 회색이었다. 벽이 ±3.95 m 에 2.6 m 높이로
+            // 서 있어서 그 너머는 아무것도 안 보인다.
+            //
+            // 내가 만든 검사가 내가 만든 벽에 막혔는데, **사진이 비어 있어서 바로 보였다** —
+            // 수만 봤으면 "확대 사진 찍음" 으로 지나갔을 자리다.
+            //
+            // 캐릭터가 1.2 m 로 작아졌으므로 보는 높이도 같이 내린다
+            // **복도 안에서, 앞에서 본다.** 벽 바깥에 두면 어디에 둬도 벽이 끼어든다 —
+            // 옆으로 6.5 m 는 벽 뒷면만 나왔고, 벽 위로 올렸더니 이번엔 **아래쪽 벽**이
+            // 화면 절반을 덮었다. 벽은 양쪽에 있으니 *바깥에서 안을 보는* 각도 자체가 없다.
+            //
+            // 앞에서 보면 복도 안이라 막는 것이 없고, **걸어오는 쪽**이라 팔다리 교차도
+            // 보인다 (옆모습만큼은 아니지만 벽에 안 가린다)
+            var target = new Vector3(runner.Sim.X, 0.45f, runner.Sim.Z + 0.8f);
+            cam.transform.position = new Vector3(runner.Sim.X + 1.1f, 1.15f, runner.Sim.Z + 4.6f);
             cam.transform.rotation = Quaternion.LookRotation(target - cam.transform.position);
-            cam.fieldOfView = 26f;
+            cam.fieldOfView = 22f;
             ShotWorld("unit_closeup", runner);
 
             // **되돌린다** — 안 되돌리면 뒤이어 찍는 게임 화면이 이 구도로 나간다

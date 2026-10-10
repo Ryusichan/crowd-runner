@@ -73,7 +73,7 @@ namespace CrowdRunner.View
                 // 실린더는 높이 2 짜리라 y 배율 0.01 이면 두께 0.02 m 다. 0 으로 두면
                 // 땅과 **같은 평면**이 되어 z 싸움으로 지직거린다
                 mats[n++] = Matrix4x4.TRS(new Vector3(f.X[i], 0.02f, f.Z[i]),
-                                          Quaternion.identity, new Vector3(0.58f, 0.01f, 0.58f));
+                                          Quaternion.identity, new Vector3(0.28f, 0.01f, 0.28f));
             return n;
         }
     }

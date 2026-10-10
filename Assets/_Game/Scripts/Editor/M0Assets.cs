@@ -118,40 +118,66 @@ namespace CrowdRunner.EditorTools
 
         static readonly BoneDef[] Rig =
         {
-            new BoneDef { name = "hips",   parent = -1, off = new Vector3(0f, 0.86f, 0f) },
-            new BoneDef { name = "spine",  parent = 0,  off = new Vector3(0f, 0.22f, 0f) },
-            new BoneDef { name = "chest",  parent = 1,  off = new Vector3(0f, 0.26f, 0f) },
-            new BoneDef { name = "neck",   parent = 2,  off = new Vector3(0f, 0.20f, 0f) },
-            new BoneDef { name = "head",   parent = 3,  off = new Vector3(0f, 0.14f, 0f) },
+            // **작고 귀엽게** (오너 2026-10-10). 전에는 키 1.86 m 의 8 등신이었다 —
+            // 사람 비율이라 군중 속에서 *작은 어른*으로 보였지, 귀엽지는 않았다.
+            //
+            // 지금은 **키 1.2 m · 3 등신**이다. 귀여움은 장식이 아니라 **비율**이다:
+            // 머리가 몸에 비해 크고(아기 비율), 팔다리가 짧고 뭉툭하다. 그리고 작아진 만큼
+            // **더 빽빽하게 모을 수 있어서** 같은 수가 더 많아 보인다 (`LevelView.Disc`).
+            new BoneDef { name = "hips",   parent = -1, off = new Vector3(0f, 0.40f, 0f) },
+            new BoneDef { name = "spine",  parent = 0,  off = new Vector3(0f, 0.10f, 0f) },
+            new BoneDef { name = "chest",  parent = 1,  off = new Vector3(0f, 0.12f, 0f) },
+            new BoneDef { name = "neck",   parent = 2,  off = new Vector3(0f, 0.09f, 0f) },
+            new BoneDef { name = "head",   parent = 3,  off = new Vector3(0f, 0.11f, 0f) },
 
-            new BoneDef { name = "lhip",   parent = 0,  off = new Vector3(-0.10f, -0.04f, 0f) },
-            new BoneDef { name = "lknee",  parent = 5,  off = new Vector3(0f, -0.42f, 0f) },
-            new BoneDef { name = "lfoot",  parent = 6,  off = new Vector3(0f, -0.36f, 0f) },
-            new BoneDef { name = "rhip",   parent = 0,  off = new Vector3(0.10f, -0.04f, 0f) },
-            new BoneDef { name = "rknee",  parent = 8,  off = new Vector3(0f, -0.42f, 0f) },
-            new BoneDef { name = "rfoot",  parent = 9,  off = new Vector3(0f, -0.36f, 0f) },
+            // 다리는 **짧고 통통하게**. 전에는 키의 46 % 였는데 지금은 33 % 다
+            new BoneDef { name = "lhip",   parent = 0,  off = new Vector3(-0.08f, -0.03f, 0f) },
+            new BoneDef { name = "lknee",  parent = 5,  off = new Vector3(0f, -0.18f, 0f) },
+            new BoneDef { name = "lfoot",  parent = 6,  off = new Vector3(0f, -0.16f, 0f) },
+            new BoneDef { name = "rhip",   parent = 0,  off = new Vector3(0.08f, -0.03f, 0f) },
+            new BoneDef { name = "rknee",  parent = 8,  off = new Vector3(0f, -0.18f, 0f) },
+            new BoneDef { name = "rfoot",  parent = 9,  off = new Vector3(0f, -0.16f, 0f) },
 
-            // 어깨는 **몸통 반지름 밖**에 둔다. 0.23 이었는데 가슴 반지름이 0.25 라 팔이
-            // 몸 **안쪽**에 묻혔다 — 화면에서는 몸통 밖으로 삐져나온 조각이 *망토* 처럼 보였다
-            new BoneDef { name = "lsh",    parent = 2,  off = new Vector3(-0.27f, 0.12f, 0f) },
-            new BoneDef { name = "lelb",   parent = 11, off = new Vector3(0f, -0.28f, 0f) },
-            new BoneDef { name = "lhand",  parent = 12, off = new Vector3(0f, -0.26f, 0f) },
-            new BoneDef { name = "rsh",    parent = 2,  off = new Vector3(0.27f, 0.12f, 0f) },
-            new BoneDef { name = "relb",   parent = 14, off = new Vector3(0f, -0.28f, 0f) },
-            new BoneDef { name = "rhand",  parent = 15, off = new Vector3(0f, -0.26f, 0f) },
+            // 어깨는 **몸통 반지름 밖**에 둔다. 전에 가슴 반지름보다 안쪽이라 팔이 몸에
+            // 묻혔고, 화면에서는 삐져나온 조각이 *망토* 처럼 보였다
+            new BoneDef { name = "lsh",    parent = 2,  off = new Vector3(-0.17f, 0.05f, 0f) },
+            new BoneDef { name = "lelb",   parent = 11, off = new Vector3(0f, -0.13f, 0f) },
+            new BoneDef { name = "lhand",  parent = 12, off = new Vector3(0f, -0.12f, 0f) },
+            new BoneDef { name = "rsh",    parent = 2,  off = new Vector3(0.17f, 0.05f, 0f) },
+            new BoneDef { name = "relb",   parent = 14, off = new Vector3(0f, -0.13f, 0f) },
+            new BoneDef { name = "rhand",  parent = 15, off = new Vector3(0f, -0.12f, 0f) },
 
             new BoneDef { name = "x0",     parent = 0,  off = Vector3.zero },
             new BoneDef { name = "x1",     parent = 17, off = Vector3.zero },
             new BoneDef { name = "x2",     parent = 18, off = Vector3.zero },
         };
 
+        /// <summary>
+        /// **전체 배율.** 오너 2026-10-10: *"아주 작고 귀엽게"* → *"더 작아도 돼"*.
+        /// 위 표의 수를 하나씩 고치는 대신 여기 한 곳에서 줄인다 — 비율(3 등신)은 그대로
+        /// 두고 크기만 바뀌어야 하기 때문이다. 표를 직접 만지면 **줄이면서 비율이 어긋난다**.
+        ///
+        /// 따라 줄여야 하는 것 둘이 밖에 있다: `LevelView.Disc` 의 한 사람당 면적(**배율의
+        /// 제곱**으로 — 면적이니까)과 `BlobShadows` 의 원반 크기. 안 줄이면 작아진 몸 사이에
+        /// 빈 틈이 생겨 **오히려 덜 많아 보인다**.
+        /// </summary>
+        public const float Scale = 0.78f;
+
         /// <summary>쉬는 자세에서 본이 서 있는 **월드 좌표**. 바인드포즈와 메시가 둘 다 이것을 쓴다</summary>
         static Vector3[] RestPositions()
         {
             var p = new Vector3[Rig.Length];
             for (int i = 0; i < Rig.Length; i++)
-                p[i] = Rig[i].parent < 0 ? Rig[i].off : p[Rig[i].parent] + Rig[i].off;
+                p[i] = Rig[i].parent < 0 ? Rig[i].off * Scale : p[Rig[i].parent] + Rig[i].off * Scale;
             return p;
+        }
+
+        /// <summary>반지름 표를 배율에 맞춰 줄인다 — 비율은 그대로, 크기만</summary>
+        static float[] S(params float[] r)
+        {
+            var o = new float[r.Length];
+            for (int i = 0; i < r.Length; i++) o[i] = r[i] * Scale;
+            return o;
         }
 
         /// <summary>
@@ -184,32 +210,27 @@ namespace CrowdRunner.EditorTools
                 float kk = k;
                 int R(int n) => Mathf.Max(4, Mathf.RoundToInt(n * kk));
 
-                // 몸통 — 골반에서 목까지. 어깨에서 가장 넓다
+                // 몸통 — 짧고 **통통하게**. 귀여움은 비율이다: 허리를 거의 안 잘록하게 둔다
                 Part(verts, weights, tris, R(12), R(5), rest[0], rest[3],
-                     new[] { 0, 0, 1, 2, 3 }, new[] { 0.17f, 0.145f, 0.165f, 0.205f, 0.105f });
-                // 머리 — **목에서 시작한다.** 전에는 `rest[4] - 0.06`(y 1.62)부터 그려서
-                // 몸통 끝(목, y 1.54)과 **8 cm 가 비었고**, 확대하면 머리 아래로 뒤 나무가
-                // 그대로 비쳤다. 목에서 시작하고 첫 층을 가늘게 두면 목이 생긴다 —
-                // 정점을 더 쓰지 않고 틈만 메운다
-                Part(verts, weights, tris, R(10), R(5), rest[3] + new Vector3(0f, -0.02f, 0f),
-                     rest[4] + new Vector3(0f, 0.17f, 0f),
-                     new[] { 3, 4, 4, 4, 4 }, new[] { 0.085f, 0.075f, 0.125f, 0.125f, 0.05f });
-                // 다리 둘 — 엉덩이에서 발까지
+                     new[] { 0, 0, 1, 2, 3 }, S(0.135f, 0.130f, 0.140f, 0.150f, 0.080f));
+                // 머리 — **크다.** 키의 3 분의 1 쯤 (3 등신). 목에서 시작해야 머리 아래로
+                // 뒤 배경이 비치지 않는다 — 전에 8 cm 가 비어서 확대하면 나무가 보였다
+                Part(verts, weights, tris, R(11), R(6), rest[3] + new Vector3(0f, -0.01f * Scale, 0f),
+                     rest[4] + new Vector3(0f, 0.22f * Scale, 0f),
+                     new[] { 3, 4, 4, 4, 4, 4 }, S(0.070f, 0.062f, 0.150f, 0.175f, 0.150f, 0.055f));
+                // 다리 둘 — **짧고 뭉툭하게**
                 for (int sgn = 0; sgn < 2; sgn++)
                 {
                     int h = sgn == 0 ? 5 : 8;
-                    Part(verts, weights, tris, R(7), R(5), rest[h], rest[h + 2] + new Vector3(0f, -0.04f, 0f),
-                         new[] { h, h, h + 1, h + 1, h + 2 }, new[] { 0.11f, 0.09f, 0.08f, 0.07f, 0.06f });
+                    Part(verts, weights, tris, R(7), R(5), rest[h], rest[h + 2] + new Vector3(0f, -0.03f * Scale, 0f),
+                         new[] { h, h, h + 1, h + 1, h + 2 }, S(0.070f, 0.062f, 0.058f, 0.055f, 0.052f));
                 }
-                // 팔 둘 — 어깨에서 손까지
+                // 팔 둘 — **짧고 뭉툭하게**. 6 각은 옆에서 보면 평평한 판 두 장이라 8 각으로
                 for (int sgn = 0; sgn < 2; sgn++)
                 {
                     int sh = sgn == 0 ? 11 : 14;
-                    // **고리를 늘리고 두껍게.** 6 각 · 반지름 0.075 는 확대하면 **널빤지**로
-                    // 읽혔다 — 면이 적으면 옆에서 볼 때 평평한 판 두 장이 된다. 8 각이면
-                    // 둥글게 보이고, 그만큼 머리 고리를 12 → 10 으로 줄여 예산 안에 둔다
-                    Part(verts, weights, tris, R(8), R(4), rest[sh], rest[sh + 2] + new Vector3(0f, -0.04f, 0f),
-                         new[] { sh, sh, sh + 1, sh + 2 }, new[] { 0.085f, 0.075f, 0.065f, 0.055f });
+                    Part(verts, weights, tris, R(8), R(4), rest[sh], rest[sh + 2] + new Vector3(0f, -0.03f * Scale, 0f),
+                         new[] { sh, sh, sh + 1, sh + 2 }, S(0.058f, 0.052f, 0.048f, 0.044f));
                 }
 
                 if (verts.Count <= want) break;
