@@ -31,6 +31,27 @@ namespace CrowdRunner.Game
         public string Error { get; private set; }
 
         float targetX;
+
+        /// <summary>
+        /// **시험이 손가락 대신 넣는 자리.**
+        ///
+        /// 배치 모드에서는 `Input` 을 흉내 낼 수 없다 — 마우스도 터치도 없다. 그래서 화면을
+        /// 찍는 검사들이 지금까지 **아무도 안 만진 판**만 돌렸고, 그 판은 `targetX = 0` 이라
+        /// 늘 한가운데다. 즉 **실제로 조작했을 때 어떻게 보이는지는 한 번도 안 봤다.**
+        ///
+        /// `ReadDrag` 가 매 프레임 덮어쓰지 않는다(드래그 중일 때만 쓴다)는 것이 이 구멍이
+        /// 성립하는 이유다. 넣어 두면 다음 프레임의 `Step` 이 그 값을 쓴다.
+        /// </summary>
+        internal float TargetX
+        {
+            get => targetX;
+            set
+            {
+                float half = Level != null ? Level.roadWidth * 0.5f : 4f;
+                targetX = Mathf.Clamp(value, -half, half);
+            }
+        }
+
         float accumulator;
         bool dragging;
         float lastPointerX;

@@ -784,6 +784,94 @@ namespace CrowdRunner.Tests
         }
 
         /// <summary>
+        /// **한 판을 실제로 조작하며 끝까지 간다** — 그리고 그 과정을 필름처럼 찍는다.
+        ///
+        /// 오너: *"너가 유니티 켜서 플레이해봐."* 맞는 지적이다. 지금까지 찍은 것은 전부
+        /// **아무도 안 만진 판**이었다 — 배치 모드에는 `Input` 이 없으니 `targetX` 가 늘 0 이고,
+        /// 그건 **한가운데로 직진**하는 판이다. 그러니까 지금까지 본 것은 *게임* 이 아니라
+        /// **게임의 한 단면**이었다.
+        ///
+        /// 여기서는 손가락을 넣는다 (`LevelRunner.TargetX`). 고르는 규칙은 단순하다:
+        /// **앞의 게이트에서 더 많이 주는 쪽으로 간다** — `Sim.Apply` 로 두 선택지를 실제로
+        /// 계산해서 고르므로, *"큰 수가 좋다"* 같은 짐작이 안 들어간다.
+        ///
+        /// 그리고 **여러 장을 찍는다.** 한 장으로는 *시작은 괜찮은데 중간이 어떤지* 를 모른다 —
+        /// 오늘 그걸로 두 번 틀렸다(중반만 찍어서 시작이 빈 것을 몰랐고, 군중 사진만 찍어서
+        /// 사람에게 팔다리가 없는 것을 몰랐다).
+        /// </summary>
+        [UnityTest, Timeout(600000)]
+        public IEnumerator Plays_A_Level_And_Films_It()
+        {
+            var lv = LevelCatalog.Find("1-1");
+            Assert.IsNotNull(lv, "1-1 을 목록에서 못 찾았다");
+            flow.StartLevel(lv);
+            yield return null;
+            yield return null;
+
+            var runner = GameBoot.Runner;
+            Assert.IsNotNull(runner.Sim, "1-1 을 못 띄웠다 — " + runner.Error);
+            Directory.CreateDirectory(Dir + "/play");
+
+            float prev = Time.timeScale;
+            Time.timeScale = 30f;
+            int shot = 0, frame = 0;
+            float nextShotZ = 0f;
+            const float ShotEvery = 9f;      // m — 110 m 짜리 판에서 열두 장쯤
+
+            while (frame++ < 30000 && runner.Sim != null
+                   && runner.Sim.State != SimState.Won && runner.Sim.State != SimState.Lost)
+            {
+                runner.TargetX = PickLane(runner);
+
+                if (runner.Sim.Z >= nextShotZ && shot < 14)
+                {
+                    Time.timeScale = 1f;      // 찍는 동안은 멈춰 세운다 — 흐린 프레임을 안 남긴다
+                    yield return null;
+                    var s = runner.Sim;
+                    ShotWorld($"play/{shot:00}", runner);
+                    Debug.Log($"[CR-TEST] 플레이 {shot:00}: z {s.Z:F0}m · 병력 {s.Units} · " +
+                              $"x {s.X:+0.0;-0.0} · {s.State}");
+                    shot++;
+                    nextShotZ += ShotEvery;
+                    Time.timeScale = 30f;
+                }
+                yield return null;
+            }
+            Time.timeScale = prev;
+
+            var fin = runner.Sim;
+            Debug.Log($"[CR-TEST] 플레이 끝: {fin.State} · 남은 병력 {fin.Units} · " +
+                      $"{frame} 프레임 · 사진 {shot} 장");
+            Assert.AreNotEqual(SimState.Running, fin.State, "판이 안 끝났다 — 30,000 프레임을 돌고도");
+        }
+
+        /// <summary>
+        /// **앞의 게이트에서 더 많이 주는 쪽.** `Sim.Apply` 로 둘을 실제로 계산해서 고른다 —
+        /// *"큰 수가 좋다"* 는 이 게임에서 틀린 규칙이다(`+10` 과 `×3` 중 무엇이 큰지는 지금
+        /// 병력에 달렸다). 게이트가 없으면 가운데로 돌아온다.
+        /// </summary>
+        static float PickLane(LevelRunner runner)
+        {
+            var sim = runner.Sim;
+            var lv = runner.Level;
+            float best = 0f, bestZ = float.MaxValue;
+            foreach (var e in lv.events)
+            {
+                if (e.kind != EventKind.Gate || e.z < sim.Z - 1f || e.z > bestZ) continue;
+                bestZ = e.z;
+                float top = float.MinValue;
+                foreach (var o in e.options)
+                {
+                    float after = Sim.Apply(sim.Units, o.op, o.value);
+                    if (after <= top) continue;
+                    top = after;
+                    best = o.lane * lv.roadWidth * 0.35f;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
         /// **시작하는 순간을 찍는다** — 오너가 보는 첫 화면.
         ///
         /// 지금까지 게임 화면을 **군단이 67 명일 때** 찍었다. 그 그림은 길이 꽉 차서

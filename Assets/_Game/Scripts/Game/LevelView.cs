@@ -32,7 +32,7 @@ namespace CrowdRunner.View
         LevelRunner runner;
         CrowdField allies, foes;
         VatCrowd allyView, foeView;
-        Transform road, wall, divider, ground, curbL, curbR;
+        Transform road, wall, divider, ground, curbL, curbR, wallL, wallR;
         Transform[] gates = new Transform[0];
         /// <summary>게이트 네모마다의 **z 와 차선** — 지났을 때 *어느 것이 고른 것인지* 를
         /// 찾으려면 필요하다. `Transform.position` 에서 되읽지 않는 이유: 연출이 그 위치를
@@ -123,6 +123,15 @@ namespace CrowdRunner.View
             // 밝아서 길의 폭이 한눈에 읽힌다 — 폭이 좁아지는 구간이 눈에 걸려야 한다
             curbL = Box("Curb", new Color(0.92f, 0.90f, 0.84f));
             curbR = Box("Curb", new Color(0.92f, 0.90f, 0.84f));
+
+            // **벽으로 닫는다** (`docs/REF_TOPWAR.md` §2③). 들판 가운데 열린 길은 *어디로
+            // 가야 하는지* 는 말하지만 **갇혀 있다** 는 말을 못 한다. 벽이 서면 좌우가 끝이라는
+            // 것이 모양으로 읽히고, 군중이 벽에 닿는 것이 *꽉 찼다* 를 만든다 — 참고한 광고에서
+            // 군중이 **벽에서 벽까지** 차 있는 것이 그 장르의 핵심 그림이다.
+            //
+            // 길보다 **밝게** 둔다: 어두우면 화면 양끝이 검은 띠가 되어 세로 화면이 더 좁아 보인다
+            wallL = Box("Wall", new Color(0.62f, 0.60f, 0.58f));
+            wallR = Box("Wall", new Color(0.62f, 0.60f, 0.58f));
         }
 
         /// <summary>`LevelRunner` 가 레벨을 띄운 뒤 부른다 — 게이트·지역·벽을 레벨대로 세운다</summary>
@@ -188,6 +197,13 @@ namespace CrowdRunner.View
             curbR.localScale = curbL.localScale;
             curbL.position = new Vector3(-half, 0.12f, sim.Z + 36f);
             curbR.position = new Vector3(+half, 0.12f, sim.Z + 36f);
+
+            // 벽은 연석 **바깥**에 선다. 높이 2.6 m 는 사람(1.86)보다 높아 *넘을 수 없다* 로
+            // 읽히고, 카메라가 10 m 높이라 복도 안이 다 보인다 — 더 높이면 길을 가린다
+            wallL.localScale = new Vector3(0.6f, 2.6f, 190f);
+            wallR.localScale = wallL.localScale;
+            wallL.position = new Vector3(-half - 0.45f, 1.3f, sim.Z + 36f);
+            wallR.position = new Vector3(+half + 0.45f, 1.3f, sim.Z + 36f);
 
             Formation(allies, sim.Units, sim.X, sim.Z, w, 0);
             allyView.Sync(allies); allyView.Draw();
@@ -410,7 +426,14 @@ namespace CrowdRunner.View
             // 중심을 옮긴다 — 개체마다의 흩어짐은 `CrowdField` 가 만든 것을 그대로 쓴다
             for (int i = 0; i < f.Count; i++)
             {
-                f.X[i] = cx + f.SideTarget[i];
+                // **길 안에 가둔다.** 시뮬의 `X` 는 군단의 **중심**이고 ±길폭/2 까지 간다.
+                // 대형은 거기서 또 퍼지므로 가장자리 사람은 길 밖으로 나간다 — 벽을 세우기
+                // 전에는 안 보였고(풀밭 위를 걸을 뿐이었다), 벽을 세우니 **벽을 뚫고 지나갔다**.
+                //
+                // 시뮬은 안 고친다: 규칙상 중심이 ±길폭/2 인 것이 맞다. **보이는 몸만** 길 안으로
+                // 당긴다 — 표현이 규칙보다 넓게 말하지 않게 하는 쪽이다
+                float lim = w * 0.5f - 0.35f;
+                f.X[i] = Mathf.Clamp(cx + f.SideTarget[i], -lim, lim);
                 // **떼는 깊이가 있어야 떼다.** 3.2 m 로는 한 줄로 서 있고, 그러면 42 명이
                 // 42 명으로 안 읽힌다 (앞줄만 보인다). 뒤로 늘리면 수가 눈에 쌓인다
                 f.Z[i] = cz + (f.Phase[i] - 0.5f) * depth + (f.SpeedMul[i] - 1f) * depth * 2.1f;
