@@ -18,6 +18,12 @@ rating 7 26 48
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
+
+
 gates 45..105 every 30 | L add 25 | R add 7
 enemies 62..146 every 42 count 16
 

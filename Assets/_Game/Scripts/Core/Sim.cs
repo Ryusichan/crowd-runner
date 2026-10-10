@@ -51,6 +51,13 @@ namespace CrowdRunner.Core
         /// </summary>
         public float BlockingZ { get; private set; }
 
+        /// <summary>
+        /// 지금 막고 있는 것이 **최종 방어선**인가. 그리는 쪽이 보스를 다르게 그릴 때 쓴다
+        /// (`docs/REF_TOPWAR.md` — 장르의 끝은 보스와 성이다). 없으면 표현 쪽이
+        /// `level.events[BlockingIndex].isFinal` 로 레벨 데이터를 뒤져야 한다.
+        /// </summary>
+        public bool BlockingIsFinal { get; private set; }
+
         public float BlockingEnemies => blockingEnemies;
         public float BlockingWallHp => blockingWallHp;
 
@@ -279,12 +286,12 @@ namespace CrowdRunner.Core
                     break;
                 }
                 case EventKind.Enemy:
-                    BlockingIndex = i; BlockingZ = e.z;
+                    BlockingIndex = i; BlockingZ = e.z; BlockingIsFinal = e.isFinal;
                     blockingEnemies = e.enemyCount;
                     State = SimState.Fighting; Last.fightBegan = true;
                     break;
                 case EventKind.Wall:
-                    BlockingIndex = i; BlockingZ = e.z;
+                    BlockingIndex = i; BlockingZ = e.z; BlockingIsFinal = false;
                     blockingWallHp = e.wallHp;
                     State = SimState.Breaking; Last.wallBegan = true;
                     break;

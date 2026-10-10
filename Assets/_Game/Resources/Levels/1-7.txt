@@ -13,14 +13,23 @@ road 7
 length 255
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
-rating 10 14 19
+rating 21 30 40
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
-gates 45..105 every 30 | R add 40 | L add 15
-zone 120 dps 0.35 len 70
-enemies 125..185 every 60 count 31
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
-enemy 240 count 95 final
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
+
+
+# ⚠ **빨간 게이트.** 이 장르의 긴장은 *한쪽이 실제로 손해* 라는 데서 온다
+# (`docs/REF_TOPWAR.md` — "Avoid red gates that shrink your army"). 둘 다 더하기면
+# 나쁜 쪽도 **덜 좋을 뿐**이라 틀려도 안 아프다. 이제 잘못 고르면 **줄어든다**.
+gates 45..105 every 30 | R add 40 | L sub 8
+zone 120 dps 0.35 len 70
+enemies 125..185 every 60 count 22
+
+enemy 240 count 68 final
