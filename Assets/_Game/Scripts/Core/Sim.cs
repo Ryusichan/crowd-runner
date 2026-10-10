@@ -17,6 +17,9 @@ namespace CrowdRunner.Core
     public class Sim
     {
         public const float FixedStep = 1f / 60f;
+
+        /// <summary>교전 중에도 전진하는 비율. 0 이면 멈춤, 1 이면 적을 지나쳐 버린다</summary>
+        public const float PushThrough = 0.2f;
         /// <summary>논리 병력 상한 (기획서 §3.3). 넘기면 수가 커지는 쾌감 대신 숫자만 늘어난다</summary>
         public const int MaxUnits = 2000;
 
@@ -140,7 +143,25 @@ namespace CrowdRunner.Core
             }
             if (zones.Count > 0) { TickZones(dt); if (State == SimState.Lost) return; }
 
-            if (BlockingIndex >= 0) { TickBlocking(dt); return; }
+            if (BlockingIndex >= 0)
+            {
+                // **싸우면서도 민다.** 전에는 교전 중 전진이 **완전히 멈췄다.** 그러면 무리가
+                // 커질수록 멈춰 서는 시간이 길어지고(35 명이면 2.8 초, 최종 방어선은 4~10 초),
+                // 화면은 *막아내는 것*이 아니라 **멈춰 있는 것**으로 읽힌다. 오너가 준 광고는
+                // 군단이 **밀고 지나간다** (`docs/REF_TOPWAR.md`).
+                //
+                // 느리게(20 %) 가는 이유: 0 이면 멈춤이고, 100 % 면 적을 지나쳐 버린다.
+                // 20 % 면 3 초짜리 교전에서 2.7 m 를 민다 — 무리 간격(15 m 이상)보다 훨씬
+                // 작으므로 **다음 무리를 앞당겨 불러오지 않는다.**
+                //
+                // ⚠ 그리고 여기서 `return` 하므로 **사건은 여전히 안 터진다.** 미는 동안
+                // 지나친 사건은 교전이 끝난 뒤 순서대로 처리된다 — 전진은 하되 *건너뛰지는
+                // 않는다*. 이 둘이 같이 가야 레벨 글이 뜻을 지킨다.
+                Z += level.forwardSpeed * PushThrough * dt;
+                BlockingZ = Z + 2f;     // 맞붙은 자리가 군단 바로 앞으로 따라온다
+                TickBlocking(dt);
+                return;
+            }
 
             Z += level.forwardSpeed * dt;
 

@@ -289,16 +289,26 @@ namespace CrowdRunner.Tools
 
             // 다음 게이트를 **미리 보고** 그쪽으로 붙어 선다 — 사람도 게이트를 읽고 미리 옮긴다
             int maxDelta = 0;
+            // ⚠ **앞에 게이트가 없어도 손을 놓지 않는다.**
+            //
+            // 전에는 `NextGate` 가 없으면 `lane = 0`(가운데)으로 뒀다. 그런데 교전 중에도
+            // 전진하게 바꾼 뒤(`Sim.PushThrough`), 적 바로 뒤에 선 게이트를 **싸우면서
+            // 지나치는** 일이 생긴다. 그 순간 "다음 게이트 없음" 이 되어 드라이버가 손을
+            // 놓고 가운데로 흐르고, 그러면 그 게이트가 **반대쪽으로** 걸린다.
+            //
+            // 1-1 에서 적이 104 m, 게이트가 105 m 라 정확히 그랬다 — 최선 경로가 61 → 43 으로
+            // 떨어졌고, 그 18 은 `+25` 와 `+7` 의 차였다. **게임이 아니라 재는 쪽이 틀렸다.**
+            // 사람은 왼쪽에 붙어 있으면 계속 왼쪽에 있다. 드라이버도 그래야 한다.
+            int held = -1;
             for (int step = 0; step < 60 * 600 && sim.State != SimState.Won && sim.State != SimState.Lost; step++)
             {
-                int lane = 0;
                 int idx = NextGate(level, sim.Z);
                 if (idx >= 0)
                 {
                     int bit = CountGatesBefore(level, idx);
-                    lane = ((mask >> bit) & 1) == 0 ? -1 : +1;
+                    held = ((mask >> bit) & 1) == 0 ? -1 : +1;
                 }
-                sim.Step(lane * half * 0.5f);
+                sim.Step(held * half * 0.5f);
 
                 // **게이트가 띄우는 실제 증감.** 화면은 `×3` 아래에 `+28` 을 같이 띄우는데
                 // (세션 B, `View/GatePassFx`), 그 글자 길이가 게이트 네모의 폭 상한을 정한다.
