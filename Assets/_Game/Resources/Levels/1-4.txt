@@ -1,21 +1,21 @@
-# 1-4 — 증식한 뒤 장애물을 깬다 (기획서 §6.2: "방어벽")
+# 탑워 광고 구조 (`docs/REF_TOPWAR.md`): 게이트가 복도를 따라 줄지어 선다.
+# 고르는 순간이 아니라 **머무는 시간**이 보상을 정한다.
 #
-# 벽은 **병력을 안 깎는다. 시간을 먹는다** — 많을수록 빨리 지난다 (기획서 §5).
-# 그래서 여기서 처음으로 *"지금 더 받는 것"* 이 **속도**로 돌아온다.
-# 오른쪽은 적게 받지만 벽이 얇고, 왼쪽은 많이 받지만 두껍다.
+# ⚠ **좋은 쪽은 판마다 다르다.** 전부 L 로 두면 왼쪽에 붙어 있는 것만으로 챕터가 깨진다
+# (어제 고친 결함 — `DESIGN.md` §3f). 검증기의 장 단위 판정이 그것을 본다.
 chapter 1
 index 4
 name Yongdusan Park
 teaches 바리케이드는 병력이 많을수록 빨리 부순다
-units 14
+units 30
 road 7
-length 170
+length 215
 
-# ☣ 기준: tools/sim 이 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
-rating 5 8 11
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
+rating 24 39 57
 
 
-gate 25 commit 110 | L mul 3 | R add 20
-wall 60 hp 1400 lane L
-wall 60 hp 500 lane R
-enemy 155 count 70 final
+gates 45..105 every 30 | R add 28 | L add 6
+wall 135 hp 2000
+
+enemy 195 count 110 final

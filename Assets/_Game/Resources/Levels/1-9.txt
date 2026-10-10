@@ -1,23 +1,25 @@
-# 1-9 — 좁은 길에서 큰 군단 (기획서 §6.2: "좁은 경로")
+# 탑워 광고 구조 (`docs/REF_TOPWAR.md`): 게이트가 복도를 따라 줄지어 선다.
+# 고르는 순간이 아니라 **머무는 시간**이 보상을 정한다.
 #
-# 좁으면 **전선이 줄어 전투가 길어진다.** 좁은 것만으로는 손실이 안 늘지만(§3c)
-# 그 구간에 **지역이 깔려 있으면** 오래 있는 만큼 녹는다 — 좁음과 지역의 곱이 이 판이다.
-# 큰 군단이 처음으로 **불리해지는** 자리다.
+# ⚠ **줄 게이트에 `commit` 을 걸면 줄이 한 번의 선택으로 접힌다.** 첫 게이트에서 묶이면
+# 나머지가 전부 같은 쪽으로 걸려서, 줄로 세워 놓고 고르는 것은 하나가 된다. 그러면
+# 화면이 규칙보다 넓게 말하는 것이다 — 차선 지정 위험물은 줄 게이트와 같이 쓰지 않는다.
 chapter 1
 index 9
 name Busan Station Line
-teaches 좁은 길에서는 앞줄만 싸운다
-units 30
-road 8
-length 240
+teaches 좁은 길에서는 앞줄만 싸운다 — 큰 군단도 네 명씩만 붙는다
+units 50
+road 9
+length 258
 
-# ☣ 기준: tools/sim 이 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
-rating 22 35 49
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다 (1-1.txt 설명 참고)
+rating 27 45 66
 
 
-gate 25 commit 150 | L add 40 | R mul 3
-narrow 60 width 2.7 len 70 lane R
-zone 60 dps 1.1 len 70 lane R
-enemy 100 count 45 lane L
-gate 160 | L add 60 | R mul 2
-enemy 230 count 130 final
+gates 45..105 every 30 | L add 46 | R add 20
+
+# 좁은 구간 **안에서** 싸운다. 좁은 길 자체는 아무것도 안 한다 — 거기서 전투가 나야 뜻이 생긴다
+narrow 140 width 3.6 len 80
+enemy 172 count 110
+
+enemy 245 count 150 final
