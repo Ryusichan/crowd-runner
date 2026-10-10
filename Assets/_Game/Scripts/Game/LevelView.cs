@@ -446,14 +446,42 @@ namespace CrowdRunner.View
         void AddCluster(CrowdField f, int n, float cx, float cz, float w, byte side)
         {
             int from = f.Count;
-            float spread = Mathf.Min(w * 0.92f, 1.15f * Mathf.Sqrt(Mathf.Max(1, n)));
-            f.Add(n, side, 0f, spread);
-            float depth = Mathf.Min(8.5f, 0.95f * Mathf.Sqrt(Mathf.Max(1, n)));
+            f.Add(n, side, 0f, 1f);
+            Disc(f, from, f.Count, cx, cz, w);
+        }
+
+        /// <summary>
+        /// **빽빽한 원**으로 세운다 (오너 2026-10-10: *"인물들 최대한 모아줘야해 · 둥그런
+        /// 현상이되게"*).
+        ///
+        /// 전에는 폭 안에 **무작위로** 뿌렸다. 그러면 가장자리가 들쭉날쭉한 **네모 얼룩**이
+        /// 되고, 같은 인원이라도 **덜 많아 보인다** — 빈 자리가 사이사이에 생기기 때문이다.
+        /// 이 장르의 군중이 둥근 덩어리인 데는 이유가 있다: **원이 같은 면적에 가장 짧은
+        /// 둘레**를 가져서, 같은 수가 가장 꽉 차 보인다.
+        ///
+        /// 황금각(137.5°) 나선으로 놓는다 — 해바라기 씨앗이 그렇게 박히는 방식이고,
+        /// **격자가 아니면서도 빈 자리가 안 생긴다.** 격자로 놓으면 줄이 보여 군대 사열이 된다.
+        ///
+        /// 반지름은 `sqrt(n)` 에 비례한다(사람이 면적을 차지하므로). 한 사람당 0.42 m² 는
+        /// 어깨가 거의 닿는 밀도다 — *"최대한 모아줘"* 의 수치다.
+        /// </summary>
+        void Disc(CrowdField f, int from, int to, float cx, float cz, float w)
+        {
+            int n = Mathf.Max(1, to - from);
+            const float PerPerson = 0.42f;                    // m² — 어깨가 거의 닿는다
+            float r = Mathf.Sqrt(n * PerPerson / Mathf.PI);
             float lim = w * 0.5f - 0.35f;
-            for (int i = from; i < f.Count; i++)
+            const float Golden = 2.39996323f;                 // 라디안 — 황금각
+            for (int i = from; i < to; i++)
             {
-                f.X[i] = Mathf.Clamp(cx + f.SideTarget[i], -lim, lim);
-                f.Z[i] = cz + (f.Phase[i] - 0.5f) * depth;
+                int k = i - from;
+                // `sqrt` 를 쓰면 **바깥쪽이 안 성기다** — 그냥 k/n 으로 하면 가운데만 빽빽하다
+                float rad = r * Mathf.Sqrt((k + 0.5f) / n);
+                float a = k * Golden;
+                // 아주 약한 흔들림만 — 없으면 나선이 눈에 보이고, 크면 다시 얼룩이 된다
+                float j = (f.Phase[i] - 0.5f) * 0.18f;
+                f.X[i] = Mathf.Clamp(cx + Mathf.Cos(a) * rad + j, -lim, lim);
+                f.Z[i] = cz + Mathf.Sin(a) * rad + (f.SpeedMul[i] - 1f) * 0.9f;
                 f.Phase[i] += Time.deltaTime * 1.4f;
                 if (f.Phase[i] >= 1f) f.Phase[i] -= 1f;
             }
@@ -469,31 +497,16 @@ namespace CrowdRunner.View
             // `sqrt(n)` 에 비례시키는 이유: 사람이 **면적**을 차지하므로 폭은 수의 제곱근으로
             // 자란다. 10 명 → 3.6 m · 40 명 → 7.2 m(길 폭에서 잘림) 으로, 적을 때 뭉치고
             // 많을 때 길을 꽉 채운다
-            float spread = Mathf.Min(w * 0.92f, 1.15f * Mathf.Sqrt(Mathf.Max(1, n)));
-            if (f.Count != n || Mathf.Abs(spreadNow - spread) > 0.25f)
+            if (f.Count != n)
             {
                 f.Clear();
-                f.Add(n, side, 0f, spread);
-                spreadNow = spread;
+                f.Add(n, side, 0f, 1f);
             }
-            float depth = Mathf.Min(8.5f, 0.95f * Mathf.Sqrt(Mathf.Max(1, n)));
-            // 중심을 옮긴다 — 개체마다의 흩어짐은 `CrowdField` 가 만든 것을 그대로 쓴다
-            for (int i = 0; i < f.Count; i++)
-            {
-                // **길 안에 가둔다.** 시뮬의 `X` 는 군단의 **중심**이고 ±길폭/2 까지 간다.
-                // 대형은 거기서 또 퍼지므로 가장자리 사람은 길 밖으로 나간다 — 벽을 세우기
-                // 전에는 안 보였고(풀밭 위를 걸을 뿐이었다), 벽을 세우니 **벽을 뚫고 지나갔다**.
-                //
-                // 시뮬은 안 고친다: 규칙상 중심이 ±길폭/2 인 것이 맞다. **보이는 몸만** 길 안으로
-                // 당긴다 — 표현이 규칙보다 넓게 말하지 않게 하는 쪽이다
-                float lim = w * 0.5f - 0.35f;
-                f.X[i] = Mathf.Clamp(cx + f.SideTarget[i], -lim, lim);
-                // **떼는 깊이가 있어야 떼다.** 3.2 m 로는 한 줄로 서 있고, 그러면 42 명이
-                // 42 명으로 안 읽힌다 (앞줄만 보인다). 뒤로 늘리면 수가 눈에 쌓인다
-                f.Z[i] = cz + (f.Phase[i] - 0.5f) * depth + (f.SpeedMul[i] - 1f) * depth * 2.1f;
-                f.Phase[i] += Time.deltaTime * 1.4f;
-                if (f.Phase[i] >= 1f) f.Phase[i] -= 1f;
-            }
+            // **빽빽한 원.** 길 안으로 가두는 것은 `Disc` 가 한다 — 시뮬의 `X` 는 군단의
+            // **중심**이고 ±길폭/2 까지 가는데, 대형이 거기서 또 퍼지면 가장자리 사람이
+            // 벽을 뚫는다. 시뮬은 안 고친다(규칙상 중심이 ±길폭/2 인 것이 맞다) —
+            // **보이는 몸만** 당긴다
+            Disc(f, 0, f.Count, cx, cz, w);
         }
 
         Transform Gate(float z, GateOption o)
