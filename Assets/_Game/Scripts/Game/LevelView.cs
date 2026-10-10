@@ -164,6 +164,8 @@ namespace CrowdRunner.View
                     wallHp0 = e.wallHp;
                 }
             }
+            Goal(level, z);
+
             gates = g.ToArray();
             gateZ = gz.ToArray();
             gateLane = gl.ToArray();
@@ -606,6 +608,45 @@ namespace CrowdRunner.View
             t.localScale = new Vector3(zw, 0.06f, e.zoneLength);
             t.position = new Vector3(zx, 0.01f, e.z + e.zoneLength * 0.5f);
             return t;
+        }
+
+        /// <summary>
+        /// **끝이 보여야 달릴 이유가 있다.**
+        ///
+        /// 이 장르는 *"가능한 많은 병력을 결승선까지 데려가, 끝에서 보스와 붙는다"* 가 한 판의
+        /// 모양이다 (`docs/REF_TOPWAR.md` §4 — 인터넷에서 확인한 장르 규칙). 그런데 우리 복도는
+        /// **그냥 끝났다**: 목표가 화면에 없으니 달리는 것이 *어디로* 가 아니라 *그냥 앞으로* 였다.
+        ///
+        /// 문 모양으로 세우는 이유: 게이트와 같은 어휘다. 플레이어는 이미 *문은 지나가는 것*
+        /// 으로 배웠으니, 끝의 큰 문은 **"저기까지 가면 된다"** 로 바로 읽힌다.
+        ///
+        /// 색은 게이트 어느 쪽과도 안 겹치게 금색으로 둔다 — 파랑(+)·초록(×)·빨강(−÷)은
+        /// 이미 뜻이 있다.
+        /// </summary>
+        void Goal(LevelData level, System.Collections.Generic.List<Transform> into)
+        {
+            float w = level.roadWidth;
+            var gold = new Color(0.92f, 0.76f, 0.30f);
+            float z = level.length;
+
+            // 기둥 둘 + 가로대 — 멀리서 **문 하나**로 읽힌다
+            for (int i = 0; i < 2; i++)
+            {
+                var post = Box("Goal", gold);
+                post.localScale = new Vector3(0.55f, 4.2f, 0.55f);
+                post.position = new Vector3((i == 0 ? -1f : 1f) * (w * 0.5f - 0.28f), 2.1f, z);
+                into.Add(post);
+            }
+            var bar = Box("Goal", gold);
+            bar.localScale = new Vector3(w, 0.9f, 0.55f);
+            bar.position = new Vector3(0f, 4.2f, z);
+            into.Add(bar);
+
+            // 바닥의 결승선 — 가로대만으로는 **어디서 끝나는지**가 땅에 안 적힌다
+            var line = Box("Goal", new Color(0.96f, 0.93f, 0.82f));
+            line.localScale = new Vector3(w, 0.06f, 0.9f);
+            line.position = new Vector3(0f, 0.02f, z);
+            into.Add(line);
         }
 
         /// <summary>
