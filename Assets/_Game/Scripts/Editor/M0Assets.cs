@@ -187,10 +187,13 @@ namespace CrowdRunner.EditorTools
                 // 몸통 — 골반에서 목까지. 어깨에서 가장 넓다
                 Part(verts, weights, tris, R(12), R(5), rest[0], rest[3],
                      new[] { 0, 0, 1, 2, 3 }, new[] { 0.17f, 0.145f, 0.165f, 0.205f, 0.105f });
-                // 머리 — 목 위의 공
-                Part(verts, weights, tris, R(12), R(4), rest[4] + new Vector3(0f, -0.06f, 0f),
-                     rest[4] + new Vector3(0f, 0.20f, 0f),
-                     new[] { 4, 4, 4, 4 }, new[] { 0.085f, 0.125f, 0.125f, 0.05f });
+                // 머리 — **목에서 시작한다.** 전에는 `rest[4] - 0.06`(y 1.62)부터 그려서
+                // 몸통 끝(목, y 1.54)과 **8 cm 가 비었고**, 확대하면 머리 아래로 뒤 나무가
+                // 그대로 비쳤다. 목에서 시작하고 첫 층을 가늘게 두면 목이 생긴다 —
+                // 정점을 더 쓰지 않고 틈만 메운다
+                Part(verts, weights, tris, R(10), R(5), rest[3] + new Vector3(0f, -0.02f, 0f),
+                     rest[4] + new Vector3(0f, 0.17f, 0f),
+                     new[] { 3, 4, 4, 4, 4 }, new[] { 0.085f, 0.075f, 0.125f, 0.125f, 0.05f });
                 // 다리 둘 — 엉덩이에서 발까지
                 for (int sgn = 0; sgn < 2; sgn++)
                 {
@@ -202,8 +205,11 @@ namespace CrowdRunner.EditorTools
                 for (int sgn = 0; sgn < 2; sgn++)
                 {
                     int sh = sgn == 0 ? 11 : 14;
-                    Part(verts, weights, tris, R(6), R(4), rest[sh], rest[sh + 2] + new Vector3(0f, -0.04f, 0f),
-                         new[] { sh, sh, sh + 1, sh + 2 }, new[] { 0.075f, 0.065f, 0.055f, 0.05f });
+                    // **고리를 늘리고 두껍게.** 6 각 · 반지름 0.075 는 확대하면 **널빤지**로
+                    // 읽혔다 — 면이 적으면 옆에서 볼 때 평평한 판 두 장이 된다. 8 각이면
+                    // 둥글게 보이고, 그만큼 머리 고리를 12 → 10 으로 줄여 예산 안에 둔다
+                    Part(verts, weights, tris, R(8), R(4), rest[sh], rest[sh + 2] + new Vector3(0f, -0.04f, 0f),
+                         new[] { sh, sh, sh + 1, sh + 2 }, new[] { 0.085f, 0.075f, 0.065f, 0.055f });
                 }
 
                 if (verts.Count <= want) break;
