@@ -77,9 +77,27 @@ namespace CrowdRunner.Tools
             foreach (var e in level.events) if (e.kind == EventKind.Gate) gates++;
             Console.WriteLine($"## {level.Code} · 시작 {level.initialUnits} · 길이 {level.length} m · 게이트 {gates} · 경로 {1 << gates} 가지");
 
+            // ⚠ **경로는 2ⁿ 이다.** 줄 게이트(`gates ..`)가 들어오면서 n 이 쉽게 커진다 —
+            // 10 개면 1,024 가지, 14 개면 16,384 가지이고 각 가지가 최대 36,000 틱이다.
+            // 그대로 두면 검증기가 **조용히 몇 분씩** 걸리고, 그러면 사람이 안 돌린다.
+            //
+            // 그래서 많아지면 **대표 전략만** 돌리고 **그 사실을 찍는다.** 전부 본 것과
+            // 몇 개만 본 것이 같은 글자로 나오면 안 된다 (오늘 여러 번 나온 그 자리).
+            const int FullUpTo = 10;
             var results = new List<(string path, Run r)>();
-            for (int mask = 0; mask < (1 << gates); mask++)
-                results.Add((PathName(mask, gates), RunOne(level, mask)));
+            if (gates <= FullUpTo)
+            {
+                for (int mask = 0; mask < (1 << gates); mask++)
+                    results.Add((PathName(mask, gates), RunOne(level, mask)));
+            }
+            else
+            {
+                int all = (1 << gates) - 1, alt = 0, anti = 0;
+                for (int i = 0; i < gates; i++) { if (i % 2 == 1) alt |= 1 << i; else anti |= 1 << i; }
+                foreach (var (m, nm) in new[] { (0, "왼쪽 고정"), (all, "오른쪽 고정"), (alt, "번갈아"), (anti, "번갈아(반대)") })
+                    results.Add((nm, RunOne(level, m)));
+                Console.WriteLine($"   ⚠ 게이트가 {gates} 개라 경로 {1 << gates} 가지를 다 안 돌렸다 — **대표 4 가지만** 봤다");
+            }
 
             Console.WriteLine("| 경로 | 결과 | ☣ | 잔여 | 최대 | 전투 | 지역 | 처치 | k | 시간 |");
             Console.WriteLine("|---|---|---|---|---|---|---|---|---|---|");

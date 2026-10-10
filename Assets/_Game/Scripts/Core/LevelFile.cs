@@ -59,9 +59,31 @@ namespace CrowdRunner.Core
                 if (why != null) { error = (n + 1) + "줄: " + why + "  ← \"" + lines[n].Trim() + "\""; return null; }
             }
 
+            // **읽고 나서 z 로 세운다.** `gates` 가 줄을 펼치므로 두 줄을 번갈아 깔면
+            // (왼쪽이 좋은 게이트와 오른쪽이 좋은 게이트를 엇갈리게) 적은 순서와 z 순서가
+            // 달라진다. `Validate` 와 `Sim` 둘 다 z 오름차순을 전제하므로 여기서 맞춘다.
+            // **안정 정렬**이라 같은 z 의 사건은 적은 순서를 지킨다 — 그 순서가 뜻을 가질 수 있다
+            // (벽 먼저, 그다음 지역 같은).
+            l.events = StableByZ(l.events);
+
             string bad = l.Validate();
             if (bad != null) { error = bad; return null; }
             return l;
+        }
+
+        /// <summary>z 오름차순으로 **안정** 정렬. 같은 z 는 적은 순서를 지킨다</summary>
+        static List<LevelEvent> StableByZ(List<LevelEvent> src)
+        {
+            var idx = new List<int>();
+            for (int i = 0; i < src.Count; i++) idx.Add(i);
+            idx.Sort((a, b) =>
+            {
+                int c = src[a].z.CompareTo(src[b].z);
+                return c != 0 ? c : a.CompareTo(b);
+            });
+            var outp = new List<LevelEvent>(src.Count);
+            foreach (var i in idx) outp.Add(src[i]);
+            return outp;
         }
 
         static string ParseLine(LevelData l, string line)
@@ -117,6 +139,51 @@ namespace CrowdRunner.Core
                         opts.Add(new GateOption(lane, op, val));
                     }
                     l.events.Add(LevelEvent.Gate(z, commit, opts.ToArray()));
+                    return null;
+                }
+
+                case "gates":
+                {
+                    // **줄지어 선 게이트** — `gates 40..160 every 20 | L add 1 | R add 9`
+                    //
+                    // 탑워 광고의 핵심 구조다 (`docs/REF_TOPWAR.md` §2②): 한 지점에서 한 번
+                    // 고르는 것이 아니라, **복도를 달리는 내내 한쪽에 붙어 있으면 그쪽이 계속
+                    // 걸린다.** 그래서 *고르는 순간* 이 아니라 **머무는 시간**이 보상을 정한다.
+                    //
+                    // ⚠ **간판만 늘리지 않는다.** 여기서 **진짜 게이트 여러 개로 펼친다** —
+                    // 화면이 규칙보다 넓게 말하면 선택이 죽는다 (오늘 1-7 지역에서 고친 그것).
+                    // 펼친 뒤에는 `Sim` 도 검증기도 **평범한 게이트 여럿**으로 본다. 새 개념이
+                    // 들어가지 않는 것이 요점이다.
+                    if (bar.Length < 3) return "줄 게이트에 선택지가 " + (bar.Length - 1) + " 개다 — `| L add 1 | R add 9` 처럼 둘 이상";
+                    if (head.Count < 2) return "줄 게이트에 구간이 없다 — `gates 40..160 every 20`";
+                    var span = head[1].Split(new[] { ".." }, StringSplitOptions.None);
+                    float from, to, step;
+                    if (span.Length != 2 || !TryNum(span[0], out from) || !TryNum(span[1], out to))
+                        return "구간은 `처음..끝` 이다: " + head[1];
+                    int ei = head.IndexOf("every");
+                    if (ei < 0 || ei + 1 >= head.Count || !TryNum(head[ei + 1], out step))
+                        return "`every <간격>` 이 없다";
+                    if (step <= 0f) return "간격이 " + step + " 다 — 0 이하면 끝없이 펼쳐진다";
+                    if (to < from) return "구간이 거꾸로다 (" + from + ".." + to + ")";
+                    if ((to - from) / step > 200f) return "한 줄이 게이트 " + (int)((to - from) / step) + " 개로 펼쳐진다 — 200 개가 상한이다";
+
+                    float commitTo = 0f;
+                    int ci2 = head.IndexOf("commit");
+                    if (ci2 >= 0 && (ci2 + 1 >= head.Count || !TryNum(head[ci2 + 1], out commitTo)))
+                        return "`commit` 뒤에 합류 지점(z)이 없다";
+
+                    var opts2 = new List<GateOption>();
+                    for (int b = 1; b < bar.Length; b++)
+                    {
+                        var w = Words(bar[b]);
+                        if (w.Count < 3) return "선택지는 `<쪽> <연산> <값>` 이다: \"" + bar[b].Trim() + "\"";
+                        int lane2; if (!TryLane(w[0], out lane2) || lane2 == 0) return "선택지의 쪽은 L 이나 R 이다: " + w[0];
+                        GateOp op2; if (!TryOp(w[1], out op2)) return "연산은 add·mul·sub·div 다: " + w[1];
+                        int val2; if (!int.TryParse(w[2], out val2)) return "값이 숫자가 아니다: " + w[2];
+                        opts2.Add(new GateOption(lane2, op2, val2));
+                    }
+                    for (float z2 = from; z2 <= to + 0.001f; z2 += step)
+                        l.events.Add(LevelEvent.Gate(z2, commitTo, (GateOption[])opts2.ToArray().Clone()));
                     return null;
                 }
 
