@@ -119,6 +119,27 @@ namespace CrowdRunner.EditorTools
             mat.SetFloat("_Verts", n);
             mat.SetFloat("_ClipSpeed", 1f / Mathf.Max(0.1f, clip.length));
             AssetDatabase.CreateAsset(mat, Dir + "/standin_vat" + suffix + ".mat");
+
+            // **적은 머티리얼을 따로 쓴다.**
+            //
+            // 셰이더에 인스턴스별 `_Side`(0=아군 1=적)가 있고 `VatCrowd.Sync` 가 그 값을 넣는데,
+            // **화면에서는 안 먹는다** — 적 무리를 처음 그려 보고 화소로 재서 알았다:
+            // 앞의 무리 평균 RGB (47,74,83) · 내 군단 (52,82,96). 빨강이면 R 이 커야 하는데
+            // 둘 다 청록이다. `Graphics.RenderMeshInstanced` 의 구조체 경로에서 그 값이
+            // 셰이더까지 안 가는 것으로 보인다.
+            //
+            // 깊이 파는 대신 **돌아간다**: 색이 다른 머티리얼 하나를 더 굽는다. 이 게임에서
+            // *앞의 것이 적인가* 는 한눈에 읽혀야 하는 두 가지 중 하나라, **확실한 쪽**을 쓴다.
+            // 런타임에 `new Material` 로 만들지 않는 이유는 오늘 배웠다 — 빌드가 인스턴싱
+            // 변형을 안 남긴다 (`RoadMarks` 주석).
+            var foe = new Material(sh) { name = "standin_vat" + suffix + "_foe", enableInstancing = true };
+            if (foe.HasProperty("_Color")) foe.SetColor("_Color", new Color(0.90f, 0.36f, 0.33f));
+            foe.SetTexture("_Vat", tex);
+            foe.SetFloat("_Frames", Frames);
+            foe.SetFloat("_Verts", n);
+            foe.SetFloat("_ClipSpeed", 1f / Mathf.Max(0.1f, clip.length));
+            AssetDatabase.CreateAsset(foe, Dir + "/standin_vat" + suffix + "_foe.mat");
+
             AssetDatabase.SaveAssets();
 
             Debug.Log($"[M0] baked VAT{suffix}: verts={n} frames={Frames} tex={n}x{Frames} " +

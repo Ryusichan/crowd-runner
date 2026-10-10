@@ -63,7 +63,7 @@ namespace CrowdRunner.View
             allies = new CrowdField(Sim.MaxUnits, 20261009);
             foes = new CrowdField(Sim.MaxUnits, 77215);
             allyView = new VatCrowd("_lo");
-            foeView = new VatCrowd("_lo");
+            foeView = new VatCrowd("_lo", foe: true);
             allyView.Init(renderCap); foeView.Init(renderCap);
             allyView.SetActive(true); foeView.SetActive(true);
             fx = new CasualtyFx(); fx.Init();
@@ -208,10 +208,7 @@ namespace CrowdRunner.View
             Formation(allies, sim.Units, sim.X, sim.Z, w, 0);
             allyView.Sync(allies); allyView.Draw();
 
-            // 막고 있는 적 — 수는 `BlockingEnemies`, 자리는 `BlockingZ`. 둘 다 시뮬이 준다
-            int fn = Mathf.RoundToInt(sim.BlockingEnemies);
-            Formation(foes, fn, 0f, sim.BlockingZ, w, 1);
-            foeView.Sync(foes); foeView.Draw();
+            DrawFoes(sim, w);
 
             // **벽은 비율을 정직하게 따라가야 한다.** 세션 A 측정: 벽 HP 2400 과 3200 이 네 경로
             // 모두 **한 숫자도 안 달랐다** — 벽은 밸런스가 아니라 *"병력이 많으면 빨리 부순다"* 가
@@ -405,6 +402,63 @@ namespace CrowdRunner.View
         /// 보이고, 이 장르의 군중은 *몰려 달리는 떼*다. `CrowdField` 가 개체마다 다른 위상과
         /// 속도 배수를 들고 있으므로 줄이 저절로 흐트러진다.
         /// </summary>
+        /// <summary>
+        /// **앞에 있는 적을 미리 그린다.**
+        ///
+        /// 전에는 `BlockingEnemies` 로만 그렸다 — 그건 **몸이 닿는 순간에야 0 이 아니다.**
+        /// 그래서 플레이어는 빈 복도를 달리다가 적이 **갑자기 생기는** 것을 본다. 오너:
+        /// *"적도 없잖어."* 화면에 없었던 것이 맞다.
+        ///
+        /// 이 장르에서 앞의 적은 **긴장 그 자체**다 — 저 끝에 무엇이 얼마나 있는지가 보여야
+        /// *지금 더 모아야 하나* 를 묻게 된다. 안 보이면 게이트는 그냥 숫자 놀이다.
+        ///
+        /// 아직 안 닿은 무리는 **레벨이 적은 수 그대로** 그린다 (손대지 않았으니 그 수가 맞다).
+        /// 지금 막고 있는 무리만 `BlockingEnemies` 로 바꿔 그린다 — 그래야 **줄어드는 것이
+        /// 보인다**. 둘을 같은 식으로 그리면 싸우는데 수가 안 줄어 보인다.
+        /// </summary>
+        void DrawFoes(Sim sim, float w)
+        {
+            var lv = runner.Level;
+            foes.Clear();
+            if (lv == null) { foeView.Sync(foes); foeView.Draw(); return; }
+
+            int budget = renderCap;
+            foreach (var e in lv.events)
+            {
+                if (e.kind != EventKind.Enemy || budget <= 0) continue;
+                // 지나온 무리는 안 그린다. 막고 있는 무리는 `BlockingZ` 가 그 자리를 말한다
+                bool engaged = sim.BlockingEnemies > 0.5f && Mathf.Abs(e.z - sim.BlockingZ) < 2f;
+                if (!engaged && e.z < sim.Z - 1f) continue;
+                int n = engaged ? Mathf.RoundToInt(sim.BlockingEnemies) : e.enemyCount;
+                if (n <= 0) continue;
+                n = Mathf.Min(n, budget);
+                budget -= n;
+                AddCluster(foes, n, e.lane * w * 0.25f, e.z, w, 1);
+            }
+            foeView.Sync(foes); foeView.Draw();
+        }
+
+        /// <summary>
+        /// 한 무리를 **기존 무리 뒤에 덧붙인다** (`Formation` 은 매번 비우고 하나만 채운다).
+        /// 적은 여러 무리가 **동시에 화면에 있을 수 있어서** 필요한 것이다 — 그게 이 게임의
+        /// 원칙(*무수히 많은 적을 막아낸다*)이 화면에서 성립하는 조건이다.
+        /// </summary>
+        void AddCluster(CrowdField f, int n, float cx, float cz, float w, byte side)
+        {
+            int from = f.Count;
+            float spread = Mathf.Min(w * 0.92f, 1.15f * Mathf.Sqrt(Mathf.Max(1, n)));
+            f.Add(n, side, 0f, spread);
+            float depth = Mathf.Min(8.5f, 0.95f * Mathf.Sqrt(Mathf.Max(1, n)));
+            float lim = w * 0.5f - 0.35f;
+            for (int i = from; i < f.Count; i++)
+            {
+                f.X[i] = Mathf.Clamp(cx + f.SideTarget[i], -lim, lim);
+                f.Z[i] = cz + (f.Phase[i] - 0.5f) * depth;
+                f.Phase[i] += Time.deltaTime * 1.4f;
+                if (f.Phase[i] >= 1f) f.Phase[i] -= 1f;
+            }
+        }
+
         void Formation(CrowdField f, int n, float cx, float cz, float w, byte side)
         {
             n = Mathf.Min(n, renderCap);

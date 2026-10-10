@@ -293,7 +293,14 @@ namespace CrowdRunner.Tests
             MeasureDecisionTime(runner);
             float share = ShotWorld("game", runner);
             Debug.Log($"[CR-TEST] 게임 화면: 병력 {runner.Sim.Units} z {runner.Sim.Z:F0} · 그려진 화소 {share:F1}%");
-            Assert.Greater(runner.Sim.Units, lv.initialUnits, "게이트를 지나지 않았다 — 군단이 안 커졌다");
+            // **지금 수가 아니라 최고치를 본다.** 전에는 `Units > initialUnits` 였는데, 적이
+            // 끊임없이 오는 구조로 바뀐 뒤로는 **지나는 동안 계속 깎인다** — 찍는 시점에
+            // 초기값보다 적을 수 있고(20 → 45 → 27), 그건 게이트를 안 지난 것이 아니다.
+            //
+            // 게임이 아니라 **내 전제가 낡은 것**이었다: *"게이트를 지나면 는다"* 가
+            // *"지나면 한 번은 늘었다"* 로 약해졌고, `PeakUnits` 가 그 "한 번" 을 들고 있다
+            Assert.Greater(runner.Sim.PeakUnits, lv.initialUnits,
+                "게이트를 한 번도 안 지났다 — 최고 병력이 시작값을 못 넘었다");
             Assert.Greater(share, 3f, "게임 화면이 거의 비었다 — 군중이 안 그려지는지 보라");
         }
 
@@ -804,35 +811,55 @@ namespace CrowdRunner.Tests
         {
             var lv = LevelCatalog.Find("1-1");
             Assert.IsNotNull(lv, "1-1 을 목록에서 못 찾았다");
+            yield return Film("1-1");
+            yield return Film("1-8");     // "쉬는 구간이 없다" — 끊김이 제일 심하게 드러날 판
+            yield return Film("1-10");    // 최고 348 — 복도가 어떻게 차는지 볼 수 있는 유일한 판
+        }
+
+        /// <summary>
+        /// 한 판을 조작하며 끝까지 가고 **사진을 남긴다.**
+        ///
+        /// **거리로만 찍으면 안 된다.** 처음엔 9 m 마다 찍었는데, 교전 중에는 **전진이 멈춘다** —
+        /// 그래서 다음 촬영 지점에 영영 도달하지 않고 **싸우는 장면을 한 장도 못 찍었다.**
+        /// 하필 그게 이 게임에서 가장 중요한 순간이다 (오너: *"무수히 많은 적을 막아내는 게
+        /// 게임의 원칙"*). 그래서 **거리 또는 시간 중 먼저 오는 쪽**으로 찍는다.
+        /// </summary>
+        IEnumerator Film(string code)
+        {
+            var lv = LevelCatalog.Find(code);
+            Assert.IsNotNull(lv, code + " 을 목록에서 못 찾았다");
             flow.StartLevel(lv);
             yield return null;
             yield return null;
 
             var runner = GameBoot.Runner;
-            Assert.IsNotNull(runner.Sim, "1-1 을 못 띄웠다 — " + runner.Error);
-            Directory.CreateDirectory(Dir + "/play");
+            Assert.IsNotNull(runner.Sim, code + " 을 못 띄웠다 — " + runner.Error);
+            string dir = $"{Dir}/play/{code}";
+            Directory.CreateDirectory(dir);
 
             float prev = Time.timeScale;
             Time.timeScale = 30f;
-            int shot = 0, frame = 0;
+            int shot = 0, frame = 0, sinceShot = 0;
             float nextShotZ = 0f;
-            const float ShotEvery = 9f;      // m — 110 m 짜리 판에서 열두 장쯤
+            float every = Mathf.Max(6f, lv.length / 13f);
 
             while (frame++ < 30000 && runner.Sim != null
                    && runner.Sim.State != SimState.Won && runner.Sim.State != SimState.Lost)
             {
                 runner.TargetX = PickLane(runner);
+                sinceShot++;
 
-                if (runner.Sim.Z >= nextShotZ && shot < 14)
+                // 거리로 왔거나, **200 프레임째 제자리면** (= 막혀서 싸우는 중이면) 찍는다
+                if (shot < 16 && (runner.Sim.Z >= nextShotZ || sinceShot > 200))
                 {
                     Time.timeScale = 1f;      // 찍는 동안은 멈춰 세운다 — 흐린 프레임을 안 남긴다
                     yield return null;
                     var s = runner.Sim;
-                    ShotWorld($"play/{shot:00}", runner);
-                    Debug.Log($"[CR-TEST] 플레이 {shot:00}: z {s.Z:F0}m · 병력 {s.Units} · " +
-                              $"x {s.X:+0.0;-0.0} · {s.State}");
-                    shot++;
-                    nextShotZ += ShotEvery;
+                    ShotWorld($"play/{code}/{shot:00}", runner);
+                    Debug.Log($"[CR-TEST] {code} {shot:00}: z {s.Z:F0}m · 아군 {s.Units} · " +
+                              $"막는 적 {s.BlockingEnemies:F0} · x {s.X:+0.0;-0.0} · {s.State}");
+                    shot++; sinceShot = 0;
+                    nextShotZ = Mathf.Max(nextShotZ + every, s.Z + 0.5f);
                     Time.timeScale = 30f;
                 }
                 yield return null;
@@ -840,9 +867,9 @@ namespace CrowdRunner.Tests
             Time.timeScale = prev;
 
             var fin = runner.Sim;
-            Debug.Log($"[CR-TEST] 플레이 끝: {fin.State} · 남은 병력 {fin.Units} · " +
+            Debug.Log($"[CR-TEST] {code} 끝: {fin.State} · 남은 {fin.Units} · " +
                       $"{frame} 프레임 · 사진 {shot} 장");
-            Assert.AreNotEqual(SimState.Running, fin.State, "판이 안 끝났다 — 30,000 프레임을 돌고도");
+            Assert.AreNotEqual(SimState.Running, fin.State, code + ": 판이 안 끝났다");
         }
 
         /// <summary>

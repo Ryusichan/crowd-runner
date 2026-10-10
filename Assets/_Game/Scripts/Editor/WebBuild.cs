@@ -112,6 +112,7 @@ namespace CrowdRunner.EditorTools
             {
                 ("Assets/_Game/Resources/M0/standin_vat_mesh_lo.asset", "군중의 몸 — 없으면 길과 게이트만 달린다"),
                 ("Assets/_Game/Resources/M0/standin_vat_lo.mat",        "군중의 재질 — 같은 결과"),
+                ("Assets/_Game/Resources/M0/standin_vat_lo_foe.mat",    "적의 재질 — 없으면 적이 아군 색으로 나온다"),
                 ("Assets/_Game/Resources/Fonts/Jua-Regular.ttf",        "본문 글꼴 — 없으면 웹에서 글자가 통째로 안 나온다 (OS 폰트가 없다)"),
                 ("Assets/_Game/Resources/Fonts/ZQFallbackGothic.ttf",   "대체 글꼴 — `·` `—` 같은 글리프가 여기로 넘어간다"),
                 ("Assets/_Game/Resources/M0/roadmark.mat",              "길 표식 — 없으면 달리는 것이 안 보인다"),

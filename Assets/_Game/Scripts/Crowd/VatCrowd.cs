@@ -41,13 +41,24 @@ namespace CrowdRunner.Crowd
         public int DrawCalls => on && live > 0 ? 1 : 0;
 
         readonly string suffix;
-        /// <summary>`""` = 1,500 정점 · `"_lo"` = 300 정점. **같은 방식, 다른 폴리 예산**을 나란히 잰다</summary>
-        public VatCrowd(string suffix = "") { this.suffix = suffix; }
+        readonly bool foe;
+        /// <summary>
+        /// `""` = 1,500 정점 · `"_lo"` = 300 정점. **같은 방식, 다른 폴리 예산**을 나란히 잰다.
+        ///
+        /// `foe` 는 **색만 다른 머티리얼**을 쓴다. 셰이더에 인스턴스별 `_Side`(0=아군 1=적)가 있고
+        /// `Sync` 가 그 값을 넣는데 **화면에서는 안 먹는다** — 적 무리를 처음 그려 보고 화소로
+        /// 재서 알았다: 앞의 무리 RGB (47,74,83) · 내 군단 (52,82,96), 둘 다 청록이다.
+        /// `RenderMeshInstanced` 의 구조체 경로에서 그 값이 셰이더까지 안 가는 것으로 보인다.
+        ///
+        /// *앞의 것이 적인가* 는 이 게임에서 한눈에 읽혀야 하는 두 가지 중 하나라,
+        /// 원인을 더 파는 대신 **확실한 쪽**(머티리얼)으로 가른다.
+        /// </summary>
+        public VatCrowd(string suffix = "", bool foe = false) { this.suffix = suffix; this.foe = foe; }
 
         public void Init(int cap)
         {
             mesh = Resources.Load<Mesh>("M0/standin_vat_mesh" + suffix);
-            mat = Resources.Load<Material>("M0/standin_vat" + suffix);
+            mat = Resources.Load<Material>("M0/standin_vat" + suffix + (foe ? "_foe" : ""));
             inst = new Inst[cap];
             if (mesh == null || mat == null)
             {
