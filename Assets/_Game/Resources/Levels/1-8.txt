@@ -13,10 +13,13 @@ road 8
 length 265
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
-rating 30 54 81
+rating 18 42 69
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 gates 45..105 every 30 | R add 45 | L add 11
-enemies 120..225 every 15 count 16
+enemies 120..225 every 35 count 35
 
 enemy 252 count 110 final

@@ -13,11 +13,14 @@ road 7
 length 195
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
-rating 8 33 62
+rating 3 29 58
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 gates 40..104 every 32 | L add 16 | R add 4
 gates 56..120 every 32 | R add 16 | L add 4
-enemies 70..160 every 22 count 12
+enemies 70..160 every 45 count 21
 
 enemy 188 count 55 final

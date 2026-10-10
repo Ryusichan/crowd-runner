@@ -13,13 +13,16 @@ road 9
 length 320
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
-rating 11 95 192
+rating 11 76 150
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 gates 45..105 every 30 | L add 55 | R add 12
-enemies 120..165 every 22 count 18
+enemies 120..165 every 45 count 65
 gates 180..210 every 30 | R add 70 | L add 14
 wall 230 hp 2200
-enemies 245..295 every 16 count 22
+enemies 245..295 every 50 count 65
 
 enemy 308 count 160 final
