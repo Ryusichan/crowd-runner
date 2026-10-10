@@ -10,10 +10,14 @@ name Centum Fire Station
 teaches 쉬는 구간이 없다 — 끝까지 밀려든다
 units 50
 road 8
+speed 6.0
 length 265
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 rating 23 45 70
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다

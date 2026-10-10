@@ -10,10 +10,14 @@ name Yongdusan Park
 teaches 바리케이드 앞에서도 적은 온다 — 병력이 많을수록 빨리 부순다
 units 35
 road 7
+speed 6.0
 length 235
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 rating 22 37 54
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다

@@ -10,10 +10,14 @@ name Busan Medical Center
 teaches 더하기를 먼저 쌓고 곱하기를 나중에 — 순서가 결과를 바꾼다
 units 25
 road 7
+speed 6.0
 length 240
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 rating 42 77 117
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다

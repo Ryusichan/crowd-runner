@@ -9,10 +9,14 @@ name Choryang Alley
 teaches 적은 끊임없이 온다 — 게이트에 붙어 수를 모아야 밀고 나간다
 units 20
 road 7
+speed 6.0
 length 175
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 rating 7 26 48
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다

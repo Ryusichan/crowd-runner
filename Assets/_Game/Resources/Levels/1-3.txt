@@ -10,10 +10,14 @@ name Nampo-dong Street
 teaches 한 번 크게 부딪힌 뒤 좋은 쪽이 반대로 바뀐다
 units 30
 road 7
+speed 6.0
 length 225
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 rating 4 33 67
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다

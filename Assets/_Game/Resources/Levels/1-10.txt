@@ -10,10 +10,14 @@ name Busan Port Last Stand
 teaches 최종 방어선 — 배운 것을 전부 쓴다
 units 60
 road 9
+speed 6.0
 length 320
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 rating 12 76 150
+
+
+# ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
