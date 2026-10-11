@@ -209,7 +209,7 @@ namespace CrowdRunner.View
             wallL.position = new Vector3(-half - 0.45f, 1.3f, sim.Z + 36f);
             wallR.position = new Vector3(+half + 0.45f, 1.3f, sim.Z + 36f);
 
-            Formation(allies, sim.Units, sim.X, sim.Z, w, 0);
+            SyncAllies(sim);
             allyView.Sync(allies); allyView.Draw();
 
             DrawFoes(sim, w);
@@ -421,6 +421,30 @@ namespace CrowdRunner.View
         /// 지금 막고 있는 무리만 `BlockingEnemies` 로 바꿔 그린다 — 그래야 **줄어드는 것이
         /// 보인다**. 둘을 같은 식으로 그리면 싸우는데 수가 안 줄어 보인다.
         /// </summary>
+        /// <summary>
+        /// **아군 자리는 로직이 정한다** (`Battle.SetArmy`). 전에는 여기서 따로 깔았는데,
+        /// 그러면 총구 화염이 *그려진 병사*가 아니라 아무 데서나 터진다. 오너 지시 1
+        /// (*"300 명이면 300 명이 총을 쏘는 모습이 보여야 한다"*)은 둘이 같은 자리를 써야 선다.
+        ///
+        /// 논리 병사 수는 1,200 까지 가고 **그리는 수는 `renderCap`(400) 이다** — 그 차이는
+        /// 숨기지 않고 `Gunfire.LastMuzzles` 와 측정표에 나온다 (오너 지시 3).
+        /// </summary>
+        void SyncAllies(Sim sim)
+        {
+            var b = sim.Battle;
+            allies.Clear();
+            int n = Mathf.Min(b.AllyCount, renderCap);
+            for (int i = 0; i < n; i++)
+            {
+                int k = allies.Count;
+                allies.Add(1, 0, 0f, 1f);
+                allies.X[k] = b.AX[i]; allies.Z[k] = b.AZ[i];
+                allies.SideTarget[k] = b.AX[i];
+                float ph = i * 0.113f + Time.time * 1.7f;
+                allies.Phase[k] = ph - Mathf.Floor(ph);
+            }
+        }
+
         void DrawFoes(Sim sim, float w)
         {
             var b = sim.Battle;

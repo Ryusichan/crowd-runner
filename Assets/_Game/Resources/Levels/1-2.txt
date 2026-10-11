@@ -14,7 +14,7 @@ speed 7.0
 length 195
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
-rating 52 85 111
+rating 10 25 43
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
@@ -37,6 +37,6 @@ rating 52 85 111
 # 나쁜 쪽도 **덜 좋을 뿐**이라 틀려도 안 아프다. 이제 잘못 고르면 **줄어든다**.
 gates 40..104 every 32 | L add 16 | R sub 6
 gates 56..120 every 32 | R add 16 | L sub 6
-enemies 70..160 every 45 count 44
+enemies 70..160 every 45 count 21
 
-enemy 188 count 108 final
+enemy 188 count 55 final

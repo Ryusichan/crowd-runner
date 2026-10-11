@@ -170,6 +170,8 @@ namespace CrowdRunner.Core
             // 달리면서 계속 도는 것이고, 느려지는 정도만 압력이 정한다.
             int aliveBefore = Battle.Alive;
             float al = Allies;
+            // **대형을 먼저 세운다.** 병사가 개체라 자리가 있어야 쏜다 (`Battle.SetArmy`)
+            Battle.SetArmy(Allies, X, Z, RoadWidth, dt);
             float mul = Battle.Step(dt, ref al, Z, X, ally, zombie);
             Allies = al;
             Last.lostToCombat = Battle.LostThisTick;
@@ -217,7 +219,8 @@ namespace CrowdRunner.Core
             // **최종 방어선을 지웠으면 거기서 끝난다** — 남은 길을 걸어가게 두면 판이 늘어지고,
             // 그 사이에 아무 일도 없다. 탄환이 아직 날고 있으면 기다린다(마지막 한 발이
             // 끝낼 수 있다)
-            if (finalSpawned && Battle.Alive == 0 && Battle.BulletCount == 0) { Finish(); return; }
+            // `Remaining` 은 **아직 안 나온 적**까지 센다 — 흘려보내는 중에 끝나면 안 된다
+            if (finalSpawned && Battle.Remaining == 0) { Finish(); return; }
             if (Z >= level.length) Finish();
         }
 
@@ -320,7 +323,7 @@ namespace CrowdRunner.Core
                     // **깔기만 한다 — 막지 않는다.** 적은 저 앞에 서 있다가 달려온다.
                     // 씨앗을 사건 번호에서 만드는 이유는 결정성이다: 같은 판은 같은 자리에
                     // 깔려야 시뮬과 게임의 결과가 같다 (오너 완료 조건의 마지막 줄)
-                    Battle.Spawn(e.enemyCount, e.z, e.lane * (RoadWidth * 0.25f), RoadWidth, 7919 + i * 131, e.isFinal);
+                    Battle.Queue(e.enemyCount, e.z, e.lane * (RoadWidth * 0.25f), RoadWidth, 7919 + i * 131, e.isFinal);
                     BlockingIndex = i; BlockingIsFinal = e.isFinal;
                     if (e.isFinal) finalSpawned = true;
                     break;
@@ -355,7 +358,7 @@ namespace CrowdRunner.Core
         {
             // 최종 방어선을 깬 적이 있어야 이긴 것이다. 길 끝까지 갔는데 그걸 안 만났다면
             // **레벨 데이터가 틀린 것**이고 (`Validate` 가 막는다), 여기서는 졌다고 본다
-            bool clearedFinal = finalSpawned && Battle.Alive == 0;
+            bool clearedFinal = finalSpawned && Battle.Remaining == 0;
             State = clearedFinal && Allies > 0f ? SimState.Won : SimState.Lost;
         }
 

@@ -1,50 +1,58 @@
 namespace CrowdRunner.Core
 {
     /// <summary>
-    /// **총격전.** 적은 개체이고, 아군은 수이고, 그 수가 곧 발사율이다 (`docs/COMBAT_REWORK.md`).
+    /// **총격전 — 병사 한 명이 한 명씩 쏜다.**
     ///
-    /// 이것이 `Core/Combat.cs` 의 전선 소모 모델을 **대체한다.** 그 모델은 양쪽을 전선 폭으로
-    /// 깎아서 **아군 수가 결과에 안 들어갔다** — 적 하나당 잃는 아군이 병력과 무관하게 0.427 로
-    /// 고정됐다. 즉 *"많으면 덜 죽는다"* 가 아니라 *"같은 수를 잃고 더 오래 버틴다"* 였고,
-    /// 그 성질이 이 장르와 정반대다 (오너 2026-10-11).
+    /// 처음 판(2026-10-11 오전)은 `발사율 = 병력 ÷ 간격` 으로 **군단 전체를 한 번에** 계산하고
+    /// 탄환을 240 발/초로 **묶어서** 내보냈다. 오너가 그 자리를 정확히 짚었다:
+    /// *"300 명의 아군이 실제로 모두 사격 판정을 수행하는지, 아니면 군단 전체의 공격력을 한 번에
+    /// 계산하면서 일부 사격 연출만 보여주는지. 이 차이를 확인하지 않고 적 HP 만 올리면 계속
+    /// 잘못된 방향으로 개발하게 돼."*
     ///
-    /// **`UnityEngine` 을 쓰지 않는다** — `Core/` 의 규칙이고, 그래야 `tools/sim` 이 에디터 없이
-    /// 같은 전투를 돌린다. 오너 완료 조건의 마지막 줄(*"시뮬레이터의 전투 결과와 실제 게임
-    /// 결과가 일치한다"*)이 그 성질 위에 선다.
+    /// 그래서 **병사가 개체가 됐다.** 병사마다 자리와 발사 타이머가 있고 자기 차례에 자기가 쏜다.
+    /// 300 명이면 **초당 600 번의 판정**이 각각 일어난다.
     ///
-    /// **개체 배열은 SoA 이고 한 번만 잡는다.** 프레임당 관리 힙 할당 0 B 예산 (`DESIGN.md` §3).
+    /// **명중 판정은 즉시(히트스캔)이고 탄환은 그중 일부만 그린다.** 오너가 허락한 분리다
+    /// (*"실제 발사·피해 판정과 시각적 탄환 수는 성능을 위해 분리해도 된다"*). 거꾸로 하면 —
+    /// 피해를 한 번에 계산하고 탄환을 장식으로 뿌리면 — 그것이 가짜 사격이고, 그게 방금 지운 것이다.
+    ///
+    /// **적은 묶지 않는다.** 개체 하나가 여럿의 HP 를 지면 화면에서 쓰러지는 수가 줄어
+    /// *무수히 많은 적을 막아낸다* 와 정면으로 부딪친다 (오너 2026-10-11).
     /// </summary>
     public sealed class Battle
     {
-        // ── 상수 (수치의 출처는 COMBAT_REWORK §3 — 오너 제시 임시값) ──────────────
-        public const int EnemyCap = 512;
-        /// <summary>
-        /// 동시에 날아다닐 수 있는 탄환. 240 발/초 × 사거리 18 m ÷ 30 m/s = 144 발이 최악이고,
-        /// 유도가 빗나가 수명을 채우는 몫까지 봐서 256 을 잡는다.
-        /// </summary>
-        public const int BulletCap = 256;
+        // ── 상한 — **논리와 렌더링을 나눠서 보고한다** (오너 지시 3) ──────────────
+        /// <summary>논리 병사 수의 상한. 이 수까지는 **전원이 각자 쏜다**</summary>
+        public const int AllyCap = 1200;
+        public const int EnemyCap = 900;
+        /// <summary>**그리는** 탄환의 상한. 발사 판정은 이것과 무관하게 전원이 한다</summary>
+        public const int BulletCap = 320;
+        public const float TracerPerSec = 260f;
 
-        public const float BulletSpeed = 30f;
+        public const float BulletSpeed = 34f;
         public const float Range = 18f;
-        /// <summary>
-        /// **화면에 나갈 수 있는 초당 발사 수.** 넘으면 묶는다 — 탄환 하나가 여러 발의 피해를 진다.
-        /// 피해 총량은 묶어도 같고, 바뀌는 것은 *몇 개를 그리느냐* 뿐이다 (COMBAT_REWORK §2c).
-        ///
-        /// 240 인 이유: 10 명(20 발/초)과 300 명(240 발/초)이 **12 배** 차이로 보여야 한다는
-        /// 오너 조건 때문이다. 이 값을 낮추면 큰 군단과 작은 군단이 같은 양으로 쏘는 것처럼 보인다.
-        /// </summary>
-        public const float MaxShotsPerSec = 240f;
-
-        /// <summary>적이 멈춰서 때리기 시작하는 거리</summary>
         public const float Contact = 1.2f;
-        /// <summary>탄환이 표적에 닿았다고 보는 거리. 너무 작으면 빠른 탄환이 한 틱에 지나친다</summary>
-        public const float HitRadius = 0.9f;
-        /// <summary>쓰러지는 연출에 주는 시간. 이 동안 개체는 배열에 남아 있고 표적이 되지 않는다</summary>
         public const float DeathTime = 0.6f;
-        /// <summary>전진 감속을 계산할 때 "가까운 적" 으로 세는 거리</summary>
-        public const float PressureRange = 8f;
+        public const float PressureRange = 9f;
+        public const float FlashTime = 0.055f;
+        /// <summary>
+        /// 적이 **한 번에 쏟아지지 않고 흘러드는 속도**(초당). 오너 지시 2: *"한 무리를 처리하고
+        /// 다음 무리가 나오는 방식만으로 끝내지 말고, 전방에서 적군이 지속적으로 접근하며 전선을
+        /// 형성해야 한다."* 한 무리를 통째로 깔면 큰 군단은 1 초 안에 지우고 다시 빈 복도를 달린다.
+        /// </summary>
+        public const float StreamPerSec = 34f;
+        /// <summary>흘러드는 적이 생기는 거리 (군단 앞)</summary>
+        public const float StreamAhead = 38f;
 
-        // ── 적 ────────────────────────────────────────────────────────────────────
+        // ── 아군 (개체다) ─────────────────────────────────────────────────────────
+        public int AllyCount;
+        public readonly float[] AX = new float[AllyCap];
+        public readonly float[] AZ = new float[AllyCap];
+        /// <summary>남은 총구 화염 시간. 표현이 **쏜 병사 자리에** 불을 띄운다</summary>
+        public readonly float[] AFlash = new float[AllyCap];
+        readonly float[] aFireT = new float[AllyCap];
+
+        // ── 적 (개체다 — 묶지 않는다) ─────────────────────────────────────────────
         public int EnemyCount;
         public readonly float[] EX = new float[EnemyCap];
         public readonly float[] EZ = new float[EnemyCap];
@@ -52,118 +60,123 @@ namespace CrowdRunner.Core
         public readonly float[] EMaxHp = new float[EnemyCap];
         /// <summary>0 달려옴 · 1 때림 · 2 쓰러지는 중</summary>
         public readonly byte[] EState = new byte[EnemyCap];
-        /// <summary>쓰러진 뒤 지난 시간. 연출 길이는 표현이 정하고, 여기서는 치우는 시점만 센다</summary>
         public readonly float[] EDieT = new float[EnemyCap];
+        /// <summary>맞은 뒤 남은 **피격 반응** 시간 — 표현이 움찔하게 그린다</summary>
+        public readonly float[] EHurt = new float[EnemyCap];
         readonly float[] eAtkT = new float[EnemyCap];
 
-        // ── 탄환 ──────────────────────────────────────────────────────────────────
+        // ── 탄환 (보이는 것만 — 피해는 이미 들어갔다) ─────────────────────────────
         public int BulletCount;
         public readonly float[] BX = new float[BulletCap];
         public readonly float[] BZ = new float[BulletCap];
-        /// <summary>진행 방향(단위 벡터). 궤적을 그리려면 자리만으로는 모자란다</summary>
         public readonly float[] BDX = new float[BulletCap];
         public readonly float[] BDZ = new float[BulletCap];
-        readonly float[] bDmg = new float[BulletCap];
         readonly float[] bLife = new float[BulletCap];
-        /// <summary>표적 번호. −1 이면 표적을 잃은 것(다음 틱에 다시 고른다), −2 는 벽</summary>
-        readonly int[] bTarget = new int[BulletCap];
+        readonly float[] bRange = new float[BulletCap];
 
-        // ── 벽 (총알이 부순다 — COMBAT_REWORK §2g) ────────────────────────────────
+        // ── 아직 안 나온 적 ───────────────────────────────────────────────────────
+        struct Pending { public int left; public float laneX, roadWidth, z; public int seed; public bool band; }
+        readonly Pending[] pending = new Pending[8];
+        int pendingCount;
+        float streamAccum;
+
         public bool HasWall;
         public float WallZ, WallHp, WallMaxHp;
 
-        // ── 이번 틱의 사건 (표현이 `Step` 직후에 읽는다) ──────────────────────────
-        /// <summary>지금 초당 몇 발 나가는가. 총구 화염의 **양**을 이 수로 정한다</summary>
-        public float FireRate;
-        public int ShotsThisTick, HitsThisTick;
-        /// <summary>
-        /// **이번 틱에 맞은 자리.** 표현이 거기에 불꽃을 띄운다. 좌표를 표현이 다시 계산하면
-        /// 그것이 오너가 말한 *"총알 효과만 표시하는 가짜 사격"* 이 된다 — 맞은 자리는
-        /// 맞춘 쪽만 안다.
-        /// </summary>
-        public const int HitCap = 64;
+        // ── 이번 틱의 사건 ────────────────────────────────────────────────────────
+        /// <summary>이번 틱에 **실제로 일어난 발사 판정** 수. 연출 수가 아니다</summary>
+        public int ShotsThisTick;
+        public int HitsThisTick, KilledThisTick;
+        /// <summary>이번 틱에 **총을 쏜 병사** 수 — 오너 지시 5 의 측정 항목</summary>
+        public int FiringThisTick;
+        public float LostThisTick;
+        public float AlliesLost, EnemiesKilled;
+
+        public const int HitCap = 96;
         public int HitCount;
         public readonly float[] HitX = new float[HitCap];
         public readonly float[] HitZ = new float[HitCap];
-        public int KilledThisTick;
-        public float LostThisTick;
 
-        /// <summary>누계 — 판이 끝난 뒤 되짚을 때</summary>
-        public float AlliesLost, EnemiesKilled;
-
-        /// <summary>쓰러지는 중이 아닌 적. 전투가 끝났는지를 이 수로 본다</summary>
         public int Alive
         {
-            get
-            {
-                int n = 0;
-                for (int i = 0; i < EnemyCount; i++) if (EState[i] != 2) n++;
-                return n;
-            }
+            get { int n = 0; for (int i = 0; i < EnemyCount; i++) if (EState[i] != 2) n++; return n; }
         }
 
-        float shotAccum;
-        /// <summary>총구 자리를 좌우로 흩는 counter. 난수를 안 쓰는 이유는 **결정성**이다</summary>
-        int muzzle;
+        /// <summary>아직 안 나온 적까지 센다 — 전투가 끝났는지는 이것으로 본다</summary>
+        public int Remaining
+        {
+            get { int n = Alive; for (int i = 0; i < pendingCount; i++) n += pending[i].left; return n; }
+        }
+
+        /// <summary>사거리 안의 적 후보 — 틱마다 한 번 모아서 **모든 병사가 나눠 쓴다**</summary>
+        const int CandCap = 160;
+        readonly int[] cand = new int[CandCap];
+        int candCount;
+        int frame;
+        float tracerAccum;
 
         /// <summary>
-        /// 적 한 무리를 깐다. **막는 사건이 아니라 웨이브**다 — 군단이 아직 멀리 있을 때 깔아 두면
-        /// 적이 **화면에 보이고 나서** 닿는다. 닿는 순간에 생기면 그 전까지는 아무것도 없는 길이다.
+        /// **대형을 로직이 들고 있다.** 전에는 표현이 따로 깔았는데, 그러면 총구 화염이
+        /// *그려진 병사*가 아니라 아무 데서나 터진다. 오너 지시 1(*"300 명이면 300 명이 총을
+        /// 쏘는 모습이 보여야 한다"*)은 로직과 표현이 **같은 자리**를 써야 성립한다.
+        ///
+        /// 황금각(137.5°) 해바라기 배치 — 같은 수를 가장 고르게 둥글게 채운다.
         /// </summary>
-        /// <param name="band">
-        /// **마지막 무리는 덩어리가 아니라 벽이다.** 장르의 끝은 보스와 최후의 일전인데
-        /// (`docs/REF_TOPWAR.md` §4) 둥근 덩어리로 두면 *더 큰 덩어리*일 뿐이다. 길을 가로로
-        /// 꽉 막는 줄로 세우면 **뚫어야 하는 것**으로 읽힌다 — 같은 수로 뜻을 바꾸므로 비용이 0 이다.
-        /// </param>
-        public void Spawn(int count, float z, float laneX, float roadWidth, int seed, bool band = false)
+        public void SetArmy(float allies, float cx, float cz, float roadWidth, float dt)
         {
-            // 결정적인 배치 — `System.Random` 을 쓰되 **씨앗을 받는다**. 시뮬과 게임이 같은
-            // 자리를 깔아야 오너 완료 조건의 마지막 줄이 선다
-            var rng = new System.Random(seed);
-            float half = roadWidth * 0.5f;
-            for (int k = 0; k < count && EnemyCount < EnemyCap; k++)
+            int n = (int)(allies + 0.999f);
+            if (n > AllyCap) n = AllyCap;
+            if (n < 0) n = 0;
+
+            const float PerPerson = 0.19f * 0.78f * 0.78f;
+            float r = (float)System.Math.Sqrt(n * PerPerson / 3.14159265f);
+            float lim = roadWidth * 0.5f - 0.3f;
+            const float Golden = 2.39996323f;
+
+            for (int i = 0; i < n; i++)
             {
-                int i = EnemyCount++;
-                // 수가 많을수록 뒤로 깊어진다 — 한 줄로 서면 "밀려온다" 가 아니라 "벽" 이 된다
-                if (band)
-                {
-                    int perRow = (int)(roadWidth / 0.85f); if (perRow < 4) perRow = 4;
-                    int col = k % perRow, row = k / perRow;
-                    float span = roadWidth - 0.9f;
-                    EX[i] = -half + 0.45f + (perRow > 1 ? span * col / (perRow - 1) : span * 0.5f);
-                    EZ[i] = z + row * 0.85f;
-                }
-                else
-                {
-                    // 수가 많을수록 뒤로 깊어진다 — 한 줄로 서면 "밀려온다" 가 아니라 "벽" 이 된다
-                    float depth = 2f + count * 0.12f;
-                    EX[i] = laneX + (float)(rng.NextDouble() - 0.5) * roadWidth * 0.8f;
-                    if (EX[i] < -half) EX[i] = -half;
-                    if (EX[i] > half) EX[i] = half;
-                    EZ[i] = z + (float)rng.NextDouble() * depth;
-                }
-                EHp[i] = EMaxHp[i] = UnitStats.Zombie.hp * 3f;   // 30 — COMBAT_REWORK §3
-                EState[i] = 0; EDieT[i] = 0f; eAtkT[i] = 0f;
+                float rad = n > 1 ? r * (float)System.Math.Sqrt((i + 0.5f) / n) : 0f;
+                float a = i * Golden;
+                float x = cx + (float)System.Math.Cos(a) * rad;
+                if (x < -lim) x = -lim;
+                if (x > lim) x = lim;
+                AX[i] = x;
+                AZ[i] = cz + (float)System.Math.Sin(a) * rad;
+                // **새로 들어온 병사는 발사 시점을 흩어 둔다.** 전부 0 이면 600 발이 한 프레임에
+                // 몰려 나가고 그다음 반 초는 아무도 안 쏜다 — 화면이 깜빡인다
+                if (i >= AllyCount) { aFireT[i] = (i % 31) / 31f * UnitStats.Ally.interval; AFlash[i] = 0f; }
+                if (AFlash[i] > 0f) AFlash[i] -= dt;
             }
+            AllyCount = n;
+        }
+
+        /// <summary>
+        /// 적 한 뭉치를 **예약한다** — 그 자리에 통째로 깔지 않는다. `StreamPerSec` 로 흘러나와
+        /// 군단 앞 `StreamAhead` 에서 계속 생기고, 그래서 **전선이 생긴다** (오너 지시 2).
+        /// </summary>
+        public void Queue(int count, float z, float laneX, float roadWidth, int seed, bool band = false)
+        {
+            if (pendingCount >= pending.Length) { pending[pendingCount - 1].left += count; return; }
+            pending[pendingCount++] = new Pending
+            { left = count, laneX = laneX, roadWidth = roadWidth, z = z, seed = seed, band = band };
         }
 
         public void SetWall(float z, float hp) { HasWall = true; WallZ = z; WallHp = WallMaxHp = hp; }
         public void ClearWall() { HasWall = false; WallHp = 0f; }
 
-        /// <summary>
-        /// 한 틱. **전진 속도 배수를 돌려준다** — 압력에 따라 20~100 % (COMBAT_REWORK §2f).
-        /// 멈추지 않는 것이 요점이다: 멈추면 화면이 *막아내는 것*이 아니라 **멈춰 있는 것**이 된다.
-        /// </summary>
-        /// <param name="allies">병력. 줄어든 만큼 여기서 깎는다</param>
+        /// <summary>한 틱. 전진 속도 배수(20~100 %)를 돌려준다</summary>
         public float Step(float dt, ref float allies, float allyZ, float allyX, UnitStats a, UnitStats e)
         {
-            ShotsThisTick = 0; HitsThisTick = 0; KilledThisTick = 0; LostThisTick = 0f; HitCount = 0;
+            ShotsThisTick = 0; HitsThisTick = 0; KilledThisTick = 0; LostThisTick = 0f;
+            HitCount = 0; FiringThisTick = 0;
+            frame++;
 
+            Stream(dt, allyZ);
             StepEnemies(dt, ref allies, allyZ, allyX, a, e);
-            Fire(dt, allies, allyZ, allyX, a);
+            Candidates(allyZ);
+            FirePerSoldier(dt, a);
             StepBullets(dt);
 
-            // 압력 — 가까이 온 적이 많을수록 느려지고, **병력이 많을수록 덜 느려진다**
             int near = 0;
             for (int i = 0; i < EnemyCount; i++)
                 if (EState[i] != 2 && EZ[i] - allyZ < PressureRange) near++;
@@ -172,10 +185,56 @@ namespace CrowdRunner.Core
             return 1f - 0.8f * p;
         }
 
+        /// <summary>예약된 적을 **조금씩** 내보낸다 — 전방에서 끊임없이 다가오게</summary>
+        void Stream(float dt, float allyZ)
+        {
+            if (pendingCount == 0) return;
+            streamAccum += StreamPerSec * dt;
+            while (streamAccum >= 1f && pendingCount > 0 && EnemyCount < EnemyCap)
+            {
+                streamAccum -= 1f;
+                int left = pending[0].left;
+                float laneX = pending[0].laneX, roadWidth = pending[0].roadWidth, pz = pending[0].z;
+                bool band = pending[0].band;
+                var rng = new System.Random(pending[0].seed + left);
+
+                int i = EnemyCount++;
+                float half = roadWidth * 0.5f;
+                if (band)
+                {
+                    // 마지막 무리는 **길을 가로로 막는 줄**이다 — 뚫어야 하는 것으로 읽힌다
+                    int perRow = (int)(roadWidth / 0.85f); if (perRow < 4) perRow = 4;
+                    float z0 = allyZ + StreamAhead * 0.8f; if (z0 < pz) z0 = pz;
+                    EX[i] = -half + 0.45f + (roadWidth - 0.9f) * (left % perRow) / (perRow - 1);
+                    EZ[i] = z0 + (left / perRow) * 0.85f;
+                }
+                else
+                {
+                    EX[i] = laneX + (float)(rng.NextDouble() - 0.5) * roadWidth * 0.85f;
+                    if (EX[i] < -half) EX[i] = -half;
+                    if (EX[i] > half) EX[i] = half;
+                    // **군단 앞에서 생긴다.** 사건의 z 에 고정하면 군단이 지나친 뒤에 나와
+                    // 뒤에서 쫓아오는 꼴이 된다
+                    float z0 = allyZ + StreamAhead; if (z0 < pz) z0 = pz;
+                    EZ[i] = z0 + (float)rng.NextDouble() * 6f;
+                }
+                EHp[i] = EMaxHp[i] = UnitStats.Zombie.hp * 3f;
+                EState[i] = 0; EDieT[i] = 0f; eAtkT[i] = 0f; EHurt[i] = 0f;
+
+                pending[0].left = left - 1;
+                if (pending[0].left <= 0)
+                {
+                    for (int k = 1; k < pendingCount; k++) pending[k - 1] = pending[k];
+                    pendingCount--;
+                }
+            }
+        }
+
         void StepEnemies(float dt, ref float allies, float allyZ, float allyX, UnitStats a, UnitStats e)
         {
             for (int i = EnemyCount - 1; i >= 0; i--)
             {
+                if (EHurt[i] > 0f) EHurt[i] -= dt;
                 if (EState[i] == 2)
                 {
                     EDieT[i] += dt;
@@ -186,8 +245,7 @@ namespace CrowdRunner.Core
                 float dz = EZ[i] - allyZ;
                 if (dz <= Contact)
                 {
-                    // 닿았다 — 멈춰서 때린다. **전선 폭 제한이 없다**: 닿은 적은 전부 때린다.
-                    // 그래서 둘러싸이면 빨리 녹고, 그것이 "막아내지 못했다" 의 뜻이다
+                    // 닿은 적은 **전부** 때린다 — 전선 폭 제한이 없다. 둘러싸이면 빨리 녹는다
                     EState[i] = 1;
                     eAtkT[i] += dt;
                     if (eAtkT[i] >= e.interval)
@@ -203,7 +261,6 @@ namespace CrowdRunner.Core
                 {
                     EState[i] = 0;
                     EZ[i] -= e.speed * dt;
-                    // 좌우로도 군단 쪽으로 붙는다 — 안 그러면 길 가장자리의 적이 영원히 안 닿는다
                     float dx = allyX - EX[i];
                     float step = e.speed * 0.4f * dt;
                     if (dx > step) dx = step; else if (dx < -step) dx = -step;
@@ -213,146 +270,123 @@ namespace CrowdRunner.Core
         }
 
         /// <summary>
-        /// **발사.** 발사율은 병력에 비례하고 전선 폭에 안 막힌다 — 뒤에 선 병사도 앞으로 쏜다.
-        /// 그것이 §1 에서 폐기한 성질을 뒤집는 자리다 (병력 두 배 = 화력 두 배).
+        /// 사거리 안의 적을 **틱마다 한 번** 모은다. 병사마다 전체를 훑으면 300 × 900 이 매 틱
+        /// 돌아간다 — 같은 답을 300 번 구하는 셈이다.
         /// </summary>
-        void Fire(float dt, float allies, float allyZ, float allyX, UnitStats a)
+        void Candidates(float allyZ)
         {
-            FireRate = 0f;
-            if (allies <= 0f) { shotAccum = 0f; return; }
-            if (!AnyTarget(allyZ)) { shotAccum = 0f; return; }
-
-            FireRate = allies / a.interval;
-
-            // 묶음 — 그릴 수 있는 수를 넘는 몫은 **탄환 하나의 피해**로 들어간다
-            float pack = FireRate / MaxShotsPerSec;
-            if (pack < 1f) pack = 1f;
-            int packN = (int)pack; if (packN < pack) packN++;     // ceil, 할당 없이
-
-            float visual = FireRate / packN;
-            shotAccum += visual * dt;
-            while (shotAccum >= 1f)
-            {
-                shotAccum -= 1f;
-                if (!SpawnBullet(allyZ, allyX, a.damage * packN)) { shotAccum = 0f; break; }
-                ShotsThisTick++;
-            }
-        }
-
-        bool AnyTarget(float allyZ)
-        {
-            for (int i = 0; i < EnemyCount; i++)
-                if (EState[i] != 2 && EZ[i] > allyZ - Contact && EZ[i] - allyZ <= Range) return true;
-            return HasWall && WallHp > 0f && WallZ - allyZ <= Range && WallZ > allyZ - Contact;
-        }
-
-        bool SpawnBullet(float allyZ, float allyX, float dmg)
-        {
-            if (BulletCount >= BulletCap) return false;
-            int t = PickTarget(allyZ, allyX);
-            if (t == -1) return false;
-
-            int b = BulletCount++;
-            // 총구는 군단 앞줄의 **여러 자리**에서 나온다 — 한 점에서 나오면 분수처럼 보인다
-            muzzle = (muzzle + 7) & 15;
-            BX[b] = allyX + (muzzle - 7.5f) * 0.22f;
-            BZ[b] = allyZ + 1.2f;
-            bDmg[b] = dmg; bLife[b] = 0f; bTarget[b] = t;
-            Aim(b);
-            return true;
-        }
-
-        /// <summary>사거리 안에서 **가장 가까운** 산 적. 없으면 벽(−2), 둘 다 없으면 −1</summary>
-        int PickTarget(float allyZ, float allyX)
-        {
-            int best = -1; float bestD = float.MaxValue;
-            for (int i = 0; i < EnemyCount; i++)
+            candCount = 0;
+            for (int i = 0; i < EnemyCount && candCount < CandCap; i++)
             {
                 if (EState[i] == 2) continue;
                 float dz = EZ[i] - allyZ;
                 if (dz < -Contact || dz > Range) continue;
-                float dx = EX[i] - allyX;
-                float d = dz * dz + dx * dx;
-                if (d < bestD) { bestD = d; best = i; }
+                cand[candCount++] = i;
             }
-            if (best >= 0) return best;
-            if (HasWall && WallHp > 0f && WallZ - allyZ <= Range && WallZ > allyZ - Contact) return -2;
-            return -1;
         }
 
-        void Aim(int b)
+        /// <summary>
+        /// **병사마다 자기 타이머로 자기가 쏜다.** 300 명이면 초당 600 번의 판정이 각각 일어난다.
+        /// 표적은 틱마다 모은 후보를 번호로 나눠 가진다 — 앞에 선 적부터 고르게 맞는다.
+        /// </summary>
+        void FirePerSoldier(float dt, UnitStats a)
         {
-            float tx, tz;
-            if (bTarget[b] == -2) { tx = BX[b]; tz = WallZ; }
-            else { tx = EX[bTarget[b]]; tz = EZ[bTarget[b]]; }
-            float dx = tx - BX[b], dz = tz - BZ[b];
+            for (int i = 0; i < AllyCount; i++)
+            {
+                aFireT[i] -= dt;
+                if (aFireT[i] > 0f) continue;
+
+                float tx, tz; int t = -1;
+                if (candCount > 0)
+                {
+                    t = cand[(i + frame) % candCount];
+                    tx = EX[t]; tz = EZ[t];
+                }
+                else if (HasWall && WallHp > 0f && WallZ - AZ[i] <= Range)
+                {
+                    tx = AX[i]; tz = WallZ;
+                }
+                else
+                {
+                    // 쏠 것이 없다 — **타이머를 돌리지 않는다.** 돌리면 적이 나타나는 순간
+                    // 전원이 한 프레임에 쏘고 그다음 반 초가 비어, 첫 교전이 깜빡인다
+                    aFireT[i] = 0f;
+                    continue;
+                }
+
+                aFireT[i] += a.interval;
+                FiringThisTick++; ShotsThisTick++; HitsThisTick++;
+                AFlash[i] = FlashTime;
+
+                // **명중은 즉시 들어간다** (히트스캔). 보이는 탄환은 그중 일부일 뿐이고,
+                // 그 분리는 오너가 허락한 것이다 — 거꾸로(피해를 한 번에 계산하고 탄환을
+                // 장식으로 뿌리는 것)가 가짜 사격이고, 그게 이 파일이 방금 지운 것이다
+                if (t >= 0)
+                {
+                    EHp[t] -= a.damage;
+                    EHurt[t] = 0.12f;
+                    if (HitCount < HitCap) { HitX[HitCount] = EX[t]; HitZ[HitCount] = EZ[t]; HitCount++; }
+                    if (EHp[t] <= 0f)
+                    {
+                        EHp[t] = 0f; EState[t] = 2; EDieT[t] = 0f;
+                        KilledThisTick++; EnemiesKilled += 1f;
+                        // 죽은 것은 후보에서 뺀다 — 안 그러면 이번 틱의 뒷 병사들이 시체에 쏜다
+                        for (int c = 0; c < candCount; c++)
+                            if (cand[c] == t) { cand[c] = cand[--candCount]; break; }
+                    }
+                }
+                else
+                {
+                    WallHp -= a.damage;
+                    if (WallHp < 0f) WallHp = 0f;
+                    if (HitCount < HitCap) { HitX[HitCount] = tx; HitZ[HitCount] = tz; HitCount++; }
+                }
+
+                Tracer(dt, AX[i], AZ[i], tx, tz);
+            }
+        }
+
+        /// <summary>
+        /// 보이는 탄환. **실제로 일어난 발사에서만** 나온다 — 예산을 넘으면 그 발은 안 그려질
+        /// 뿐이고 피해는 이미 들어갔다.
+        /// </summary>
+        void Tracer(float dt, float sx, float sz, float tx, float tz)
+        {
+            tracerAccum += TracerPerSec * dt;
+            if (tracerAccum < 1f || BulletCount >= BulletCap) return;
+            tracerAccum -= 1f;
+
+            float dx = tx - sx, dz = tz - sz;
             float len = (float)System.Math.Sqrt(dx * dx + dz * dz);
-            if (len < 1e-4f) { BDX[b] = 0f; BDZ[b] = 1f; return; }
+            if (len < 1e-3f) return;
+            int b = BulletCount++;
+            BX[b] = sx; BZ[b] = sz;
             BDX[b] = dx / len; BDZ[b] = dz / len;
+            bLife[b] = 0f; bRange[b] = len;
         }
 
         void StepBullets(float dt)
         {
             for (int b = BulletCount - 1; b >= 0; b--)
             {
-                int t = bTarget[b];
-                // 표적이 죽었으면 **가장 가까운 산 적으로 옮겨 탄다** — 쏜 피해를 버리지 않는다
-                if (t >= 0 && (t >= EnemyCount || EState[t] == 2)) t = bTarget[b] = Retarget(b);
-                if (t == -1) { RemoveBullet(b); continue; }
-                if (t == -2 && (!HasWall || WallHp <= 0f)) { RemoveBullet(b); continue; }
-
-                Aim(b);
                 BX[b] += BDX[b] * BulletSpeed * dt;
                 BZ[b] += BDZ[b] * BulletSpeed * dt;
                 bLife[b] += dt;
-
-                float tx = t == -2 ? BX[b] : EX[t];
-                float tz = t == -2 ? WallZ : EZ[t];
-                float dx = tx - BX[b], dz = tz - BZ[b];
-                if (dx * dx + dz * dz <= HitRadius * HitRadius)
+                if (bLife[b] * BulletSpeed >= bRange[b])
                 {
-                    HitsThisTick++;
-                    if (HitCount < HitCap) { HitX[HitCount] = BX[b]; HitZ[HitCount] = BZ[b]; HitCount++; }
-                    if (t == -2)
+                    int last = --BulletCount;
+                    if (b != last)
                     {
-                        WallHp -= bDmg[b];
-                        if (WallHp < 0f) WallHp = 0f;
+                        BX[b] = BX[last]; BZ[b] = BZ[last]; BDX[b] = BDX[last]; BDZ[b] = BDZ[last];
+                        bLife[b] = bLife[last]; bRange[b] = bRange[last];
                     }
-                    else
-                    {
-                        EHp[t] -= bDmg[b];
-                        if (EHp[t] <= 0f)
-                        {
-                            EHp[t] = 0f; EState[t] = 2; EDieT[t] = 0f;
-                            KilledThisTick++; EnemiesKilled += 1f;
-                        }
-                    }
-                    RemoveBullet(b);
-                    continue;
                 }
-
-                // 수명 — 사거리의 두 배를 날면 버린다. 유도라도 못 따라잡는 경우가 있다
-                if (bLife[b] > Range * 2f / BulletSpeed) RemoveBullet(b);
             }
-        }
-
-        int Retarget(int b)
-        {
-            int best = -1; float bestD = float.MaxValue;
-            for (int i = 0; i < EnemyCount; i++)
-            {
-                if (EState[i] == 2) continue;
-                float dx = EX[i] - BX[b], dz = EZ[i] - BZ[b];
-                float d = dx * dx + dz * dz;
-                if (d < bestD) { bestD = d; best = i; }
-            }
-            if (best >= 0) return best;
-            return HasWall && WallHp > 0f ? -2 : -1;
         }
 
         /// <summary>
-        /// 빈자리를 **맨 뒤로 메운다**(swap-remove). 그런데 그러면 맨 뒤를 **가리키던 탄환**이
-        /// 엉뚱한 적을 때린다 — 옮긴 번호를 따라가게 고쳐 준다. 조용히 틀리는 종류라 적어 둔다.
+        /// 빈자리를 맨 뒤로 메운다. **후보 배열이 그 번호를 들고 있으면 따라가게** 고친다 —
+        /// 안 그러면 이번 틱의 남은 병사들이 엉뚱한 적을 쏜다. 조용히 틀리는 종류다.
         /// </summary>
         void Remove(int i)
         {
@@ -360,29 +394,22 @@ namespace CrowdRunner.Core
             if (i != last)
             {
                 EX[i] = EX[last]; EZ[i] = EZ[last]; EHp[i] = EHp[last]; EMaxHp[i] = EMaxHp[last];
-                EState[i] = EState[last]; EDieT[i] = EDieT[last]; eAtkT[i] = eAtkT[last];
+                EState[i] = EState[last]; EDieT[i] = EDieT[last]; eAtkT[i] = eAtkT[last]; EHurt[i] = EHurt[last];
             }
-            for (int b = 0; b < BulletCount; b++)
+            for (int c = 0; c < candCount; c++)
             {
-                if (bTarget[b] == last) bTarget[b] = i;
-                else if (bTarget[b] == i) bTarget[b] = -1;   // 다음 틱에 다시 고른다
+                if (cand[c] == last) { cand[c] = i; break; }
+                if (cand[c] == i) { cand[c] = cand[--candCount]; break; }
             }
-        }
-
-        void RemoveBullet(int b)
-        {
-            int last = --BulletCount;
-            if (b == last) return;
-            BX[b] = BX[last]; BZ[b] = BZ[last]; BDX[b] = BDX[last]; BDZ[b] = BDZ[last];
-            bDmg[b] = bDmg[last]; bLife[b] = bLife[last]; bTarget[b] = bTarget[last];
         }
 
         public void Clear()
         {
-            EnemyCount = 0; BulletCount = 0; shotAccum = 0f; HitCount = 0;
+            AllyCount = 0; EnemyCount = 0; BulletCount = 0; pendingCount = 0;
+            streamAccum = 0f; tracerAccum = 0f; candCount = 0;
             HasWall = false; WallHp = 0f;
-            FireRate = 0f; ShotsThisTick = HitsThisTick = KilledThisTick = 0; LostThisTick = 0f;
-            AlliesLost = 0f; EnemiesKilled = 0f;
+            ShotsThisTick = HitsThisTick = KilledThisTick = FiringThisTick = HitCount = 0;
+            LostThisTick = 0f; AlliesLost = 0f; EnemiesKilled = 0f;
         }
     }
 }

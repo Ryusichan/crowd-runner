@@ -22,7 +22,7 @@ namespace CrowdRunner.View
     public sealed class Gunfire
     {
         const int Cap = Battle.BulletCap;
-        const int MuzzleCap = 48;
+        const int MuzzleCap = 160;
         const int DownCap = 256;
         const int SparkCap = 96;
 
@@ -100,21 +100,20 @@ namespace CrowdRunner.View
             if (n > 0) Graphics.RenderMeshInstanced(rpTracer, mesh, 0, tracers, n);
 
             // ── 총구 화염 ─────────────────────────────────────────────────────────
-            // **수가 발사율을 따라간다.** 10 명(20 발/초)과 300 명(240 발/초)이 화면에서
-            // 달라야 한다는 것이 오너 조건이고, 탄환만으로는 12 배 차이가 앞쪽에서만 보인다.
-            // 화염은 **군단 앞줄 전체**에 깔리므로 *얼마나 많은 총이 불을 뿜는가* 가 읽힌다
-            int m = Mathf.Clamp(Mathf.CeilToInt(b.FireRate / 6f), 0, MuzzleCap);
-            for (int i = 0; i < m; i++)
+            // **쏜 병사 자리에서 터진다.** 전에는 발사율로 개수만 맞춰 아무 데나 뿌렸는데,
+            // 그러면 *군단이 쏘는 그림*이 아니라 *앞쪽에서 불이 난 그림*이다. 로직이 병사마다
+            // `AFlash` 를 켜 주므로(`Battle.FirePerSoldier`) 여기서는 그것만 읽는다 —
+            // 화면에 보이는 불 하나가 **실제로 일어난 발사 판정 하나**다
+            int m = 0;
+            for (int i = 0; i < b.AllyCount && m < MuzzleCap; i++)
             {
-                // 매 프레임 자리를 바꾼다 — 고정하면 불빛이 **줄 세운 전구**처럼 보인다
-                int h = (i * 2654435761u + (uint)frame * 40503u).GetHashCode();
-                float u = ((h >> 8) & 1023) / 1023f;
-                float v = ((h >> 20) & 255) / 255f;
-                float s = 0.18f + v * 0.16f;
-                muzzles[i] = Matrix4x4.TRS(
-                    new Vector3(frontX + (u - 0.5f) * 3.4f, 1.05f + v * 0.1f, frontZ + 0.9f + v * 0.5f),
+                if (b.AFlash[i] <= 0f) continue;
+                float k = b.AFlash[i] / Battle.FlashTime;
+                float s = 0.13f + k * 0.22f;
+                muzzles[m++] = Matrix4x4.TRS(
+                    new Vector3(b.AX[i], 1.06f, b.AZ[i] + 0.6f),
                     Quaternion.identity,
-                    new Vector3(s, s, s * 1.6f));
+                    new Vector3(s, s, s * 1.7f));
             }
             LastMuzzles = m;
             if (m > 0) Graphics.RenderMeshInstanced(rpMuzzle, mesh, 0, muzzles, m);
