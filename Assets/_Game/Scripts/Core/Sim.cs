@@ -18,8 +18,12 @@ namespace CrowdRunner.Core
     {
         public const float FixedStep = 1f / 60f;
 
-        /// <summary>교전 중에도 전진하는 비율. 0 이면 멈춤, 1 이면 적을 지나쳐 버린다</summary>
-        public const float PushThrough = 0.2f;
+        /// <summary>
+        /// 적 무리를 **미리 깔아 두는 거리**. 닿는 순간에 만들면 그 전까지는 아무것도 없는 길이고,
+        /// 오너가 본 화면이 그것이었다 (*"그리구 적도 없잖어"*). 40 m 면 7 m/s 에서 **5.7 초** 전에
+        /// 보이기 시작한다 — 게이트를 읽는 창(COMBAT_REWORK §2a, `HANDOFF` §6)과 같은 자리수다.
+        /// </summary>
+        public const float SpawnAhead = 40f;
         /// <summary>논리 병력 상한 (기획서 §3.3). 넘기면 수가 커지는 쾌감 대신 숫자만 늘어난다</summary>
         public const int MaxUnits = 2000;
 
@@ -43,7 +47,6 @@ namespace CrowdRunner.Core
         // 프로퍼티가 아니라 **필드**다 — `Combat.TickWall` 이 `ref` 로 받기 때문이다.
         // 처음에 프로퍼티로 두고 임시 변수에 복사해 `ref` 로 넘겼는데, 그러면 깎인 값이
         // **돌아오지 않아 벽이 영원히 안 부서진다**. 컴파일은 된다
-        float blockingEnemies, blockingWallHp;
         /// <summary>
         /// 막고 있는 것이 **서 있는 z**. 그리는 쪽이 적 무리나 벽을 어디에 둘지 알아야 하는데,
         /// 그것 때문에 `level.events[BlockingIndex]` 로 레벨 데이터를 뒤지게 하고 싶지 않다 —
@@ -58,16 +61,24 @@ namespace CrowdRunner.Core
         /// </summary>
         public bool BlockingIsFinal { get; private set; }
 
-        public float BlockingEnemies => blockingEnemies;
-        public float BlockingWallHp => blockingWallHp;
+        public float BlockingEnemies => Battle.Alive;
+        public float BlockingWallHp => Battle.WallHp;
 
         /// <summary>고른 게이트 기록 — 경로를 되짚을 때 쓴다 (`"L"`/`"R"`)</summary>
         public readonly List<int> ChosenLanes = new List<int>();
         /// <summary>전사 누계 — 끝난 뒤 `k`(적 1 명당 잃은 아군)를 **출력으로** 계산할 때 쓴다</summary>
-        public float AlliesLost { get; private set; }
-        public float EnemiesKilled { get; private set; }
+        public float AlliesLost => Battle.AlliesLost;
+        public float EnemiesKilled => Battle.EnemiesKilled;
 
         readonly bool[] fired;
+
+        /// <summary>
+        /// **총격전.** 적 개체와 탄환이 전부 여기 있다 (`Core/Battle.cs`). 표현은 이 배열을
+        /// 직접 읽어서 그린다 — `Sim` 을 거쳐 복사하면 프레임당 할당 0 B 예산을 로직이 먼저 쓴다.
+        /// </summary>
+        public readonly Battle Battle = new Battle();
+        /// <summary>최종 방어선이 **깔렸나**. 이기는 조건이 "그것을 지웠다" 이므로 필요하다</summary>
+        bool finalSpawned;
 
         // ── 표현이 읽는 문 ────────────────────────────────────────────────────────
         // **이번 틱에 무슨 일이 있었나.** 표현(파티클·소리·카메라)은 *상태*가 아니라 *사건*을
@@ -150,43 +161,63 @@ namespace CrowdRunner.Core
             }
             if (zones.Count > 0) { TickZones(dt); if (State == SimState.Lost) return; }
 
-            if (BlockingIndex >= 0)
+            // ── 전투 ──────────────────────────────────────────────────────────
+            // **막는 것이 없다.** 전에는 적을 만나면 `BlockingIndex` 가 서고 전진이 20 % 로
+            // 떨어진 채 `Combat.Tick` 이 양쪽 수를 깎았다. 그 모델은 아군 수가 결과에 안
+            // 들어가서 적 하나당 잃는 아군이 **늘 0.427** 이었다 (`COMBAT_REWORK.md` §1).
+            //
+            // 이제 적은 개체이고 아군의 수는 **발사율**이다. 전투는 멈추는 사건이 아니라
+            // 달리면서 계속 도는 것이고, 느려지는 정도만 압력이 정한다.
+            int aliveBefore = Battle.Alive;
+            float al = Allies;
+            float mul = Battle.Step(dt, ref al, Z, X, ally, zombie);
+            Allies = al;
+            Last.lostToCombat = Battle.LostThisTick;
+            Last.killed = Battle.KilledThisTick;
+            if (Battle.Alive > 0 && aliveBefore == 0) Last.fightBegan = true;
+            if (Battle.Alive == 0 && aliveBefore > 0) Last.fightEnded = true;
+            if (Allies <= 0f) { State = SimState.Lost; return; }
+
+            Z += level.forwardSpeed * mul * dt;
+
+            // 벽은 **지나갈 수 없다.** 총알이 부수는 동안 군단은 그 앞에 선다 — 벽이 시간을
+            // 받아 가는 성질은 그대로이고, 다만 그 시간이 이제 **화력**으로 줄어든다
+            if (Battle.HasWall)
             {
-                // **싸우면서도 민다.** 전에는 교전 중 전진이 **완전히 멈췄다.** 그러면 무리가
-                // 커질수록 멈춰 서는 시간이 길어지고(35 명이면 2.8 초, 최종 방어선은 4~10 초),
-                // 화면은 *막아내는 것*이 아니라 **멈춰 있는 것**으로 읽힌다. 오너가 준 광고는
-                // 군단이 **밀고 지나간다** (`docs/REF_TOPWAR.md`).
-                //
-                // 느리게(20 %) 가는 이유: 0 이면 멈춤이고, 100 % 면 적을 지나쳐 버린다.
-                // 20 % 면 3 초짜리 교전에서 2.7 m 를 민다 — 무리 간격(15 m 이상)보다 훨씬
-                // 작으므로 **다음 무리를 앞당겨 불러오지 않는다.**
-                //
-                // ⚠ 그리고 여기서 `return` 하므로 **사건은 여전히 안 터진다.** 미는 동안
-                // 지나친 사건은 교전이 끝난 뒤 순서대로 처리된다 — 전진은 하되 *건너뛰지는
-                // 않는다*. 이 둘이 같이 가야 레벨 글이 뜻을 지킨다.
-                Z += level.forwardSpeed * PushThrough * dt;
-                BlockingZ = Z + 2f;     // 맞붙은 자리가 군단 바로 앞으로 따라온다
-                TickBlocking(dt);
-                return;
+                if (Battle.WallHp > 0f)
+                {
+                    float stop = Battle.WallZ - 1.5f;
+                    if (Z > stop) Z = stop;
+                }
+                else { Battle.ClearWall(); Last.wallEnded = true; }
             }
 
-            Z += level.forwardSpeed * dt;
+            State = Battle.Alive > 0 ? SimState.Fighting
+                  : Battle.HasWall ? SimState.Breaking : SimState.Running;
+            BlockingZ = NearestEnemyZ();
 
             // 지나친 사건을 **순서대로** 처리한다. 한 틱에 둘을 지나칠 수 있고(빠른 속도·긴 dt),
-            // 그때 뒤엣것을 건너뛰면 레벨이 조용히 쉬워진다
+            // 그때 뒤엣것을 건너뛰면 레벨이 조용히 쉬워진다.
+            //
+            // ⚠ **`break` 가 아니라 `continue` 다.** 적은 `SpawnAhead` 만큼 **앞당겨** 터지므로
+            // z 순서대로 봐도 "아직 멀다" 가 뒤엣것에 대해 참이 아니다. 끊으면 적이 안 깔린다
             for (int i = 0; i < level.events.Count; i++)
             {
                 if (fired[i]) continue;
                 var e = level.events[i];
-                if (Z < e.z) break;          // z 오름차순이 보장돼 있다 (`LevelData.Validate`)
+                float trigger = e.kind == EventKind.Enemy ? e.z - SpawnAhead : e.z;
+                if (Z < trigger) continue;
                 fired[i] = true;
                 // **그쪽 길에 선 군단만 만난다.** 반대쪽으로 갔으면 그냥 지나간다 —
                 // 이것이 게이트 선택에 뒤따르는 결과를 만든다 (`LevelEvent.lane`)
                 if (e.lane != 0 && Side != e.lane) continue;
                 Enter(i, e);
-                if (BlockingIndex >= 0) return;
             }
 
+            // **최종 방어선을 지웠으면 거기서 끝난다** — 남은 길을 걸어가게 두면 판이 늘어지고,
+            // 그 사이에 아무 일도 없다. 탄환이 아직 날고 있으면 기다린다(마지막 한 발이
+            // 끝낼 수 있다)
+            if (finalSpawned && Battle.Alive == 0 && Battle.BulletCount == 0) { Finish(); return; }
             if (Z >= level.length) Finish();
         }
 
@@ -286,13 +317,16 @@ namespace CrowdRunner.Core
                     break;
                 }
                 case EventKind.Enemy:
-                    BlockingIndex = i; BlockingZ = e.z; BlockingIsFinal = e.isFinal;
-                    blockingEnemies = e.enemyCount;
-                    State = SimState.Fighting; Last.fightBegan = true;
+                    // **깔기만 한다 — 막지 않는다.** 적은 저 앞에 서 있다가 달려온다.
+                    // 씨앗을 사건 번호에서 만드는 이유는 결정성이다: 같은 판은 같은 자리에
+                    // 깔려야 시뮬과 게임의 결과가 같다 (오너 완료 조건의 마지막 줄)
+                    Battle.Spawn(e.enemyCount, e.z, e.lane * (RoadWidth * 0.25f), RoadWidth, 7919 + i * 131);
+                    BlockingIndex = i; BlockingIsFinal = e.isFinal;
+                    if (e.isFinal) finalSpawned = true;
                     break;
                 case EventKind.Wall:
-                    BlockingIndex = i; BlockingZ = e.z; BlockingIsFinal = false;
-                    blockingWallHp = e.wallHp;
+                    Battle.SetWall(e.z, e.wallHp);
+                    BlockingIndex = i; BlockingIsFinal = false;
                     State = SimState.Breaking; Last.wallBegan = true;
                     break;
                 case EventKind.Narrow:
@@ -305,45 +339,23 @@ namespace CrowdRunner.Core
             }
         }
 
-        void TickBlocking(float dt)
+        /// <summary>가장 가까운 산 적의 z. 카메라가 붙을 자리를 표현이 이 값으로 잡는다</summary>
+        float NearestEnemyZ()
         {
-            var e = level.events[BlockingIndex];
-            if (e.kind == EventKind.Enemy)
+            float best = Z; bool any = false;
+            for (int i = 0; i < Battle.EnemyCount; i++)
             {
-                float a0 = Allies, e0 = blockingEnemies;
-                float al = Allies;
-                Combat.Tick(ref al, ref blockingEnemies, ally, zombie, RoadWidth, dt);
-                Allies = al;
-                AlliesLost += a0 - Allies;
-                EnemiesKilled += e0 - blockingEnemies;
-                Last.lostToCombat = a0 - Allies;
-                Last.killed = e0 - blockingEnemies;
-
-                if (Allies <= 0f) { State = SimState.Lost; BlockingIndex = -1; return; }
-                if (blockingEnemies <= 0f)
-                {
-                    bool wasFinal = e.isFinal;
-                    BlockingIndex = -1;
-                    State = SimState.Running; Last.fightEnded = true;
-                    // **최종 방어선을 넘으면 거기서 끝난다** — 남은 길을 걸어가게 두면 판이 늘어지고,
-                    // 그 사이에 아무 일도 없다
-                    if (wasFinal) Finish();
-                }
+                if (Battle.EState[i] == 2) continue;
+                if (!any || Battle.EZ[i] < best) { best = Battle.EZ[i]; any = true; }
             }
-            else // Wall
-            {
-                Combat.TickWall(Allies, ref blockingWallHp, ally, RoadWidth, dt);
-                if (blockingWallHp <= 0f) { BlockingIndex = -1; State = SimState.Running; Last.wallEnded = true; }
-            }
+            return any ? best : Z + 2f;
         }
 
         void Finish()
         {
             // 최종 방어선을 깬 적이 있어야 이긴 것이다. 길 끝까지 갔는데 그걸 안 만났다면
             // **레벨 데이터가 틀린 것**이고 (`Validate` 가 막는다), 여기서는 졌다고 본다
-            bool clearedFinal = false;
-            for (int i = 0; i < level.events.Count; i++)
-                if (fired[i] && level.events[i].kind == EventKind.Enemy && level.events[i].isFinal) clearedFinal = true;
+            bool clearedFinal = finalSpawned && Battle.Alive == 0;
             State = clearedFinal && Allies > 0f ? SimState.Won : SimState.Lost;
         }
 
