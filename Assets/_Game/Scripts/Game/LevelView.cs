@@ -31,6 +31,7 @@ namespace CrowdRunner.View
 
         LevelRunner runner;
         CrowdField allies, foes;
+        readonly Gunfire gunfire = new Gunfire();
         VatCrowd allyView, foeView;
         Transform road, wall, divider, ground, curbL, curbR, wallL, wallR;
         Transform[] gates = new Transform[0];
@@ -66,6 +67,7 @@ namespace CrowdRunner.View
             foeView = new VatCrowd("_lo", foe: true);
             allyView.Init(renderCap); foeView.Init(renderCap);
             allyView.SetActive(true); foeView.SetActive(true);
+            gunfire.Init();
             fx = new CasualtyFx(); fx.Init();
             marks = new RoadMarks();
             shadows = new BlobShadows(); shadows.Init();
@@ -211,6 +213,7 @@ namespace CrowdRunner.View
             allyView.Sync(allies); allyView.Draw();
 
             DrawFoes(sim, w);
+            gunfire.Draw(sim.Battle, sim.X, sim.Z, Time.deltaTime);
 
             // **벽은 비율을 정직하게 따라가야 한다.** 세션 A 측정: 벽 HP 2400 과 3200 이 네 경로
             // 모두 **한 숫자도 안 달랐다** — 벽은 밸런스가 아니라 *"병력이 많으면 빨리 부순다"* 가
@@ -420,70 +423,25 @@ namespace CrowdRunner.View
         /// </summary>
         void DrawFoes(Sim sim, float w)
         {
-            var lv = runner.Level;
+            var b = sim.Battle;
             foes.Clear();
-            if (lv == null) { foeView.Sync(foes); foeView.Draw(); return; }
-
-            int budget = renderCap;
-            foreach (var e in lv.events)
+            int cap = renderCap;
+            for (int i = 0; i < b.EnemyCount && foes.Count < cap; i++)
             {
-                if (e.kind != EventKind.Enemy || budget <= 0) continue;
-                // 지나온 무리는 안 그린다. 막고 있는 무리는 `BlockingZ` 가 그 자리를 말한다
-                bool engaged = sim.BlockingEnemies > 0.5f && Mathf.Abs(e.z - sim.BlockingZ) < 2f;
-                if (!engaged && e.z < sim.Z - 1f) continue;
-                int n = engaged ? Mathf.RoundToInt(sim.BlockingEnemies) : e.enemyCount;
-                if (n <= 0) continue;
-                n = Mathf.Min(n, budget);
-                budget -= n;
-                AddCluster(foes, n, e.lane * w * 0.25f, e.z, w, 1, e.isFinal);
+                // 쓰러진 것은 여기서 빼고 `Gunfire` 가 **바닥에 누워** 그린다 — 군중 렌더러는
+                // 선 자세 하나뿐이라 눕힐 수가 없다
+                if (b.EState[i] == 2) continue;
+                int k = foes.Count;
+                foes.Add(1, 1, 0f, 1f);
+                foes.X[k] = b.EX[i]; foes.Z[k] = b.EZ[i];
+                foes.SideTarget[k] = b.EX[i];
+                // **위상을 번호에서 만든다.** `CrowdField.Add` 는 매번 새 난수를 넣는데 이 배열은
+                // 프레임마다 다시 채워지므로, 그대로 두면 걸음이 **매 프레임 튄다**. 번호 + 시간은
+                // 개체마다 다르면서 프레임 사이에 이어진다
+                float ph = i * 0.137f + Time.time * 1.6f;
+                foes.Phase[k] = ph - Mathf.Floor(ph);
             }
             foeView.Sync(foes); foeView.Draw();
-        }
-
-        /// <summary>
-        /// 한 무리를 **기존 무리 뒤에 덧붙인다** (`Formation` 은 매번 비우고 하나만 채운다).
-        /// 적은 여러 무리가 **동시에 화면에 있을 수 있어서** 필요한 것이다 — 그게 이 게임의
-        /// 원칙(*무수히 많은 적을 막아낸다*)이 화면에서 성립하는 조건이다.
-        /// </summary>
-        void AddCluster(CrowdField f, int n, float cx, float cz, float w, byte side, bool final = false)
-        {
-            int from = f.Count;
-            f.Add(n, side, 0f, 1f);
-            if (final) Band(f, from, f.Count, cz, w);
-            else Disc(f, from, f.Count, cx, cz, w);
-        }
-
-        /// <summary>
-        /// **마지막 적은 덩어리가 아니라 벽이다.**
-        ///
-        /// 장르 규칙은 *"끝에서 보스와 최후의 일전"* 인데(`docs/REF_TOPWAR.md` §4), 우리
-        /// 마지막 무리는 **앞의 것들과 똑같이 생겼다** — 수만 많을 뿐 *마지막* 이라는 표시가 없다.
-        ///
-        /// 둥근 덩어리로 두면 더 큰 덩어리일 뿐이다. **길을 가로로 꽉 막는 줄**로 세우면
-        /// *뚫어야 하는 것* 으로 읽힌다 — 같은 수로 뜻을 바꾸는 쪽이라 비용이 0 이다.
-        ///
-        /// 세션 A 가 `Sim.BlockingIsFinal` 을 열어 줬지만 여기서는 안 쓴다: 이 함수는 **아직
-        /// 안 닿은 무리도** 그리므로 레벨의 `isFinal` 이 필요하고, 그 둘은 같은 값이다.
-        /// </summary>
-        void Band(CrowdField f, int from, int to, float cz, float w)
-        {
-            int n = Mathf.Max(1, to - from);
-            float lim = w * 0.5f - 0.35f;
-            // 가로로 먼저 채우고 뒤로 쌓는다 — 줄 수는 수가 많아질수록 는다
-            int perRow = Mathf.Max(4, Mathf.CeilToInt(w / 0.55f));
-            int rows = Mathf.CeilToInt(n / (float)perRow);
-            for (int i = from; i < to; i++)
-            {
-                int k = i - from;
-                int row = k / perRow, col = k % perRow;
-                float t = perRow == 1 ? 0.5f : col / (float)(perRow - 1);
-                float jx = (f.Phase[i] - 0.5f) * 0.22f;
-                float jz = (f.SpeedMul[i] - 1f) * 1.6f;
-                f.X[i] = Mathf.Clamp(Mathf.Lerp(-lim, lim, t) + jx, -lim, lim);
-                f.Z[i] = cz + row * 0.5f - rows * 0.25f + jz;
-                f.Phase[i] += Time.deltaTime * 1.4f;
-                if (f.Phase[i] >= 1f) f.Phase[i] -= 1f;
-            }
         }
 
         /// <summary>

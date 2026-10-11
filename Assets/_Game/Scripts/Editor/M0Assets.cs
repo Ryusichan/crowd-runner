@@ -87,6 +87,12 @@ namespace CrowdRunner.EditorTools
             Save(sh, "roadmark", new Color(0.90f, 0.89f, 0.82f, 1.00f));
             Save(sh, "blobshadow", new Color(0.05f, 0.08f, 0.05f, 0.38f));
             Save(sh, "roadtree", new Color(0.30f, 0.50f, 0.30f, 1.00f));
+            // 총격 셋 (`View/Gunfire.cs`). 탄환은 **길보다 밝아야** 보인다 — 길이 0.9 회색이라
+            // 흰색으로 두면 묻힌다. 화염은 주황, 쓰러진 몸은 적군 색보다 어둡게(죽은 것은
+            // 산 것보다 가라앉아 보여야 수를 잘못 세지 않는다)
+            Save(sh, "tracer", new Color(1.00f, 0.93f, 0.42f, 1.00f));
+            Save(sh, "muzzle", new Color(1.00f, 0.72f, 0.26f, 0.95f));
+            Save(sh, "foedown", new Color(0.52f, 0.20f, 0.19f, 0.92f));
         }
 
         static void Save(Shader sh, string name, Color c)

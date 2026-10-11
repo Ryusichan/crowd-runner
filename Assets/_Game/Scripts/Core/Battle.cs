@@ -76,6 +76,15 @@ namespace CrowdRunner.Core
         /// <summary>지금 초당 몇 발 나가는가. 총구 화염의 **양**을 이 수로 정한다</summary>
         public float FireRate;
         public int ShotsThisTick, HitsThisTick;
+        /// <summary>
+        /// **이번 틱에 맞은 자리.** 표현이 거기에 불꽃을 띄운다. 좌표를 표현이 다시 계산하면
+        /// 그것이 오너가 말한 *"총알 효과만 표시하는 가짜 사격"* 이 된다 — 맞은 자리는
+        /// 맞춘 쪽만 안다.
+        /// </summary>
+        public const int HitCap = 64;
+        public int HitCount;
+        public readonly float[] HitX = new float[HitCap];
+        public readonly float[] HitZ = new float[HitCap];
         public int KilledThisTick;
         public float LostThisTick;
 
@@ -101,7 +110,12 @@ namespace CrowdRunner.Core
         /// 적 한 무리를 깐다. **막는 사건이 아니라 웨이브**다 — 군단이 아직 멀리 있을 때 깔아 두면
         /// 적이 **화면에 보이고 나서** 닿는다. 닿는 순간에 생기면 그 전까지는 아무것도 없는 길이다.
         /// </summary>
-        public void Spawn(int count, float z, float laneX, float roadWidth, int seed)
+        /// <param name="band">
+        /// **마지막 무리는 덩어리가 아니라 벽이다.** 장르의 끝은 보스와 최후의 일전인데
+        /// (`docs/REF_TOPWAR.md` §4) 둥근 덩어리로 두면 *더 큰 덩어리*일 뿐이다. 길을 가로로
+        /// 꽉 막는 줄로 세우면 **뚫어야 하는 것**으로 읽힌다 — 같은 수로 뜻을 바꾸므로 비용이 0 이다.
+        /// </param>
+        public void Spawn(int count, float z, float laneX, float roadWidth, int seed, bool band = false)
         {
             // 결정적인 배치 — `System.Random` 을 쓰되 **씨앗을 받는다**. 시뮬과 게임이 같은
             // 자리를 깔아야 오너 완료 조건의 마지막 줄이 선다
@@ -111,11 +125,23 @@ namespace CrowdRunner.Core
             {
                 int i = EnemyCount++;
                 // 수가 많을수록 뒤로 깊어진다 — 한 줄로 서면 "밀려온다" 가 아니라 "벽" 이 된다
-                float depth = 2f + count * 0.12f;
-                EX[i] = laneX + (float)(rng.NextDouble() - 0.5) * roadWidth * 0.8f;
-                if (EX[i] < -half) EX[i] = -half;
-                if (EX[i] > half) EX[i] = half;
-                EZ[i] = z + (float)rng.NextDouble() * depth;
+                if (band)
+                {
+                    int perRow = (int)(roadWidth / 0.85f); if (perRow < 4) perRow = 4;
+                    int col = k % perRow, row = k / perRow;
+                    float span = roadWidth - 0.9f;
+                    EX[i] = -half + 0.45f + (perRow > 1 ? span * col / (perRow - 1) : span * 0.5f);
+                    EZ[i] = z + row * 0.85f;
+                }
+                else
+                {
+                    // 수가 많을수록 뒤로 깊어진다 — 한 줄로 서면 "밀려온다" 가 아니라 "벽" 이 된다
+                    float depth = 2f + count * 0.12f;
+                    EX[i] = laneX + (float)(rng.NextDouble() - 0.5) * roadWidth * 0.8f;
+                    if (EX[i] < -half) EX[i] = -half;
+                    if (EX[i] > half) EX[i] = half;
+                    EZ[i] = z + (float)rng.NextDouble() * depth;
+                }
                 EHp[i] = EMaxHp[i] = UnitStats.Zombie.hp * 3f;   // 30 — COMBAT_REWORK §3
                 EState[i] = 0; EDieT[i] = 0f; eAtkT[i] = 0f;
             }
@@ -131,7 +157,7 @@ namespace CrowdRunner.Core
         /// <param name="allies">병력. 줄어든 만큼 여기서 깎는다</param>
         public float Step(float dt, ref float allies, float allyZ, float allyX, UnitStats a, UnitStats e)
         {
-            ShotsThisTick = 0; HitsThisTick = 0; KilledThisTick = 0; LostThisTick = 0f;
+            ShotsThisTick = 0; HitsThisTick = 0; KilledThisTick = 0; LostThisTick = 0f; HitCount = 0;
 
             StepEnemies(dt, ref allies, allyZ, allyX, a, e);
             Fire(dt, allies, allyZ, allyX, a);
@@ -286,6 +312,7 @@ namespace CrowdRunner.Core
                 if (dx * dx + dz * dz <= HitRadius * HitRadius)
                 {
                     HitsThisTick++;
+                    if (HitCount < HitCap) { HitX[HitCount] = BX[b]; HitZ[HitCount] = BZ[b]; HitCount++; }
                     if (t == -2)
                     {
                         WallHp -= bDmg[b];
@@ -352,7 +379,7 @@ namespace CrowdRunner.Core
 
         public void Clear()
         {
-            EnemyCount = 0; BulletCount = 0; shotAccum = 0f;
+            EnemyCount = 0; BulletCount = 0; shotAccum = 0f; HitCount = 0;
             HasWall = false; WallHp = 0f;
             FireRate = 0f; ShotsThisTick = HitsThisTick = KilledThisTick = 0; LostThisTick = 0f;
             AlliesLost = 0f; EnemiesKilled = 0f;

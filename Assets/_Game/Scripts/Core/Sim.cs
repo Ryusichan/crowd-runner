@@ -320,7 +320,7 @@ namespace CrowdRunner.Core
                     // **깔기만 한다 — 막지 않는다.** 적은 저 앞에 서 있다가 달려온다.
                     // 씨앗을 사건 번호에서 만드는 이유는 결정성이다: 같은 판은 같은 자리에
                     // 깔려야 시뮬과 게임의 결과가 같다 (오너 완료 조건의 마지막 줄)
-                    Battle.Spawn(e.enemyCount, e.z, e.lane * (RoadWidth * 0.25f), RoadWidth, 7919 + i * 131);
+                    Battle.Spawn(e.enemyCount, e.z, e.lane * (RoadWidth * 0.25f), RoadWidth, 7919 + i * 131, e.isFinal);
                     BlockingIndex = i; BlockingIsFinal = e.isFinal;
                     if (e.isFinal) finalSpawned = true;
                     break;
