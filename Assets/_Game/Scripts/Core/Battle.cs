@@ -41,6 +41,12 @@ namespace CrowdRunner.Core
         /// 형성해야 한다."* 한 무리를 통째로 깔면 큰 군단은 1 초 안에 지우고 다시 빈 복도를 달린다.
         /// </summary>
         public const float StreamPerSec = 34f;
+        /// <summary>
+        /// 한 무리를 **다 내보내는 데 걸리는 시간**(초). 속도를 상수 하나로 두었더니 큰 군단의
+        /// 화력이 갈 곳이 없었다 — 300 명은 초당 125 명을 지울 수 있는데 34 명만 오니 남는
+        /// 화력이 **아무 일도 안 한다**. 무리가 클수록 빨리 쏟아져야 *수가 화력*이 값을 한다.
+        /// </summary>
+        public const float ReleaseSeconds = 4f;
         /// <summary>흘러드는 적이 생기는 거리 (군단 앞)</summary>
         public const float StreamAhead = 38f;
 
@@ -75,7 +81,7 @@ namespace CrowdRunner.Core
         readonly float[] bRange = new float[BulletCap];
 
         // ── 아직 안 나온 적 ───────────────────────────────────────────────────────
-        struct Pending { public int left; public float laneX, roadWidth, z; public int seed; public bool band; }
+        struct Pending { public int left; public float laneX, roadWidth, z, rate; public int seed; public bool band; }
         readonly Pending[] pending = new Pending[8];
         int pendingCount;
         float streamAccum;
@@ -157,8 +163,10 @@ namespace CrowdRunner.Core
         public void Queue(int count, float z, float laneX, float roadWidth, int seed, bool band = false)
         {
             if (pendingCount >= pending.Length) { pending[pendingCount - 1].left += count; return; }
+            float rate = count / ReleaseSeconds;
+            if (rate < StreamPerSec) rate = StreamPerSec;
             pending[pendingCount++] = new Pending
-            { left = count, laneX = laneX, roadWidth = roadWidth, z = z, seed = seed, band = band };
+            { left = count, laneX = laneX, roadWidth = roadWidth, z = z, rate = rate, seed = seed, band = band };
         }
 
         public void SetWall(float z, float hp) { HasWall = true; WallZ = z; WallHp = WallMaxHp = hp; }
@@ -189,7 +197,7 @@ namespace CrowdRunner.Core
         void Stream(float dt, float allyZ)
         {
             if (pendingCount == 0) return;
-            streamAccum += StreamPerSec * dt;
+            streamAccum += pending[0].rate * dt;
             while (streamAccum >= 1f && pendingCount > 0 && EnemyCount < EnemyCap)
             {
                 streamAccum -= 1f;
@@ -243,7 +251,7 @@ namespace CrowdRunner.Core
                 }
 
                 float dz = EZ[i] - allyZ;
-                if (dz <= Contact)
+                if (dz <= Contact && dz >= -Contact)
                 {
                     // 닿은 적은 **전부** 때린다 — 전선 폭 제한이 없다. 둘러싸이면 빨리 녹는다
                     EState[i] = 1;
@@ -259,8 +267,12 @@ namespace CrowdRunner.Core
                 }
                 else
                 {
+                    // **군단을 쫓는다.** 전에는 늘 −z 로만 걸어서, 군단이 빠르게 지나치면
+                    // 적이 **뒤에 남아 영원히 멀어졌다** (측정: 최근접 −117 m). 뒤에 남은 적은
+                    // 표적도 아니고 죽지도 않아서, 화면에서는 *지나쳐 버린 것*으로 보이고
+                    // 판정에서는 *아직 안 끝난 전투*로 남는다
                     EState[i] = 0;
-                    EZ[i] -= e.speed * dt;
+                    EZ[i] += (dz > 0f ? -1f : 1f) * e.speed * dt;
                     float dx = allyX - EX[i];
                     float step = e.speed * 0.4f * dt;
                     if (dx > step) dx = step; else if (dx < -step) dx = -step;
@@ -280,7 +292,8 @@ namespace CrowdRunner.Core
             {
                 if (EState[i] == 2) continue;
                 float dz = EZ[i] - allyZ;
-                if (dz < -Contact || dz > Range) continue;
+                // 뒤로 흘러간 적도 **조금은** 쏜다 — 지나친 적이 그대로 쌓이면 전투가 안 끝난다
+                if (dz < -6f || dz > Range) continue;
                 cand[candCount++] = i;
             }
         }

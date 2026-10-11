@@ -11,7 +11,11 @@ namespace CrowdRunner.Core
         public float interval;
         public float speed;
 
-        public static UnitStats Ally => new UnitStats { hp = 10f, damage = 10f, interval = 0.8f, speed = 4.5f };
+        /// <summary>
+        /// 발사 간격 **0.5 초** — 오너가 준 첫 전투 수치다 (`docs/COMBAT_REWORK.md` §3).
+        /// 0.8 로 두었던 것은 전선 소모 모델 시절의 값이고, 문서와 코드가 어긋나 있었다.
+        /// </summary>
+        public static UnitStats Ally => new UnitStats { hp = 10f, damage = 10f, interval = 0.5f, speed = 4.5f };
         /// <summary>
         /// 좀비: **느리고 하나하나는 약하다. 대신 많다.** `[WORKING]` — 오너가 플레이하고 정한다.
         ///

@@ -14,7 +14,7 @@ speed 7.0
 length 265
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
-rating 115 150 176
+rating 56 116 166
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
