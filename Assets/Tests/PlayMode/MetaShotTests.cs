@@ -949,6 +949,49 @@ namespace CrowdRunner.Tests
         }
 
         /// <summary>
+        /// **연속 플레이를 필름으로 뜬다.** 오너 2026-10-11: *"자동 테스트 결과뿐 아니라 실제
+        /// 연속 플레이 영상을 통해 검증해라."*
+        ///
+        /// 정지 사진은 *전투가 3 초 멈춰 보이는가*(오너 지시 6)를 못 가린다 — 그 질문은
+        /// **연속된 프레임**이라야 답이 나온다. 같은 자리의 사진 두 장이면 멈춘 것이고,
+        /// 전선이 밀려 올라가면 미는 것이다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator Films_The_Battle_Continuously()
+        {
+            var lv = LevelCatalog.Find("1-1");
+            Assert.IsNotNull(lv, "1-1 을 목록에서 못 찾았다");
+            flow.StartLevel(lv);
+            yield return null;
+            yield return null;
+
+            var runner = GameBoot.Runner;
+            Assert.IsNotNull(runner.Sim, "1-1 을 못 띄웠다 — " + runner.Error);
+            Directory.CreateDirectory($"{Dir}/battle");
+
+            const int Frames = 44;
+            const float Step = 0.24f;
+            float next = 0f;
+            int shot = 0, guard = 0;
+            while (shot < Frames && guard++ < 20000 && runner.Sim != null
+                   && runner.Sim.State != SimState.Won && runner.Sim.State != SimState.Lost)
+            {
+                runner.TargetX = PickLane(runner);
+                if (runner.Sim.Time >= next)
+                {
+                    var s = runner.Sim; var b = s.Battle;
+                    ShotWorld($"battle/{shot:00}", runner);
+                    Debug.Log($"[CR-TEST] 필름 {shot:00}: t {s.Time:F1}s · 아군 {s.Units} · 쏜 병사 {b.FiringThisTick}" +
+                              $" · 적 {b.Alive} · 탄환 {b.BulletCount} · z {s.Z:F0}m");
+                    shot++; next = s.Time + Step;
+                }
+                yield return null;
+            }
+            Debug.Log($"[CR-TEST] 필름 {shot} 장 · {runner.Sim.State} · 남은 {runner.Sim.Units}");
+            Assert.GreaterOrEqual(shot, 20, "필름이 너무 짧다 — 연속으로 볼 수가 없다");
+        }
+
+        /// <summary>
         /// **앞의 게이트에서 더 많이 주는 쪽.** `Sim.Apply` 로 둘을 실제로 계산해서 고른다 —
         /// *"큰 수가 좋다"* 는 이 게임에서 틀린 규칙이다(`+10` 과 `×3` 중 무엇이 큰지는 지금
         /// 병력에 달렸다). 게이트가 없으면 가운데로 돌아온다.
