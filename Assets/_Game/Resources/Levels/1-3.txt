@@ -14,7 +14,7 @@ speed 7.0
 length 225
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
-rating 4 33 67
+rating 79 127 166
 
 
 # ☣ 기준: tools/sim 이 전 경로를 돌려 잰 잔여에서 뽑았다
@@ -36,9 +36,9 @@ rating 4 33 67
 # (`docs/REF_TOPWAR.md` — "Avoid red gates that shrink your army"). 둘 다 더하기면
 # 나쁜 쪽도 **덜 좋을 뿐**이라 틀려도 안 아프다. 이제 잘못 고르면 **줄어든다**.
 gates 45..105 every 30 | L add 26 | R sub 10
-enemies 60..100 every 40 count 26
-enemy 125 count 60
+enemies 60..100 every 40 count 64
+enemy 125 count 140
 gates 150..180 every 30 | R add 36 | L sub 12
-enemies 160..205 every 45 count 26
+enemies 160..205 every 45 count 64
 
-enemy 218 count 70 final
+enemy 218 count 170 final
