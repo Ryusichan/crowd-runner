@@ -82,30 +82,37 @@
 
 ## 10. ⚠ 이름 쓸기 — **"러너" 가 저장소에서 빠졌다** (2026-10-12, A)
 
-오너 지시: *"러너란 글은 전부 빠져야해."* 이 말이 나온 자리가 중요하다 — 오너가 레퍼런스
-세 장을 보내며 *"총으로 적을 무찌르는 거잖아"* 라고 한 직후다. 장르 이름이 설계를 끌고
-갔다는 뜻이고, 실제로 ··· 에 총·사격·
-무기·발사가 **한 번도 안 나온다**(전부  에만 있다).
+오너 지시: *"러너란 글은 전부 빠져야해."* 이 말이 나온 자리가 중요하다 — 레퍼런스 세 장을
+보내며 *"총으로 적을 무찌르는 거잖아"* 라고 한 **직후**다. 장르 이름이 설계를 끌고 갔다는
+뜻이고, 실제로 그랬다: `DESIGN.md` · `LEVELS.md` · `REF_TOPWAR.md` · `M0_CROWD.md` 에
+총 · 사격 · 무기 · 발사가 **한 번도 안 나온다.** 39 번 전부 `COMBAT_REWORK.md` 안에 있다 —
+오너가 직접 받아쓰게 한 문서다. 이 저장소 첫 커밋이 `aef497a` *"design for a crowd runner"*
+이고, 코드가 한 줄도 없을 때 `DESIGN.md` 가 **"`crowd-runner` — 장르다"** 라고 박았다.
 
-**B 의 파일도 바뀌었다** — 에디터에 열어 둔 버퍼가 있으면 저장하기 전에 Already up to date. 부터 받아라.
+**B 의 파일도 바뀌었다** — 에디터에 열어 둔 버퍼가 있으면 저장하기 전에 `git pull` 부터 받아라.
 
 | 전 | 후 |
 |---|---|
-|  |  |
-|  /  |  /  |
-|  |  |
-| 지역변수  |  |
-|  (productName) |  |
-|  |  |
-|  |  |
+| `namespace CrowdRunner.*` | `CrowdFire.*` |
+| `LevelRunner` / `LevelRunner.cs` | `LevelPlay` / `LevelPlay.cs` |
+| `GameBoot.Runner` | `GameBoot.Play` |
+| 지역변수 `runner` | `play` |
+| `"Crowd Runner"` (productName) | `"Crowd Fire"` |
+| `com.ryusichan.crowdrunner.m0` | `com.ryusichan.crowdfire.m0` |
+| `crowdrunner_save.json` | `crowdfire_save.json` |
+
+48 개 파일, 컴파일 0 오류, 레벨 10 개 전부 통과.
 
 안 바꾼 것 셋, 전부 **바꾸면 바깥이 깨지는 것**이다:
--  — 공개 깃헙 페이지 주소. 오너 북마크·배포 스크립트가 걸려 있다
--  — 유니티 어셈블리 이름
--  () — 장르가 아니라 **"달리는 좀비"** 라는 적 종류 키다. 데이터 쪽에서
-  쓰면 끊긴다 — 오너께 따로 여쭀다
 
-저장소 폴더 이름()과 공개 저장소 이름은 **오너 결정 대기**.
+- `crowd-runner-demo` — 공개 깃헙 페이지 주소. 오너 북마크와 `deploy-web.ps1` 이 걸려 있다
+- `UnityEngine.TestRunner` — 유니티 어셈블리 이름
+- `z_runner` (`UI/UiKit.cs`) — 장르가 아니라 **"달리는 좀비"** 라는 적 종류 키다. 데이터 쪽에서
+  쓰면 조용히 끊긴다. 오너께 따로 여쭀다
+
+저장소 폴더 이름(`crowd-runner-unity`)과 공개 저장소 이름은 **오너 결정 대기**.
+`com.ryusichan.crowdfire.m0` 로 바꿨으므로 **전에 깐 데모 APK 는 업그레이드가 아니라 별개 앱**으로
+깔리고, 저장 파일 이름도 바뀌어 데모 진행이 초기화된다 (데모라 그대로 간다).
 
 ## 0a. ⚠ 파일을 만들기 전에 **그 자리를 본다** (2026-10-09, A 가 틀렸다)
 
