@@ -89,6 +89,29 @@ namespace CrowdRunner.Core
         public bool HasWall;
         public float WallZ, WallHp, WallMaxHp;
 
+        // ── 드럼통 ───────────────────────────────────────────────────────────────
+        /// <summary>
+        /// **숫자는 걸어서 지나가는 문이 아니라 쏴서 깨는 통이다** (오너 2026-10-12, 레퍼런스 3 장).
+        ///
+        /// 통은 차선에 서 있고 **그 앞에 선 병사만** 통을 쏜다. 그동안 그 병사들은 적을 안 막는다 —
+        /// 키우는 일과 버티는 일이 **같은 화력을 놓고 다툰다.** 산수 게이트에는 이 다툼이 없었다
+        /// (걸어서 지나가면 공짜였다). 벽과 달리 여럿이 동시에 서고, 지나쳐 버리면 그걸로 끝이다.
+        /// </summary>
+        public const int BarrelCap = 8;
+        public int BarrelCount;
+        public readonly float[] RX = new float[BarrelCap];
+        public readonly float[] RZ = new float[BarrelCap];
+        public readonly float[] RHalf = new float[BarrelCap];
+        public readonly float[] RHp = new float[BarrelCap];
+        public readonly float[] RMaxHp = new float[BarrelCap];
+        public readonly int[] RGives = new int[BarrelCap];
+        /// <summary>이번 틱에 깨진 통이 내놓은 병사 — `Sim` 이 군단에 더한다</summary>
+        public int BrokenThisTick;
+        /// <summary>이번 틱에 깨진 통 수 (연출·로그용)</summary>
+        public int BrokeCountThisTick;
+        /// <summary>지나쳐 버린 통 수 — 못 먹은 것이 몇 개인지</summary>
+        public int MissedBarrels;
+
         // ── 이번 틱의 사건 ────────────────────────────────────────────────────────
         /// <summary>이번 틱에 **실제로 일어난 발사 판정** 수. 연출 수가 아니다</summary>
         public int ShotsThisTick;
@@ -169,6 +192,44 @@ namespace CrowdRunner.Core
             { left = count, laneX = laneX, roadWidth = roadWidth, z = z, rate = rate, seed = seed, band = band };
         }
 
+        /// <summary>통 하나를 세운다. `gives` 가 깨졌을 때 나오는 병사 수(통에 적힌 숫자)다</summary>
+        public void AddBarrel(float z, float x, float half, float hp, int gives)
+        {
+            if (BarrelCount >= BarrelCap) return;
+            int b = BarrelCount++;
+            RZ[b] = z; RX[b] = x; RHalf[b] = half; RHp[b] = RMaxHp[b] = hp; RGives[b] = gives;
+        }
+
+        /// <summary>그 병사가 지금 쏠 통 — **앞에 있고 사거리 안이고 정면이어야 한다**</summary>
+        int BarrelFor(float x, float z)
+        {
+            for (int b = 0; b < BarrelCount; b++)
+            {
+                if (RHp[b] <= 0f) continue;
+                float dz = RZ[b] - z;
+                if (dz <= 0f || dz > Range) continue;
+                if (x < RX[b] - RHalf[b] || x > RX[b] + RHalf[b]) continue;
+                return b;
+            }
+            return -1;
+        }
+
+        /// <summary>군단 뒤로 넘어간 통은 **놓친 것**이다 — 되돌아갈 수 없다</summary>
+        void PruneBarrels(float allyZ)
+        {
+            for (int b = BarrelCount - 1; b >= 0; b--)
+            {
+                if (RZ[b] >= allyZ - 2f) continue;
+                if (RHp[b] > 0f) MissedBarrels++;
+                int last = --BarrelCount;
+                if (b != last)
+                {
+                    RX[b] = RX[last]; RZ[b] = RZ[last]; RHalf[b] = RHalf[last];
+                    RHp[b] = RHp[last]; RMaxHp[b] = RMaxHp[last]; RGives[b] = RGives[last];
+                }
+            }
+        }
+
         public void SetWall(float z, float hp) { HasWall = true; WallZ = z; WallHp = WallMaxHp = hp; }
         public void ClearWall() { HasWall = false; WallHp = 0f; }
 
@@ -177,8 +238,10 @@ namespace CrowdRunner.Core
         {
             ShotsThisTick = 0; HitsThisTick = 0; KilledThisTick = 0; LostThisTick = 0f;
             HitCount = 0; FiringThisTick = 0;
+            BrokenThisTick = 0; BrokeCountThisTick = 0;
             frame++;
 
+            PruneBarrels(allyZ);
             Stream(dt, allyZ);
             StepEnemies(dt, ref allies, allyZ, allyX, a, e);
             Candidates(allyZ);
@@ -310,7 +373,13 @@ namespace CrowdRunner.Core
                 if (aFireT[i] > 0f) continue;
 
                 float tx, tz; int t = -1;
-                if (candCount > 0)
+                // **통 앞에 선 병사는 통을 쏜다 — 적이 와 있어도.** 이것이 대가가 생기는 자리다
+                int b = BarrelCount > 0 ? BarrelFor(AX[i], AZ[i]) : -1;
+                if (b >= 0)
+                {
+                    tx = RX[b]; tz = RZ[b];
+                }
+                else if (candCount > 0)
                 {
                     t = cand[(i + frame) % candCount];
                     tx = EX[t]; tz = EZ[t];
@@ -346,6 +415,16 @@ namespace CrowdRunner.Core
                         // 죽은 것은 후보에서 뺀다 — 안 그러면 이번 틱의 뒷 병사들이 시체에 쏜다
                         for (int c = 0; c < candCount; c++)
                             if (cand[c] == t) { cand[c] = cand[--candCount]; break; }
+                    }
+                }
+                else if (b >= 0)
+                {
+                    RHp[b] -= a.damage;
+                    if (HitCount < HitCap) { HitX[HitCount] = tx; HitZ[HitCount] = tz; HitCount++; }
+                    if (RHp[b] <= 0f)
+                    {
+                        RHp[b] = 0f;
+                        BrokenThisTick += RGives[b]; BrokeCountThisTick++;
                     }
                 }
                 else
@@ -421,6 +500,7 @@ namespace CrowdRunner.Core
             AllyCount = 0; EnemyCount = 0; BulletCount = 0; pendingCount = 0;
             streamAccum = 0f; tracerAccum = 0f; candCount = 0;
             HasWall = false; WallHp = 0f;
+            BarrelCount = 0; BrokenThisTick = 0; BrokeCountThisTick = 0; MissedBarrels = 0;
             ShotsThisTick = HitsThisTick = KilledThisTick = FiringThisTick = HitCount = 0;
             LostThisTick = 0f; AlliesLost = 0f; EnemiesKilled = 0f;
         }

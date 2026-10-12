@@ -22,7 +22,7 @@ namespace CrowdRunner.Core
         public GateOption(int lane, GateOp op, int value) { this.lane = lane; this.op = op; this.value = value; }
     }
 
-    public enum EventKind { Gate, Enemy, Wall, Zone, Narrow }
+    public enum EventKind { Gate, Enemy, Wall, Zone, Narrow, Barrel }
 
     /// <summary>
     /// 길 위의 한 사건. **`z` 하나로 줄 세운다** — 이 게임은 선형이고, 그래서 위치는 전진 거리다.
@@ -65,6 +65,16 @@ namespace CrowdRunner.Core
         /// <summary>장애물 체력. 병력이 때려서 0 으로 만들면 지나간다</summary>
         public float wallHp;
 
+        // ---- Barrel ----
+        /// <summary>
+        /// 통에 적힌 숫자 — **깨면 나오는 병사**다 (오너 2026-10-12, 레퍼런스 3 장).
+        ///
+        /// 게이트와 다른 점이 이 게임의 전부다: 게이트는 **걸어서 지나가면 공짜**로 들어오고,
+        /// 통은 **쏴서 깨야** 들어온다. 통 앞에 선 병사는 그동안 적을 안 막으므로, 키우는 일과
+        /// 버티는 일이 **같은 화력**을 놓고 다툰다. 그리고 지나쳐 버리면 못 먹는다.
+        /// </summary>
+        public int gives;
+
         // ---- Zone ----
         /// <summary>
         /// **병력 하나당** 초당 피해. 이 게임에서 **큰 군단에 처음으로 대가가 붙는 자리**다.
@@ -95,6 +105,20 @@ namespace CrowdRunner.Core
 
         public static LevelEvent Wall(float z, float hp, int lane = 0)
             => new LevelEvent { kind = EventKind.Wall, z = z, wallHp = hp, lane = lane };
+
+        /// <summary>
+        /// 드럼통. `hp` 를 안 주면 `gives × HpPerSoldier` 가 된다 — **큰 상품일수록 오래 쏴야 한다**
+        /// 가 기본값이고, 그래서 *"욕심이 곧 위험"* 이 수식으로 성립한다.
+        /// </summary>
+        public static LevelEvent Barrel(float z, int gives, int lane = 0, float hp = 0f)
+            => new LevelEvent
+            {
+                kind = EventKind.Barrel, z = z, gives = gives, lane = lane,
+                wallHp = hp > 0f ? hp : gives * HpPerSoldier,
+            };
+
+        /// <summary>통 1 명당 체력. 피해 10 짜리 총으로 병사 하나를 2.5 발에 번다</summary>
+        public const float HpPerSoldier = 25f;
 
         /// <summary>좁아지는 구간. `zoneLength` 를 길이로 쓴다 (같은 뜻이라 칸을 또 만들지 않는다)</summary>
         public static LevelEvent Narrow(float z, float width, float length, int lane = 0)
@@ -192,7 +216,9 @@ namespace CrowdRunner.Core
             for (int i = 0; i < events.Count; i++)
             {
                 var ev = events[i];
-                if (ev.lane == 0 || ev.kind == EventKind.Gate) continue;
+                // **통은 위험물이 아니다.** 피하면 못 먹는 것이라 피하는 것 자체가 이미 대가다 —
+                // 여기서 막으면 레퍼런스의 기본 그림(나란히 선 통 중 하나를 고른다)을 못 쓴다
+                if (ev.lane == 0 || ev.kind == EventKind.Gate || ev.kind == EventKind.Barrel) continue;
 
                 // 그 사건이 걸쳐 있는 구간 (지역·좁은 구간은 길이가 있다)
                 float from = ev.z;
@@ -202,8 +228,9 @@ namespace CrowdRunner.Core
                 for (int g = 0; g < events.Count; g++)
                 {
                     var ga = events[g];
-                    if (ga.kind != EventKind.Gate) continue;
-                    if (ga.z <= ev.z && ev.z < ga.commitUntilZ) { held = true; break; }
+                    // 통도 값을 치르게 한다 — 피하려고 비키면 그 통을 못 깬다
+                    if (ga.kind != EventKind.Gate && ga.kind != EventKind.Barrel) continue;
+                    if (ga.kind == EventKind.Gate && ga.z <= ev.z && ev.z < ga.commitUntilZ) { held = true; break; }
                     // 피하는 동안 못 먹는 게이트가 있나 — 구간 안이거나 바로 앞뒤 20 m
                     if (ga.z >= from - 20f && ga.z <= to + 20f) overlapped = true;
                 }
@@ -213,7 +240,8 @@ namespace CrowdRunner.Core
                          + " 앞 게이트에 `commit <z>` 를 주거나, 그 자리에 게이트를 겹쳐 두라";
             }
 
-            float last = -1f;            for (int i = 0; i < events.Count; i++)
+            float last = -1f;
+            for (int i = 0; i < events.Count; i++)
             {
                 var e = events[i];
                 if (e.z < last) return "사건이 z 순서가 아니다 (#" + i + " 가 " + e.z + ", 앞은 " + last + ")";

@@ -29,6 +29,7 @@ namespace CrowdRunner.Core
     /// gate 20 commit 90 | L add 30 | R mul 3
     /// zone 30 dps 1.2 len 40 lane R
     /// wall 55 hp 600 lane R
+    /// barrel 80 gives 20 lane R       # 쏴서 깨면 병사 20. hp 를 안 주면 gives × 25
     /// narrow 70 width 3 len 30
     /// enemy 60 count 15 lane L
     /// enemy 160 count 70 final
@@ -241,6 +242,18 @@ namespace CrowdRunner.Core
                     if (!TryKeyNum(head, "hp", out hp)) return "`hp <수>` 가 없다";
                     int lane; TryKeyLane(head, out lane);
                     l.events.Add(LevelEvent.Wall(z, hp, lane));
+                    return null;
+                }
+
+                case "barrel":
+                {
+                    float z, g, hp;
+                    string e = Pos(head, out z); if (e != null) return e;
+                    if (!TryKeyNum(head, "gives", out g)) return "`gives <수>` 가 없다 — 통에 적히는 숫자다";
+                    if (g < 1f) return "`gives` 는 1 이상이어야 한다 — 빈 통은 쏠 이유가 없다";
+                    if (!TryKeyNum(head, "hp", out hp)) hp = 0f;
+                    int lane; TryKeyLane(head, out lane);
+                    l.events.Add(LevelEvent.Barrel(z, (int)g, lane, hp));
                     return null;
                 }
 

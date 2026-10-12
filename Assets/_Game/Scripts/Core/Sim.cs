@@ -98,6 +98,8 @@ namespace CrowdRunner.Core
             public float lostToCombat, lostToZone;
             /// <summary>이번 틱에 지운 적 수</summary>
             public float killed;
+            /// <summary>이번 틱에 통이 깨져 들어온 병사 — 0 이 아니면 그 자리에서 터뜨린다</summary>
+            public int barrelBroke;
         }
         /// <summary>**`Step` 직후에만 유효하다.** 다음 `Step` 이 덮어쓴다</summary>
         public Tick Last;
@@ -108,6 +110,10 @@ namespace CrowdRunner.Core
         readonly List<int> narrows = new List<int>();
         /// <summary>지역에서 녹은 누계 — 전투 손실과 **따로** 센다. 섞으면 어느 쪽이 비쌌는지 못 본다</summary>
         public float ZoneLost { get; private set; }
+        /// <summary>통을 깨서 번 병력 누계 — 게이트로 받은 것과 **따로** 센다</summary>
+        public int BarrelGained { get; private set; }
+        /// <summary>못 깨고 지나친 통 수</summary>
+        public int BarrelsMissed => Battle.MissedBarrels;
 
         /// <summary>
         /// 이 판에서 **동시에 존재한 최대 병력**. 레벨 검증이 이 수로 *"그릴 수 있는 레벨인가"* 를 본다.
@@ -174,6 +180,14 @@ namespace CrowdRunner.Core
             Battle.SetArmy(Allies, X, Z, RoadWidth, dt);
             float mul = Battle.Step(dt, ref al, Z, X, ally, zombie);
             Allies = al;
+            // **깨진 통이 병력을 내놓는다.** 게이트처럼 공짜로 들어오지 않는다 — 쏜 값이다
+            if (Battle.BrokenThisTick > 0)
+            {
+                Allies += Battle.BrokenThisTick;
+                BarrelGained += Battle.BrokenThisTick;
+                Last.barrelBroke = Battle.BrokenThisTick;
+                if (Units > PeakUnits) PeakUnits = Units;
+            }
             Last.lostToCombat = Battle.LostThisTick;
             Last.killed = Battle.KilledThisTick;
             if (Battle.Alive > 0 && aliveBefore == 0) Last.fightBegan = true;
@@ -207,9 +221,15 @@ namespace CrowdRunner.Core
             {
                 if (fired[i]) continue;
                 var e = level.events[i];
-                float trigger = e.kind == EventKind.Enemy ? e.z - SpawnAhead : e.z;
+                // 통도 **닿기 전에** 서 있어야 한다 — 사거리(18 m) 안에 들어와야 쏠 수 있다
+                float trigger = e.kind == EventKind.Enemy || e.kind == EventKind.Barrel
+                    ? e.z - SpawnAhead : e.z;
                 if (Z < trigger) continue;
                 fired[i] = true;
+                // ⚠ **통은 차선 필터를 타지 않는다.** 통은 "그쪽 길에 있으면 만나는 것" 이 아니라
+                // **셋 다 보이는 표적**이고, 어느 통 앞에 서느냐가 곧 조준이다. 여기서 걸러 버리면
+                // 반대쪽 통이 아예 안 생겨서 "고를 수 있었는데 안 골랐다" 가 성립하지 않는다
+                if (e.kind == EventKind.Barrel) { Enter(i, e); continue; }
                 // **그쪽 길에 선 군단만 만난다.** 반대쪽으로 갔으면 그냥 지나간다 —
                 // 이것이 게이트 선택에 뒤따르는 결과를 만든다 (`LevelEvent.lane`)
                 if (e.lane != 0 && Side != e.lane) continue;
@@ -326,6 +346,10 @@ namespace CrowdRunner.Core
                     Battle.Queue(e.enemyCount, e.z, e.lane * (RoadWidth * 0.25f), RoadWidth, 7919 + i * 131, e.isFinal);
                     BlockingIndex = i; BlockingIsFinal = e.isFinal;
                     if (e.isFinal) finalSpawned = true;
+                    break;
+                case EventKind.Barrel:
+                    // 차선 중심에 세운다. 폭은 길의 17 % — 셋이 나란히 서고 **동시에 둘은 못 쏜다**
+                    Battle.AddBarrel(e.z, e.lane * (RoadWidth * 0.25f), RoadWidth * 0.17f, e.wallHp, e.gives);
                     break;
                 case EventKind.Wall:
                     Battle.SetWall(e.z, e.wallHp);

@@ -73,9 +73,11 @@ namespace CrowdRunner.Tools
 
         static List<(string path, Run r)> Report(LevelData level, out int rc)
         {
-            int gates = 0;
-            foreach (var e in level.events) if (e.kind == EventKind.Gate) gates++;
-            Console.WriteLine($"## {level.Code} · 시작 {level.initialUnits} · 길이 {level.length} m · 게이트 {gates} · 경로 {1 << gates} 가지");
+            // **선택 지점은 게이트만이 아니다.** 나란히 선 통 한 줄도 선택이다 — 어느 통 앞에
+            // 서느냐가 조준이고, 한쪽을 깨는 동안 다른 쪽은 지나가 버린다 (오너 2026-10-12)
+            var choices = ChoiceZs(level);
+            int gates = choices.Count;
+            Console.WriteLine($"## {level.Code} · 시작 {level.initialUnits} · 길이 {level.length} m · 선택 {gates} · 경로 {1 << gates} 가지");
 
             // ⚠ **경로는 2ⁿ 이다.** 줄 게이트(`gates ..`)가 들어오면서 n 이 쉽게 커진다 —
             // 10 개면 1,024 가지, 14 개면 16,384 가지이고 각 가지가 최대 36,000 틱이다.
@@ -300,14 +302,11 @@ namespace CrowdRunner.Tools
             // 떨어졌고, 그 18 은 `+25` 와 `+7` 의 차였다. **게임이 아니라 재는 쪽이 틀렸다.**
             // 사람은 왼쪽에 붙어 있으면 계속 왼쪽에 있다. 드라이버도 그래야 한다.
             int held = -1;
+            var choices = ChoiceZs(level);
             for (int step = 0; step < 60 * 600 && sim.State != SimState.Won && sim.State != SimState.Lost; step++)
             {
-                int idx = NextGate(level, sim.Z);
-                if (idx >= 0)
-                {
-                    int bit = CountGatesBefore(level, idx);
-                    held = ((mask >> bit) & 1) == 0 ? -1 : +1;
-                }
+                int bit = NextChoice(choices, sim.Z);
+                if (bit >= 0) held = ((mask >> bit) & 1) == 0 ? -1 : +1;
                 sim.Step(held * half * 0.5f);
 
                 // **게이트가 띄우는 실제 증감.** 화면은 `×3` 아래에 `+28` 을 같이 띄우는데
@@ -356,6 +355,32 @@ namespace CrowdRunner.Tools
                 time = sim.Time,
                 maxDelta = 0,   // 고정 주행은 게이트를 안 고르므로 재지 않는다
             };
+        }
+
+        /// <summary>
+        /// 고르는 자리들의 z — 게이트 하나당 하나, **통은 같은 z 에 선 줄 하나당 하나**.
+        /// 통 셋이 나란히 서도 고르는 것은 한 번이므로 비트도 하나다.
+        /// </summary>
+        static List<float> ChoiceZs(LevelData level)
+        {
+            var zs = new List<float>();
+            foreach (var e in level.events)
+            {
+                if (e.kind != EventKind.Gate && e.kind != EventKind.Barrel) continue;
+                bool dup = false;
+                if (e.kind == EventKind.Barrel)
+                    foreach (var z in zs) if (System.Math.Abs(z - e.z) < 0.001f) { dup = true; break; }
+                if (!dup) zs.Add(e.z);
+            }
+            zs.Sort();
+            return zs;
+        }
+
+        /// <summary>지금 위치에서 **다음에 고를 자리**의 번호 (= 비트 번호)</summary>
+        static int NextChoice(List<float> choices, float z)
+        {
+            for (int i = 0; i < choices.Count; i++) if (choices[i] >= z) return i;
+            return -1;
         }
 
         static int NextGate(LevelData level, float z)
