@@ -175,37 +175,45 @@ namespace CrowdRunner.Core
                     return "rating 이 오름차순이 아니다 (" + rating[0] + "/" + rating[1] + "/" + rating[2] + ") — 뒤 등급이 더 쉬우면 등급이 아니다";
             }
 
-            // **차선을 지정한 사건은 게이트의 묶임 구간 안에 있어야 한다.**
+            // **차선을 지정한 사건은 "피하는 값" 이 있어야 한다.**
             //
-            // 밖에 있으면 플레이어가 **좋은 쪽을 고른 뒤 차선만 바꿔** 그 대가를 통째로
-            // 비켜 간다. 그러면 그 게이트는 장점만 주고 값을 안 받는다 — 선택이 아니라
-            // 공짜가 된다. (`Sim` 은 사건을 만나는 **그 순간의 `Side`** 로 거르므로,
-            // 게이트와 사건 사이에서 한 번 옮기면 끝이다.)
+            // 밖에 있으면 플레이어가 좋은 쪽을 고른 뒤 **차선만 바꿔** 대가를 통째로 비켜
+            // 간다. 그러면 그 게이트는 장점만 주고 값을 안 받는다.
             //
-            // 세션 B 가 화면 쪽에서 같은 종류를 찾은 날 같이 넣는다 — 그쪽은 **지역이 길
-            // 전체로 그려져** 있지도 않은 위험을 피하게 만들었다. 규칙과 보이는 것이 어긋나면
-            // 선택이 죽고, 규칙과 **묶임**이 어긋나면 대가가 죽는다.
+            // 값을 치르게 하는 길은 **둘**이다:
+            //   ① 게이트가 **묶는다**(`commit`) — 고른 뒤 그 길에 갇힌다
+            //   ② 그 자리에 **게이트가 겹쳐 있다** — 피하려고 차선을 바꾸면 **그쪽 게이트를
+            //      못 먹는다.** 장르가 말하는 *"장애물에서 최대한 멀어져라"* 가 이 모양이고
+            //      (`docs/REF_TOPWAR.md` ④), 줄 게이트와 같이 쓰면 저절로 그렇게 된다
             //
-            // 풀고 싶으면 그 앞 게이트에 `commit <z>` 를 주면 된다.
+            // ⚠ ①만 허용하면 **줄 게이트와 장애물을 같이 못 쓴다** — `commit` 은 줄을 한 번의
+            // 선택으로 접어 버리기 때문이다(`LevelFile.gates` 주석). 그런데 그 둘을 같이 쓰는
+            // 것이 바로 이 장르의 모양이라, 처음 규칙은 **만들고 싶은 판을 막고 있었다.**
             for (int i = 0; i < events.Count; i++)
             {
                 var ev = events[i];
                 if (ev.lane == 0 || ev.kind == EventKind.Gate) continue;
-                bool held = false;
+
+                // 그 사건이 걸쳐 있는 구간 (지역·좁은 구간은 길이가 있다)
+                float from = ev.z;
+                float to = ev.z + (ev.kind == EventKind.Zone || ev.kind == EventKind.Narrow ? ev.zoneLength : 0f);
+
+                bool held = false, overlapped = false;
                 for (int g = 0; g < events.Count; g++)
                 {
                     var ga = events[g];
                     if (ga.kind != EventKind.Gate) continue;
                     if (ga.z <= ev.z && ev.z < ga.commitUntilZ) { held = true; break; }
+                    // 피하는 동안 못 먹는 게이트가 있나 — 구간 안이거나 바로 앞뒤 20 m
+                    if (ga.z >= from - 20f && ga.z <= to + 20f) overlapped = true;
                 }
-                if (!held)
+                if (!held && !overlapped)
                     return "차선 사건 #" + i + " (" + ev.kind + " @" + ev.z + ", lane " + (ev.lane < 0 ? "L" : "R")
-                         + ") 가 어떤 게이트의 묶임 구간에도 없다 — 고른 뒤 차선만 바꾸면 그냥 비켜 간다."
-                         + " 앞 게이트에 `commit <z>` 를 주라";
+                         + ") 를 **공짜로 피할 수 있다** — 차선만 바꾸면 그만이다."
+                         + " 앞 게이트에 `commit <z>` 를 주거나, 그 자리에 게이트를 겹쳐 두라";
             }
 
-            float last = -1f;
-            for (int i = 0; i < events.Count; i++)
+            float last = -1f;            for (int i = 0; i < events.Count; i++)
             {
                 var e = events[i];
                 if (e.z < last) return "사건이 z 순서가 아니다 (#" + i + " 가 " + e.z + ", 앞은 " + last + ")";
