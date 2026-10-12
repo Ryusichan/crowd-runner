@@ -1,8 +1,8 @@
-using CrowdRunner.Core;
+using CrowdFire.Core;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace CrowdRunner.View
+namespace CrowdFire.View
 {
     /// <summary>
     /// **쓰러지는 것을 보여 준다** — 손실이 **머릿수에 비례한다**는 사실이 화면에 있어야 한다.
@@ -67,7 +67,7 @@ namespace CrowdRunner.View
         }
 
         /// <summary>
-        /// 이 틱의 손실을 받는다. **`sim.Last` 는 한 틱만 유효**하므로 `LevelRunner.Consume` 이
+        /// 이 틱의 손실을 받는다. **`sim.Last` 는 한 틱만 유효**하므로 `LevelPlay.Consume` 이
         /// 틱마다 넘겨주는 그 자리에서 불러야 한다 — 프레임 끝에 한 번만 읽으면 그 프레임의
         /// 앞 틱 손실이 사라지고, 그러면 **빠른 기기에서 손실이 덜 보인다**.
         /// </summary>

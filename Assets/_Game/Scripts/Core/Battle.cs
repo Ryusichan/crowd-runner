@@ -1,4 +1,4 @@
-namespace CrowdRunner.Core
+namespace CrowdFire.Core
 {
     /// <summary>
     /// **총격전 — 병사 한 명이 한 명씩 쏜다.**

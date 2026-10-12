@@ -5,7 +5,7 @@ using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-namespace CrowdRunner.EditorTools
+namespace CrowdFire.EditorTools
 {
     /// <summary>
     /// **M0 APK — 한 번의 Unity 주행으로 끝낸다.**
@@ -14,13 +14,13 @@ namespace CrowdRunner.EditorTools
     /// 그래서 임포트 · 대역 캐릭터 굽기 · 씬 만들기 · APK 빌드가 **한 호출** 안에 있다. 나눠 두면
     /// 사람이 셋을 순서대로 불러야 하고, 그러면 왕복이 세 번이다.
     ///
-    /// <code>Unity -batchmode -nographics -quit -projectPath . -executeMethod CrowdRunner.EditorTools.M0Build.Android</code>
+    /// <code>Unity -batchmode -nographics -quit -projectPath . -executeMethod CrowdFire.EditorTools.M0Build.Android</code>
     ///
     /// 에디터 창을 띄우지 않는다 (같은 날 규칙). 측정은 폰에서 돌고 결과는 `adb logcat` 으로 나온다.
     /// </summary>
     public static class M0Build
     {
-        const string Pkg = "com.ryusichan.crowdrunner.m0";
+        const string Pkg = "com.ryusichan.crowdfire.m0";
         const string SceneDir = "Assets/_Game/Scenes";
         const string ScenePath = SceneDir + "/M0.unity";
         const string Apk = "Builds/M0.apk";
@@ -39,7 +39,7 @@ namespace CrowdRunner.EditorTools
             EnsureScene();
 
             PlayerSettings.companyName = "Ryusichan";
-            PlayerSettings.productName = "CrowdRunner M0";
+            PlayerSettings.productName = "CrowdFire M0";
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             // **측정에 필요한 둘을 켠다.** `FrameTimingManager` 는 이 설정 없이는 늘 0 을 돌려주고,
             // 0 은 *"빠르다"* 와 똑같이 생긴다 (`M0Bench.Report` 가 cpu/gpu 를 찍는 근거)

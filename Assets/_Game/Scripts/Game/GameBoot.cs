@@ -1,8 +1,8 @@
-using CrowdRunner.Game;
-using CrowdRunner.View;
+using CrowdFire.Game;
+using CrowdFire.View;
 using UnityEngine;
 
-namespace CrowdRunner
+namespace CrowdFire
 {
     /// <summary>
     /// **장면을 코드로 세운다** — 씬 파일에는 아무것도 담지 않는다.
@@ -11,8 +11,8 @@ namespace CrowdRunner
     /// 바꿀 수 있다. 그리고 지금은 그것이 규칙이기도 하다 (오너 2026-10-08: Unity 를 모니터에
     /// 띄우지 않는다). 씬에 직렬화된 값이 있으면 그 값을 고치려고 에디터를 열어야 한다.
     ///
-    /// **진입은 하나다**: `LevelRunner` + `LevelView` 를 한 오브젝트에 얹고, 판은
-    /// `LevelRunner.Load(name)` 으로 넣는다 (세션 A 가 그 문을 하나로 뒀다 — 문이 둘이면
+    /// **진입은 하나다**: `LevelPlay` + `LevelView` 를 한 오브젝트에 얹고, 판은
+    /// `LevelPlay.Load(name)` 으로 넣는다 (세션 A 가 그 문을 하나로 뒀다 — 문이 둘이면
     /// 한쪽만 초기화를 빼먹고 *"두 번째 판부터 이상하다"* 가 된다).
     ///
     /// `CR_M0` 정의가 있으면 **측정용 빌드**라 여기는 비켜난다 (`Crowd/M0Boot` 가 대신 선다).
@@ -21,7 +21,7 @@ namespace CrowdRunner
     public static class GameBoot
     {
         /// <summary>바깥(테스트·메타 화면)이 이 하나를 들고 판을 바꾼다</summary>
-        public static LevelRunner Runner { get; private set; }
+        public static LevelPlay Play { get; private set; }
 
         /// <summary>
         /// **메타 화면이 붙을 캔버스** — 월드맵·스테이지 카드·결과가 여기 자식으로 들어온다.
@@ -33,7 +33,7 @@ namespace CrowdRunner
         /// 좀비퀸에서 한 번 치른 값이다.
         ///
         /// `sortingOrder 100` 은 게임 위다. 메타가 떠 있는 동안 게임은 멈추는 것이 아니라
-        /// **가려진다** — 멈추는 것은 `LevelRunner` 쪽 결정이고 표현이 정할 일이 아니다.
+        /// **가려진다** — 멈추는 것은 `LevelPlay` 쪽 결정이고 표현이 정할 일이 아니다.
         /// </summary>
         public static Canvas Overlay { get; private set; }
 
@@ -70,15 +70,15 @@ namespace CrowdRunner
             {
                 if (o == null) continue;
                 if (o.transform.parent != null) continue;
-                if (o.name != "CrowdRunner" && o.name != "MetaFlow" && o.name != "Overlay") continue;
+                if (o.name != "CrowdFire" && o.name != "MetaFlow" && o.name != "Overlay") continue;
                 Object.DestroyImmediate(o);
             }
-            Runner = null;
+            Play = null;
             Overlay = null;
         }
 
         /// <summary>장면을 세우고 한 판을 띄운다. 테스트도 이것을 쓴다</summary>
-        public static LevelRunner Go(string level)
+        public static LevelPlay Go(string level)
         {
             // **앞 판을 지운다.** 안 지우면 판마다 길·게이트·`Sun` 이 **쌓인다.** 조명이 넷이면
             // 0.85 × 4 라 화면이 통째로 하얗게 날아가고, 그 증상은 *"길 색이 안 먹는다"* 로만
@@ -88,21 +88,21 @@ namespace CrowdRunner
             // M0 에서 같은 종류를 이미 한 번 치렀다 (`docs/M0_CROWD.md` §7: 렌더러가 구간
             // 사이로 유닛을 흘려 빈 장면이 14.33 ms 를 찍었다). 남은 것이 다음 측정에 섞이는
             // 결함은 **그럴듯한 수**를 내놓기 때문에 조용히 오래 간다
-            if (Runner != null && Runner.gameObject != null)
+            if (Play != null && Play.gameObject != null)
             {
                 // **즉시** 지운다. `Destroy` 는 프레임 끝까지 미뤄지는데, 그 사이에 새 판이
                 // 서면 한 프레임 동안 길과 해가 둘이고 — 그 프레임에 화면을 찍으면 하얗게
                 // 나온다. 바로 그 한 프레임을 찍는 것이 이 저장소의 촬영 기계가 하는 일이다
-                Object.DestroyImmediate(Runner.gameObject);
-                Runner = null;
+                Object.DestroyImmediate(Play.gameObject);
+                Play = null;
             }
-            var go = new GameObject("CrowdRunner");
+            var go = new GameObject("CrowdFire");
             // **편집 모드에서는 부르지 않는다.** `DontDestroyOnLoad` 는 플레이 모드 전용이고
             // 에디터 스크립트에서 부르면 예외가 난다 — 화면 찍는 기계(`MetaShots`)가 바로
             // 그 자리에서 죽었다. 플레이 중에는 장면이 바뀌어도 살아야 하므로 조건으로 둔다
             if (Application.isPlaying) Object.DontDestroyOnLoad(go);
-            var runner = go.AddComponent<LevelRunner>();
-            // **`LevelView` 를 `LevelRunner` 뒤에 붙인다.** `LevelRunner.Awake` 가 `Load` 를
+            var play = go.AddComponent<LevelPlay>();
+            // **`LevelView` 를 `LevelPlay` 뒤에 붙인다.** `LevelPlay.Awake` 가 `Load` 를
             // 부르므로 그때 뷰가 있어야 게이트·벽이 세워진다 — `AddComponent` 가 즉시
             // `Awake` 를 돌리기 때문에 순서가 결과를 바꾼다
             go.AddComponent<LevelView>();
@@ -110,7 +110,7 @@ namespace CrowdRunner
             // 넣어 봐야 아무 일도 안 일어난다. `Load` 가 그 필드를 쓰는 쪽이고, 필드는
             // *"열 판"* 이 아니라 *"열려 있는 판"* 이다 (세션 A 가 그렇게 바꿨다).
             //
-            // 전에는 `LevelRunner.Awake` 가 기본값 `"1-1"` 로 판을 읽었고, `AddComponent` 가
+            // 전에는 `LevelPlay.Awake` 가 기본값 `"1-1"` 로 판을 읽었고, `AddComponent` 가
             // 그 자리에서 `Awake` 를 돌리므로 **그 다음 줄에서 이름을 넣어도 늦었다** — 어떤
             // 판을 달라고 해도 1-1 이 떴다. 안 들킨 이유가 더 나쁘다: 아래 로그가 **요청한
             // 이름**을 1-1 의 숫자 옆에 찍었고, `level=1-10 units=10 events=2` 는 그럴듯하게
@@ -119,26 +119,26 @@ namespace CrowdRunner
             // 지금은 `Awake` 가 아무것도 안 읽고, 아무도 `Load` 를 안 불렀으면 `Start` 가
             // 오류로 말한다. 그리고 아래 로그는 **읽힌 판**의 이름을 찍는다 — 요청한 쪽을
             // 찍는 한 그 차이는 영원히 안 보인다.
-            runner.Load(level);
+            play.Load(level);
             // **오버레이는 판보다 오래 산다.** 판 오브젝트의 자식으로 두면 다음 판을 띄울 때
             // 같이 죽고, 메타 화면(월드맵·카드·결과)은 **그 캔버스의 자식**이라 통째로 사라진다.
             // 증상은 "결과 화면이 빈다" 인데 원인은 레벨을 바꾼 쪽에 있다 — 가장 찾기 어려운 모양
             if (Overlay == null) Overlay = BuildOverlay();
             EnsureEventSystem(Overlay.transform);
-            Runner = runner;
+            Play = play;
             AssertOneWorld();
-            if (runner.Sim == null)
-                Debug.LogError("[CR] 판을 못 띄웠다: " + runner.Error);
+            if (play.Sim == null)
+                Debug.LogError("[CR] 판을 못 띄웠다: " + play.Error);
             else
             {
                 // **읽힌 판의 이름을 찍는다** — 요청한 이름이 아니라. 둘이 다를 수 있다는 것이
                 // 위 버그의 전부였고, 로그가 요청한 쪽을 찍는 한 그 차이는 영원히 안 보인다
-                if (runner.levelName != level)
-                    Debug.LogError($"[CR] {level} 을 달라고 했는데 {runner.levelName} 이 떴다");
-                Debug.Log($"[CR] level={runner.levelName} units={runner.Sim.Units} " +
-                          $"road={runner.Sim.RoadWidth:F1}m events={runner.Level.events.Count}");
+                if (play.levelName != level)
+                    Debug.LogError($"[CR] {level} 을 달라고 했는데 {play.levelName} 이 떴다");
+                Debug.Log($"[CR] level={play.levelName} units={play.Sim.Units} " +
+                          $"road={play.Sim.RoadWidth:F1}m events={play.Level.events.Count}");
             }
-            return runner;
+            return play;
         }
 
         /// <summary>

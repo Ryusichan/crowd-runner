@@ -2,7 +2,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-namespace CrowdRunner.EditorTools
+namespace CrowdFire.EditorTools
 {
     /// <summary>
     /// **정점 애니메이션을 텍스처에 굽는다** — 방식 B 의 절반 (나머지 절반은 `Shaders/CrowdVat.shader`).

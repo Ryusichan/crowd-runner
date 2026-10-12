@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace CrowdRunner.Crowd
+namespace CrowdFire.Crowd
 {
     /// <summary>
     /// **방식 B — 인스턴싱 + 정점 애니메이션.** 드로우 **한 번**으로 군중 전체를 그린다.

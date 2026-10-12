@@ -1,8 +1,8 @@
-using CrowdRunner.Crowd;
+using CrowdFire.Crowd;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace CrowdRunner.View
+namespace CrowdFire.View
 {
     /// <summary>
     /// **발이 땅에 닿아 보이게 한다** — 지금까지 군중이 공중에 떠 있었다.
@@ -15,7 +15,7 @@ namespace CrowdRunner.View
     /// (`docs/M0_CROWD.md` §6b — 그래서 `VatCrowd` 도 `shadowCastingMode.Off` 다).
     /// 대신 발밑에 **납작한 원반**을 하나씩 깐다: 드로우 **한 번**, 조명 계산 없음.
     ///
-    /// 광고형 러너가 전부 이렇게 한다. 비용 때문만이 아니라 **이쪽이 더 잘 읽히기** 때문이다 —
+    /// 광고형 군단가 전부 이렇게 한다. 비용 때문만이 아니라 **이쪽이 더 잘 읽히기** 때문이다 —
     /// 진짜 그림자는 해 방향으로 길게 늘어져 *어느 발 아래인지*가 흐려진다.
     /// </summary>
     public sealed class BlobShadows

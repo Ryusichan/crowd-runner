@@ -1,10 +1,10 @@
 using System.IO;
-using CrowdRunner.Core;
-using CrowdRunner.View;
+using CrowdFire.Core;
+using CrowdFire.View;
 using UnityEditor;
 using UnityEngine;
 
-namespace CrowdRunner.EditorTools
+namespace CrowdFire.EditorTools
 {
     /// <summary>
     /// **열 판이 실제로 뜨는지 숫자로 본다** — 에디터 창도, 폰도 없이.
@@ -14,11 +14,11 @@ namespace CrowdRunner.EditorTools
     /// 길 폭과 시작 병력이 얼마인지를 찍는다. 뜨지 않는 판이 있으면 **이름과 이유**가 나온다.
     ///
     /// `Sim` 은 Unity 없이도 도므로(`tools/sim`) 여기서 새로 재는 것은 **레벨 파일이 실제로
-    /// `Resources` 에 들어갔는지** 와 **`LevelRunner.Load` 의 문이 열리는지** 다 — 둘 다
+    /// `Resources` 에 들어갔는지** 와 **`LevelPlay.Load` 의 문이 열리는지** 다 — 둘 다
     /// `tools/sim` 이 못 보는 자리다 (저쪽은 파일을 직접 읽는다).
     ///
     /// 배치 모드로 돈다 (오너 규칙: 에디터 창을 띄우지 않는다):
-    /// <code>Unity -batchmode -nographics -quit -executeMethod CrowdRunner.EditorTools.LevelShots.Audit</code>
+    /// <code>Unity -batchmode -nographics -quit -executeMethod CrowdFire.EditorTools.LevelShots.Audit</code>
     /// </summary>
     public static class LevelShots
     {
@@ -108,7 +108,7 @@ namespace CrowdRunner.EditorTools
             {
                 // 길 폭의 절반까지 — 시뮬이 알아서 자른다 (갇힌 구간에서는 반쪽으로)
                 sim.Step(dir * level.roadWidth);
-                // **틱마다** 넘긴다 (`Sim.Last` 는 한 틱만 유효) — 게임의 `LevelRunner` 와 같은 자리
+                // **틱마다** 넘긴다 (`Sim.Last` 는 한 틱만 유효) — 게임의 `LevelPlay` 와 같은 자리
                 if (fx != null) fx.Take(sim.Last, sim.X, sim.Z, level.roadWidth, sim.BlockingZ);
                 steps++;
             }

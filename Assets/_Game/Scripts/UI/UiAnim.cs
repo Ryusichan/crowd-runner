@@ -8,14 +8,14 @@
 // 에서 링크는 깨진다. 그래서 **한쪽을 고치면 다른 쪽도 고친다** — 특히 오너가 움직임을 지적하면
 // 양쪽에 같이 들어가야 한다. 갈라지기 시작하면 *"좀비퀸에서는 되는데 여기선 안 된다"* 가 된다.
 //
-// 바꾼 것: 이름 공간 `ZQ.UI` → `CrowdRunner.UI`, `ZQ.Core.MathUtil.Hex` 를 안으로 옮김.
+// 바꾼 것: 이름 공간 `ZQ.UI` → `CrowdFire.UI`, `ZQ.Core.MathUtil.Hex` 를 안으로 옮김.
 // 그 밖에는 **한 줄도 고치지 않았다** — 고치면 어디가 다른지 아무도 모르게 된다.
 
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-namespace CrowdRunner.UI
+namespace CrowdFire.UI
 {
     /// <summary>
     /// UI 움직임 — **화면마다 손으로 넣지 않는다** (오너 2026-09-24: "클릭했을 때 나타나는 요소들

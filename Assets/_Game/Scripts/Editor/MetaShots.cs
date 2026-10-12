@@ -1,11 +1,11 @@
 using System.IO;
-using CrowdRunner.Core;
-using CrowdRunner.Meta;
+using CrowdFire.Core;
+using CrowdFire.Meta;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace CrowdRunner.EditorTools
+namespace CrowdFire.EditorTools
 {
     /// <summary>
     /// **메타 화면을 PNG 로 뜬다** — 눈으로 봐야 아는 것을 보는 유일한 길.
@@ -24,7 +24,7 @@ namespace CrowdRunner.EditorTools
     /// 있고, 그건 *"어제는 됐는데 오늘 UI 가 안 보인다"* 로만 보인다.
     ///
     /// 배치 모드로 돈다. **`-nographics` 는 안 된다** — 그릴 장치가 없으면 PNG 가 빈다:
-    /// <code>Unity -batchmode -quit -executeMethod CrowdRunner.EditorTools.MetaShots.Shoot</code>
+    /// <code>Unity -batchmode -quit -executeMethod CrowdFire.EditorTools.MetaShots.Shoot</code>
     /// </summary>
     public static class MetaShots
     {
@@ -44,10 +44,10 @@ namespace CrowdRunner.EditorTools
             }
             Directory.CreateDirectory(Dir);
 
-            var runner = GameBoot.Go("1-3");
-            if (runner == null || runner.Sim == null)
+            var play = GameBoot.Go("1-3");
+            if (play == null || play.Sim == null)
             {
-                Debug.LogError("[CR] 판을 못 띄웠다 — 화면을 찍을 수 없다: " + (runner != null ? runner.Error : "runner 없음"));
+                Debug.LogError("[CR] 판을 못 띄웠다 — 화면을 찍을 수 없다: " + (play != null ? play.Error : "play 없음"));
                 if (Application.isBatchMode) EditorApplication.Exit(1);
                 return;
             }

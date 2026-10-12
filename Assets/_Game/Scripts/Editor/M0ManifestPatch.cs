@@ -1,7 +1,7 @@
 using System.Xml;
 using UnityEditor.Android;
 
-namespace CrowdRunner.EditorTools
+namespace CrowdFire.EditorTools
 {
     /// <summary>
     /// **측정 앱이 잠금화면 위에 뜨게 한다.**

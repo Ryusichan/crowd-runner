@@ -1,9 +1,9 @@
 using UnityEngine;
 using UnityEngine.UI;
-using CrowdRunner.Core;
-using CrowdRunner.UI;
+using CrowdFire.Core;
+using CrowdFire.UI;
 
-namespace CrowdRunner.Meta
+namespace CrowdFire.Meta
 {
     /// <summary>
     /// 화면을 **데이터로 짓는 곳.** 상태는 하나도 들지 않는다 — `MetaSave` 와 `LevelCatalog` 를
@@ -469,9 +469,9 @@ namespace CrowdRunner.Meta
             var head = UiKit.Label("Head", card, "멈췄다", F(UiKit.Title), UiKit.Text, TextAnchor.UpperCenter, true);
             UiKit.Place(head.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -48f), new Vector2(740f, 48f));
 
-            var runner = GameBoot.Runner;
-            string line = runner != null && runner.Sim != null
-                ? "병력 " + runner.Sim.Units + " · " + Mathf.RoundToInt(runner.Sim.Z) + " m"
+            var play = GameBoot.Play;
+            string line = play != null && play.Sim != null
+                ? "병력 " + play.Sim.Units + " · " + Mathf.RoundToInt(play.Sim.Z) + " m"
                 : "";
             var sub = UiKit.Label("Sub", card, line, F(UiKit.Caption), UiKit.Dim, TextAnchor.UpperCenter);
             UiKit.Place(sub.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -104f), new Vector2(740f, 34f));

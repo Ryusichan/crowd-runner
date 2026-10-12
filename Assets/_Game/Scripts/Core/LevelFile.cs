@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace CrowdRunner.Core
+namespace CrowdFire.Core
 {
     /// <summary>
     /// 레벨을 **글로 적고 읽는다** (기획서 §12 "모든 게이트와 적, 장애물의 위치를 데이터로").

@@ -13,7 +13,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $adb = "D:\Unity\6000.3.24f1\Editor\Data\PlaybackEngines\AndroidPlayer\SDK\platform-tools\adb.exe"
-$pkg = "com.ryusichan.crowdrunner.m0"
+$pkg = "com.ryusichan.crowdfire.m0"
 $apk = Join-Path $root "Builds\M0.apk"
 $out = Join-Path $root "docs\m0-raw.log"
 

@@ -1,8 +1,8 @@
 using UnityEngine;
 using UnityEngine.Rendering;
-using CrowdRunner.Core;
+using CrowdFire.Core;
 
-namespace CrowdRunner.View
+namespace CrowdFire.View
 {
     /// <summary>
     /// **총격이 보이는 자리** — 탄환 궤적 · 총구 화염 · 피격 불꽃 · 쓰러진 몸.

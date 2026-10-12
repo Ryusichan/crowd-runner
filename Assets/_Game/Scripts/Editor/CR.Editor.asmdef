@@ -1,6 +1,6 @@
 {
   "name": "CR.Editor",
-  "rootNamespace": "CrowdRunner.EditorTools",
+  "rootNamespace": "CrowdFire.EditorTools",
   "references": [
     "CR"
   ],

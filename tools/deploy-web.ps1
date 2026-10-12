@@ -111,7 +111,7 @@ if ($html -match '</body>') { $html = $html -replace '</body>', ($stamp + '</bod
 [System.IO.File]::WriteAllText($index, $html, $utf8)
 Write-Host "version: $ver ($sha) · cache-bust $n 곳"
 
-"# Crowd Runner — WebGL demo`n`nBuilt from crowd-runner-unity @ $sha ($(Get-Date -Format 'yyyy-MM-dd HH:mm')). 세로 화면 · 폰에서 열 것." |
+"# Crowd Play — WebGL demo`n`nBuilt from crowd-fire-unity @ $sha ($(Get-Date -Format 'yyyy-MM-dd HH:mm')). 세로 화면 · 폰에서 열 것." |
     Set-Content -Encoding utf8 (Join-Path $work "README.md")
 
 # ── 올리기 ────────────────────────────────────────────────────────────────────
@@ -132,7 +132,7 @@ $exists = ($LASTEXITCODE -eq 0)
 $ErrorActionPreference = $prevEAP
 if (-not $exists) {
     if (-not $hasGh) { throw "$Repo 가 없고 gh 도 없다 — 리포를 먼저 만들어 주세요" }
-    gh repo create $Repo --public --description "Crowd Runner — WebGL demo build (Unity)" | Out-Null
+    gh repo create $Repo --public --description "Crowd Play — WebGL demo build (Unity)" | Out-Null
     Write-Host "created $Repo"
 }
 
@@ -141,7 +141,7 @@ Push-Location $work
 git init -q
 git checkout -q -b main
 git add -A
-git -c user.name="Ryusichan" -c user.email="godtheenell@gmail.com" commit -q -m "deploy: crowd-runner-unity @ $sha"
+git -c user.name="Ryusichan" -c user.email="godtheenell@gmail.com" commit -q -m "deploy: crowd-fire-unity @ $sha"
 git remote add origin "https://github.com/$Repo.git"
 git push -q -f origin main
 $pushed = ($LASTEXITCODE -eq 0)

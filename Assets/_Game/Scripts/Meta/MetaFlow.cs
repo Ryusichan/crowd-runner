@@ -1,10 +1,10 @@
 using UnityEngine;
 using UnityEngine.UI;
-using CrowdRunner.Core;
-using CrowdRunner.Game;
-using CrowdRunner.UI;
+using CrowdFire.Core;
+using CrowdFire.Game;
+using CrowdFire.UI;
 
-namespace CrowdRunner.Meta
+namespace CrowdFire.Meta
 {
     public enum MetaScreen { Intro, WorldMap, StageCard, Playing, Paused, Result }
 
@@ -18,7 +18,7 @@ namespace CrowdRunner.Meta
     /// 구조 규칙 셋 (좀비퀸 `GameFlow` 에서 그대로):
     /// ① **화면마다 상태를 들지 않는다.** `Show()` 가 데이터로 통째로 다시 짓는다 —
     ///    화면이 자기 상태를 들면 두 곳의 진실이 갈라지고, 그게 *"돌아오면 ☣ 가 안 맞는다"* 가 된다.
-    /// ② **`GameManager`/`LevelRunner` 를 만들거나 지우지 않는다.** 멈추고(`Paused`) 가린다.
+    /// ② **`GameManager`/`LevelPlay` 를 만들거나 지우지 않는다.** 멈추고(`Paused`) 가린다.
     ///    판을 만들고 지우면 그 사이에 뷰·군중이 다시 서느라 화면이 끊긴다.
     /// ③ **움직임은 `UiAnim` 에서만 고른다.** 손으로 `Lerp` 를 쓰면 꺾이는 자리가 보인다
     ///    (오너 2026-09-30: 100 → 110 → 100).
@@ -28,7 +28,7 @@ namespace CrowdRunner.Meta
         public static MetaFlow I { get; private set; }
 
         /// <summary>
-        /// `AfterSceneLoad` 다 — `GameBoot` 가 `BeforeSceneLoad` 에서 캔버스와 러너를 세우므로
+        /// `AfterSceneLoad` 다 — `GameBoot` 가 `BeforeSceneLoad` 에서 캔버스와 군단를 세우므로
         /// 그 뒤에 서야 `GameBoot.Overlay` 가 있다. 순서를 뒤집으면 **부모가 없어서 화면이
         /// 안 보이고**, 그건 "아무 일도 안 일어난다" 로만 나타난다.
         /// </summary>
@@ -208,10 +208,10 @@ namespace CrowdRunner.Meta
             screen = s;
             for (int i = root.childCount - 1; i >= 0; i--) Destroy(root.GetChild(i).gameObject);
 
-            var runner = GameBoot.Runner;
+            var play = GameBoot.Play;
             bool playing = s == MetaScreen.Playing;
             root.gameObject.SetActive(!playing);
-            if (runner != null) runner.Paused = !playing;
+            if (play != null) play.Paused = !playing;
 
             // 나가기 띠는 **판이 도는 동안과 멈춰 있는 동안** 보인다 — 멈춤 화면에서
             // 사라지면 "어디를 눌러 멈췄는지" 가 화면에서 없어진다
@@ -243,11 +243,11 @@ namespace CrowdRunner.Meta
         public void StartLevel(LevelData level)
         {
             current = level;
-            var runner = GameBoot.Runner;
-            if (runner == null) { Debug.LogError("[CR] 러너가 없다 — GameBoot 가 안 섰다"); return; }
-            if (!runner.Load(level.Code))
+            var play = GameBoot.Play;
+            if (play == null) { Debug.LogError("[CR] 군단가 없다 — GameBoot 가 안 섰다"); return; }
+            if (!play.Load(level.Code))
             {
-                Debug.LogError("[CR] " + runner.Error);
+                Debug.LogError("[CR] " + play.Error);
                 Show(MetaScreen.WorldMap);
                 return;
             }
@@ -257,10 +257,10 @@ namespace CrowdRunner.Meta
         void Update()
         {
             if (screen != MetaScreen.Playing) return;
-            var runner = GameBoot.Runner;
-            if (runner == null || runner.Sim == null) return;
+            var play = GameBoot.Play;
+            if (play == null || play.Sim == null) return;
 
-            var st = runner.Sim.State;
+            var st = play.Sim.State;
             if (st != SimState.Won && st != SimState.Lost) return;
 
             // **끝난 판을 한 번만 집는다.** 여기서 바로 `Show(Result)` 로 나가므로
@@ -276,7 +276,7 @@ namespace CrowdRunner.Meta
             }
 
             resultWon = st == SimState.Won;
-            resultRemaining = runner.Sim.Units;
+            resultRemaining = play.Sim.Units;
             resultGrade = Grade.Of(resultWon, resultRemaining, current.rating);
             MetaSave.Report(current.Code, resultWon, resultRemaining, current.rating);
             Show(MetaScreen.Result);

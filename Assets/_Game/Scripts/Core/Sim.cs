@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace CrowdRunner.Core
+namespace CrowdFire.Core
 {
     public enum SimState { Running, Fighting, Breaking, Won, Lost }
 

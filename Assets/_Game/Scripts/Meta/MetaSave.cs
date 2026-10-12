@@ -2,9 +2,9 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using UnityEngine;
-using CrowdRunner.Core;
+using CrowdFire.Core;
 
-namespace CrowdRunner.Meta
+namespace CrowdFire.Meta
 {
     /// <summary>한 판의 기록. ☣ 와 **가장 잘했을 때 남은 수**를 같이 둔다</summary>
     [Serializable]
@@ -42,7 +42,7 @@ namespace CrowdRunner.Meta
         [DllImport("__Internal")] static extern void CRSyncFs();
 #endif
 
-        const string FileName = "crowdrunner_save.json";
+        const string FileName = "crowdfire_save.json";
 
         static MetaData data;
         static string dirOverride;      // 테스트가 격리할 때 쓴다

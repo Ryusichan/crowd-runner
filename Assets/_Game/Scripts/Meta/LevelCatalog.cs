@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
-using CrowdRunner.Core;
+using CrowdFire.Core;
 
-namespace CrowdRunner.Meta
+namespace CrowdFire.Meta
 {
     /// <summary>
     /// **월드맵이 보는 판 목록.** `Resources/Levels` 의 글 파일을 전부 읽어 도시·번호 순으로 세운다.

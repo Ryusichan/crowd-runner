@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace CrowdRunner.Crowd
+namespace CrowdFire.Crowd
 {
     /// <summary>
     /// **M0 장면을 코드로 세운다** — 씬 파일에 아무것도 담지 않는다.
@@ -27,7 +27,7 @@ namespace CrowdRunner.Crowd
         {
             var camGo = new GameObject("M0Camera");
             var cam = camGo.AddComponent<Camera>();
-            // 세로형 러너의 시점 — 뒤에서 내려다본다. 1,000 개체가 **한 화면에 들어와야** 측정이
+            // 세로형 이 게임의 시점 — 뒤에서 내려다본다. 1,000 개체가 **한 화면에 들어와야** 측정이
             // 의미가 있다: 화면 밖은 그려지지 않으므로, 카메라가 좁으면 측정이 쉬워진다
             camGo.transform.position = new Vector3(0f, 22f, -34f);
             camGo.transform.rotation = Quaternion.Euler(28f, 0f, 0f);

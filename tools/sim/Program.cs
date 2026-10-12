@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using CrowdRunner.Core;
+using CrowdFire.Core;
 
-namespace CrowdRunner.Tools
+namespace CrowdFire.Tools
 {
     /// <summary>
     /// **M1 의 끝 조건**: 레벨 하나를 Unity 없이 끝까지 돌려 잔여 병력이 나온다.

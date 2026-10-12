@@ -6,12 +6,12 @@
 
 | 차선 | 누가 | 파일 |
 |---|---|---|
-| 로직·레벨 | **A** | `Scripts/Core/**` · `Scripts/Game/LevelRunner.cs` · `Resources/Levels/*.txt` · `tools/sim/**` · `docs/DESIGN.md` |
+| 로직·레벨 | **A** | `Scripts/Core/**` · `Scripts/Game/LevelPlay.cs` · `Resources/Levels/*.txt` · `tools/sim/**` · `docs/DESIGN.md` |
 | 메타 화면 | **A** | `Scripts/Meta/**` (월드맵·스테이지 카드·결과 — 좀비퀸 껍데기, DESIGN §3b) |
 | 그리기·편집기 | **B** | `Scripts/View/**` · `Scripts/Game/GameBoot.cs` · `Scripts/Crowd/**` · `Scripts/Editor/**` · `Shaders/**` · `Scenes/**` · `tools/check.ps1` · `tools/CR.Check.csproj` · `ProjectSettings/**` · `docs/M0_CROWD.md` |
 
 처음 표에는 `Scripts/Game/**` 가 통째로 A 였는데, B 가 `GameBoot.cs` 를 거기 두었다
-(`c0c3d40`). 이음매가 깨끗해서 그대로 둔다 — A 는 `LevelRunner`(판을 여는 문), B 는
+(`c0c3d40`). 이음매가 깨끗해서 그대로 둔다 — A 는 `LevelPlay`(판을 여는 문), B 는
 `GameBoot`(장면을 세우는 곳). **표를 현실에 맞춘 것이고, 차선을 넘은 것을 탓하는 것이 아니다.**
 
 차선 밖 파일은 **읽기만** 한다. 고쳐야 하면 메시지로 부탁한다.
@@ -80,6 +80,33 @@
    군단의 6 배를 넘으면 뭔가 **분기가 꺾이는** 모양이다.
 
 
+## 10. ⚠ 이름 쓸기 — **"러너" 가 저장소에서 빠졌다** (2026-10-12, A)
+
+오너 지시: *"러너란 글은 전부 빠져야해."* 이 말이 나온 자리가 중요하다 — 오너가 레퍼런스
+세 장을 보내며 *"총으로 적을 무찌르는 거잖아"* 라고 한 직후다. 장르 이름이 설계를 끌고
+갔다는 뜻이고, 실제로 ··· 에 총·사격·
+무기·발사가 **한 번도 안 나온다**(전부  에만 있다).
+
+**B 의 파일도 바뀌었다** — 에디터에 열어 둔 버퍼가 있으면 저장하기 전에 Already up to date. 부터 받아라.
+
+| 전 | 후 |
+|---|---|
+|  |  |
+|  /  |  /  |
+|  |  |
+| 지역변수  |  |
+|  (productName) |  |
+|  |  |
+|  |  |
+
+안 바꾼 것 셋, 전부 **바꾸면 바깥이 깨지는 것**이다:
+-  — 공개 깃헙 페이지 주소. 오너 북마크·배포 스크립트가 걸려 있다
+-  — 유니티 어셈블리 이름
+-  () — 장르가 아니라 **"달리는 좀비"** 라는 적 종류 키다. 데이터 쪽에서
+  쓰면 끊긴다 — 오너께 따로 여쭀다
+
+저장소 폴더 이름()과 공개 저장소 이름은 **오너 결정 대기**.
+
 ## 0a. ⚠ 파일을 만들기 전에 **그 자리를 본다** (2026-10-09, A 가 틀렸다)
 
 A 가 `tools/CR.Check.csproj` 와 `tools/check.ps1` 을 **새로 만든다고 생각하고 `cat >` 로
@@ -113,18 +140,18 @@ B 의 작업이 사라진 채 올라갔다.
 
 ## 3. 지금 B → A 로 묻는 것
 
-(없음 — `897e369` 에서 `LevelRunner.Load(name)` 와 `Sim.BlockingZ` 로 답했다)
+(없음 — `897e369` 에서 `LevelPlay.Load(name)` 와 `Sim.BlockingZ` 로 답했다)
 
 ## 4. ~~A 가 다음에 만드는 것~~ — `Scripts/Meta/**` **섰다** (`3522a27`)
 
-월드맵 → 스테이지 카드 → 결과. `GameBoot.Runner.Load(code)` 로 들어가고 `LevelRunner.Paused`
+월드맵 → 스테이지 카드 → 결과. `GameBoot.Play.Load(code)` 로 들어가고 `LevelPlay.Paused`
 로 멈춘다. 레이아웃 숫자는 **짐작**이라 세션 B 의 `MetaShots` 세 장을 기다린다.
 레벨 문법과 짜는 법은 `docs/LEVELS.md`.
 
 ### 원래 적어 둔 것
 
 좀비퀸의 **월드맵 → 스테이지 카드 → 결과** 를 가져온다 (오너 지시, DESIGN §3b). 진입은
-B 가 열어 둔 `GameBoot.Go(code)` / `GameBoot.Runner.Load(code)` 를 쓴다 — 장면을 세우는
+B 가 열어 둔 `GameBoot.Go(code)` / `GameBoot.Play.Load(code)` 를 쓴다 — 장면을 세우는
 일은 B 쪽이므로 메타가 직접 `GameObject` 를 만들지 않는다.
 
 이미 올라간 발판: 레벨마다 `rating <☣> <☣☣> <☣☣☣>` (`b286ea6`) — 잰 수이고, 닿지 않는

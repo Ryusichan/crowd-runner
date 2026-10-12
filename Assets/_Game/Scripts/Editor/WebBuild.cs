@@ -5,7 +5,7 @@ using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-namespace CrowdRunner.EditorTools
+namespace CrowdFire.EditorTools
 {
     /// <summary>
     /// **웹에 올릴 빌드** — 오너가 직접 해 보실 수 있는 유일한 형태.
@@ -14,7 +14,7 @@ namespace CrowdRunner.EditorTools
     /// 이쪽은 **게임**이므로 그 정의를 넣지 않는다. 한 빌드가 둘을 다 하려 들면 측정 장면에
     /// 게임이 섞이고, 그러면 M0 의 수가 거짓이 된다.
     ///
-    /// <code>Unity -batchmode -quit -projectPath . -buildTarget WebGL -executeMethod CrowdRunner.EditorTools.WebBuild.Web</code>
+    /// <code>Unity -batchmode -quit -projectPath . -buildTarget WebGL -executeMethod CrowdFire.EditorTools.WebBuild.Web</code>
     ///
     /// 출력은 `Builds/WebGL` — 배포 스크립트가 거기를 본다.
     ///
@@ -53,7 +53,7 @@ namespace CrowdRunner.EditorTools
             EnsureScene();
 
             PlayerSettings.companyName = "Ryusichan";
-            PlayerSettings.productName = "Crowd Runner";
+            PlayerSettings.productName = "Crowd Fire";
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             // **세로 캔버스.** 기본값은 960×600 **가로**다 — 폰에서 열면 세로 화면에 가로
             // 상자가 앉고 가로 스크롤바가 생긴다. 세션 A 가 배포 쪽 CSS 로 덮어 두었지만

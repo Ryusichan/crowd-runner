@@ -1,9 +1,9 @@
-using CrowdRunner.Core;
-using CrowdRunner.Game;
-using CrowdRunner.Crowd;
+using CrowdFire.Core;
+using CrowdFire.Game;
+using CrowdFire.Crowd;
 using UnityEngine;
 
-namespace CrowdRunner.View
+namespace CrowdFire.View
 {
     /// <summary>
     /// **시뮬이 정한 수를 보여 주기만 한다** — `DESIGN.md` §2 의 "표현" 쪽.
@@ -14,12 +14,12 @@ namespace CrowdRunner.View
     ///
     /// 읽는 것: `sim.Units`(그릴 수) · `sim.Z`·`sim.X`(어디) · `sim.Side`(갇힌 차선) ·
     /// `sim.State` · `sim.BlockingEnemies`·`sim.BlockingWallHp`·`sim.BlockingZ`(막은 것) ·
-    /// `sim.Last`(이 틱의 사건 — **한 틱만 유효**하므로 `LevelRunner.Consume` 이 틱마다 넘겨준다).
+    /// `sim.Last`(이 틱의 사건 — **한 틱만 유효**하므로 `LevelPlay.Consume` 이 틱마다 넘겨준다).
     ///
     /// 군중은 **방식 B 저폴리**로 그린다 (`docs/M0_CROWD.md` §6b): 드로우 1 회 · 상한 400.
     /// 방식 A(유닛마다 `Animator`)는 60 개체에서 예산이 끝나 이 장르가 못 된다.
     /// </summary>
-    [RequireComponent(typeof(LevelRunner))]
+    [RequireComponent(typeof(LevelPlay))]
     public sealed class LevelView : MonoBehaviour
     {
         /// <summary>
@@ -29,7 +29,7 @@ namespace CrowdRunner.View
         /// </summary>
         public int renderCap = 400;
 
-        LevelRunner runner;
+        LevelPlay play;
         CrowdField allies, foes;
         readonly Gunfire gunfire = new Gunfire();
         VatCrowd allyView, foeView;
@@ -60,7 +60,7 @@ namespace CrowdRunner.View
 
         void Awake()
         {
-            runner = GetComponent<LevelRunner>();
+            play = GetComponent<LevelPlay>();
             allies = new CrowdField(Sim.MaxUnits, 20261009);
             foes = new CrowdField(Sim.MaxUnits, 77215);
             allyView = new VatCrowd("_lo");
@@ -72,11 +72,11 @@ namespace CrowdRunner.View
             marks = new RoadMarks();
             shadows = new BlobShadows(); shadows.Init();
             fxGate = new GatePassFx(); fxGate.Init(Label);
-            runner.OnTick += OnTick;
+            play.OnTick += OnTick;
             BuildScene();
-            // **늦게 붙었을 수도 있다.** `LevelRunner.Awake` 가 먼저 돌면 그때 뷰가 없어서
+            // **늦게 붙었을 수도 있다.** `LevelPlay.Awake` 가 먼저 돌면 그때 뷰가 없어서
             // `OnLevelLoaded` 를 놓친다 — 이미 떠 있는 판이 있으면 여기서 받아 간다
-            if (runner.Level != null) OnLevelLoaded(runner.Level);
+            if (play.Level != null) OnLevelLoaded(play.Level);
         }
 
         void BuildScene()
@@ -88,7 +88,7 @@ namespace CrowdRunner.View
                 go.tag = "MainCamera";
                 cam = go.AddComponent<Camera>();
             }
-            // 세로형 러너 — 뒤에서 내려다본다. 각도가 **겹쳐 그리기**를 정하므로 (§6b 마지막 경고)
+            // 세로형 군단 — 뒤에서 내려다본다. 각도가 **겹쳐 그리기**를 정하므로 (§6b 마지막 경고)
             // 더 눕히면 군중이 화면에 더 넓게 퍼져 GPU 가 싸진다. 지금은 보이는 쪽을 먼저 맞춘다
             // 34° 였는데 군단이 화면 **중간**에 앉고 그 아래가 빈 아스팔트였다. 조금 세우면
             // (= 숙이는 각을 줄이면) 화면의 것들이 전부 아래로 내려오고, 앞쪽이 더 보인다
@@ -118,7 +118,7 @@ namespace CrowdRunner.View
             // 아니라 **밝기**로 가르는 이유: 작은 화면에서 먼저 읽히는 것이 밝기다
             // **땅이 있어야 길이 길로 보인다.** 길만 그리면 하늘색 위에 떠 있는 리본이고,
             // 그러면 군단이 *어디를* 달리는지가 없다. 땅 한 장 + 연석 둘이면 끝난다 —
-            // 광고형 러너가 옆을 비워 두지 않는 이유다
+            // 광고형 군단가 옆을 비워 두지 않는 이유다
             ground = Box("Ground", new Color(0.42f, 0.55f, 0.35f));
             road = Box("Road", new Color(0.52f, 0.52f, 0.55f));
             // 연석은 길의 **가장자리를 말한다**. 갇힌 차선 칸막이(`divider`)와 달리 늘 서 있고,
@@ -136,7 +136,7 @@ namespace CrowdRunner.View
             wallR = Box("Wall", new Color(0.62f, 0.60f, 0.58f));
         }
 
-        /// <summary>`LevelRunner` 가 레벨을 띄운 뒤 부른다 — 게이트·지역·벽을 레벨대로 세운다</summary>
+        /// <summary>`LevelPlay` 가 레벨을 띄운 뒤 부른다 — 게이트·지역·벽을 레벨대로 세운다</summary>
         public void OnLevelLoaded(LevelData level)
         {
             foreach (var t in gates) if (t) Destroy(t.gameObject);
@@ -183,7 +183,7 @@ namespace CrowdRunner.View
 
         void Update()
         {
-            var sim = runner.Sim;
+            var sim = play.Sim;
             if (sim == null) return;
 
             float w = sim.RoadWidth;
@@ -276,7 +276,7 @@ namespace CrowdRunner.View
                 //
                 // `Paused` 는 멈춤 화면에서도 참이다 — 멈춤 중에 병력 수를 보여 줄지는
                 // 따로 정할 일이고, 지금은 **안 보인다**로 둔다 (멈춤 화면이 자기 수를 띄운다)
-                bool playing = !runner.Paused;
+                bool playing = !play.Paused;
                 if (countUi.gameObject.activeSelf != playing) countUi.gameObject.SetActive(playing);
 
                 countUi.text = sim.Units.ToString();
@@ -344,12 +344,12 @@ namespace CrowdRunner.View
         }
 
         /// <summary>
-        /// 틱마다 온다 (`LevelRunner.OnTick`). 여기서 쓰러지는 몸을 띄운다 — **틱마다** 받아야
+        /// 틱마다 온다 (`LevelPlay.OnTick`). 여기서 쓰러지는 몸을 띄운다 — **틱마다** 받아야
         /// 프레임이 긴 기기에서도 손실이 같은 양으로 보인다.
         /// </summary>
         void OnTick(Sim.Tick t)
         {
-            var sim = runner.Sim;
+            var sim = play.Sim;
             if (sim == null) return;
             // 전투사는 **막은 것이 서 있는 z**(앞줄)에서, 지역사는 군중 가운데에서
             fx.Take(t, sim.X, sim.Z, sim.RoadWidth, sim.BlockingZ > 0.1f ? sim.BlockingZ : sim.Z + 2f);
@@ -368,13 +368,13 @@ namespace CrowdRunner.View
         /// </summary>
         void GatePassed(in Sim.Tick t)
         {
-            var lv = runner.Level;
+            var lv = play.Level;
             if (lv == null) return;
             // 방금 터진 게이트 = 지나온 게이트 중 **가장 앞의 것**
             float zBest = float.NegativeInfinity;
             LevelEvent ev = default; bool found = false;
             foreach (var e in lv.events)
-                if (e.kind == EventKind.Gate && e.z <= runner.Sim.Z && e.z > zBest) { zBest = e.z; ev = e; found = true; }
+                if (e.kind == EventKind.Gate && e.z <= play.Sim.Z && e.z > zBest) { zBest = e.z; ev = e; found = true; }
             if (!found) return;
 
             Transform chosen = null; int nRef = 0;
@@ -394,7 +394,7 @@ namespace CrowdRunner.View
         /// <summary>갇힘이 끝나는 z — 시뮬이 공개하지 않으므로 레벨에서 읽는다 (게이트가 들고 있다)</summary>
         float CommitZ(Sim sim)
         {
-            var lv = runner.Level;
+            var lv = play.Level;
             if (lv == null) return 0f;
             float best = 0f;
             foreach (var e in lv.events)
@@ -540,7 +540,7 @@ namespace CrowdRunner.View
             // **문이어야 문으로 보인다.** 2.6 × 2.0 은 군중(67 명이 길을 꽉 채운다)보다 작아서
             // 지나가는 표지판처럼 보였다 — 첫 연출 사진에서 그게 그대로 드러났다. 차선 폭을
             // 거의 채우고 사람 키보다 높게 두면 **통과한다**는 것이 모양만으로 읽힌다
-            float lane = (runner.Level != null ? runner.Level.roadWidth : 8f) * 0.5f;
+            float lane = (play.Level != null ? play.Level.roadWidth : 8f) * 0.5f;
             // **둘 사이를 벌린다.** 전에는 폭 0.90 · 중심 0.50 이라 틈이 0.35 m 뿐이었고,
             // 멀리서 보면 **두 문이 아니라 간판 하나**로 읽혔다 (오너 폰 사진). 이 게임의
             // 조작이 *둘 중 하나* 라서, 둘로 안 보이면 조작이 화면에서 사라진 것이다
@@ -617,7 +617,7 @@ namespace CrowdRunner.View
             //
             // 표현이 규칙보다 **넓게** 말하면 플레이어는 있지도 않은 위험을 피한다. 그건
             // 틀린 그림이 아니라 **없어진 선택**이다 — 이 게임의 조작이 그 하나뿐이라 더 그렇다.
-            float rw = runner.Level != null ? runner.Level.roadWidth : 8f;
+            float rw = play.Level != null ? play.Level.roadWidth : 8f;
             float zw = e.lane != 0 ? rw * 0.5f : rw;
             float zx = e.lane != 0 ? e.lane * rw * 0.25f : 0f;
             var t = Box("Zone", new Color(0.66f, 0.38f, 0.56f, 1f));
@@ -678,7 +678,7 @@ namespace CrowdRunner.View
         /// </summary>
         void ZoneMarks(LevelEvent e, System.Collections.Generic.List<Transform> into)
         {
-            float rw = runner.Level != null ? runner.Level.roadWidth : 8f;
+            float rw = play.Level != null ? play.Level.roadWidth : 8f;
             // 바닥과 **같은 폭·같은 자리**에 선다 — 표식이 바닥보다 넓으면 표식 쪽이 거짓말을
             // 하고, 플레이어는 멀리서 표식부터 본다
             float w = e.lane != 0 ? rw * 0.5f : rw;

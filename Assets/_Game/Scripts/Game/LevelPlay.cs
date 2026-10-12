@@ -1,7 +1,7 @@
 using UnityEngine;
-using CrowdRunner.Core;
+using CrowdFire.Core;
 
-namespace CrowdRunner.Game
+namespace CrowdFire.Game
 {
     /// <summary>
     /// **로직과 화면을 잇는 한 곳.** 레벨을 읽고, 고정 스텝으로 `Sim` 을 돌리고, 손가락을 받는다.
@@ -13,7 +13,7 @@ namespace CrowdRunner.Game
     /// 그 경계다 — 위로는 Unity, 아래로는 순수 C#. 군중을 어떻게 그리든(M0 방식 A/B/추상화)
     /// 이 아래는 안 바뀐다.
     /// </summary>
-    public class LevelRunner : MonoBehaviour
+    public class LevelPlay : MonoBehaviour
     {
         /// <summary>
         /// **지금 열려 있는 판**의 이름. `Load` 가 쓴다 — 여기에 넣는다고 판이 바뀌지 않는다.
@@ -58,7 +58,7 @@ namespace CrowdRunner.Game
 
         /// <summary>
         /// ⚠ **`Awake` 에서 판을 열지 않는다.** 예전에는 `Load(levelName)` 을 여기서 불렀는데,
-        /// `AddComponent<LevelRunner>()` 가 **그 자리에서** `Awake` 를 돌리므로 **그 다음 줄에서
+        /// `AddComponent<LevelPlay>()` 가 **그 자리에서** `Awake` 를 돌리므로 **그 다음 줄에서
         /// `levelName` 에 넣는 값은 이미 읽은 뒤**가 된다. 그래서 `GameBoot.Go("1-5")` 가
         /// 1-1 을 띄웠다 (세션 B 가 찾았다, 2026-10-09).
         ///
@@ -78,7 +78,7 @@ namespace CrowdRunner.Game
             // **조용한 빈 화면을 만들지 않는다.** 아무도 `Load` 를 안 불렀으면 그 사실을
             // 말한다 — 기본값으로 때우면 "왜 늘 1-1 이지" 를 다시 만든다
             if (Sim == null && Error == null)
-                Debug.LogError("[CR] 판을 열지 않은 채로 돌고 있다 — LevelRunner.Load(\"1-3\") 을 불러야 한다");
+                Debug.LogError("[CR] 판을 열지 않은 채로 돌고 있다 — LevelPlay.Load(\"1-3\") 을 불러야 한다");
         }
 
         /// <summary>
@@ -120,7 +120,7 @@ namespace CrowdRunner.Game
             Sim = new Sim(Level);
             // 보이는 쪽에 알린다 — 게이트·지역·벽은 레벨마다 다르므로 판을 띄울 때 세운다.
             // 뷰가 아직 없을 수도 있다 (`Awake` 순서) — 그때는 뷰가 자기 `Awake` 에서 다시 받는다
-            var view = GetComponent<CrowdRunner.View.LevelView>();
+            var view = GetComponent<CrowdFire.View.LevelView>();
             if (view != null) view.OnLevelLoaded(Level);
             return true;
         }
@@ -129,7 +129,7 @@ namespace CrowdRunner.Game
         /// **멈춘다** — 메타 화면(월드맵·스테이지 카드·결과)이 떠 있는 동안.
         ///
         /// 세션 B 가 오버레이 캔버스를 세우면서 *"메타가 떠 있는 동안 게임은 멈추는 것이 아니라
-        /// 가려진다 — 멈추는 것은 `LevelRunner` 쪽 결정"* 이라고 남겼다. 맞다. 그래서 여기 둔다.
+        /// 가려진다 — 멈추는 것은 `LevelPlay` 쪽 결정"* 이라고 남겼다. 맞다. 그래서 여기 둔다.
         ///
         /// **시간도 같이 멈춘다**: 누적기를 비우지 않고 `Update` 자체를 비켜난다. 안 그러면
         /// 메타 화면에 머문 시간이 `accumulator` 에 쌓여 **돌아오는 순간 군단이 앞으로 뛴다**

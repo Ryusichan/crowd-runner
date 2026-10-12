@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace CrowdRunner.Core
+namespace CrowdFire.Core
 {
     /// <summary>
     /// 한 판의 **데이터**. 레벨은 코드가 아니라 이 구조로 적는다 — 하드코딩하면 레벨이 늘수록

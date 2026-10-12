@@ -1,8 +1,8 @@
 using NUnit.Framework;
 using UnityEngine;
-using CrowdRunner.Core;
+using CrowdFire.Core;
 
-namespace CrowdRunner.Tests
+namespace CrowdFire.Tests
 {
     /// <summary>
     /// **병사가 각자 쏘는가**를 묻는 검사.

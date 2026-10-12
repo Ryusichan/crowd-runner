@@ -1,18 +1,18 @@
 using System.Collections;
 using System.Linq;
 using System.IO;
-using CrowdRunner;
-using CrowdRunner.Core;
-using CrowdRunner.Game;
-using CrowdRunner.Meta;
-using CrowdRunner.View;
+using CrowdFire;
+using CrowdFire.Core;
+using CrowdFire.Game;
+using CrowdFire.Meta;
+using CrowdFire.View;
 using NUnit.Framework;
 using UnityEngine.Rendering;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
-namespace CrowdRunner.Tests
+namespace CrowdFire.Tests
 {
     /// <summary>
     /// **메타 화면을 PNG 로 뜨고, 짐작으로 둔 수를 재는 주행.**
@@ -42,8 +42,8 @@ namespace CrowdRunner.Tests
             GameBoot.Reset();
             yield return null;
 
-            var runner = GameBoot.Go("1-3");
-            Assert.IsNotNull(runner.Sim, "판을 못 띄웠다 — " + runner.Error);
+            var play = GameBoot.Go("1-3");
+            Assert.IsNotNull(play.Sim, "판을 못 띄웠다 — " + play.Error);
             // **애니메이션을 끈다.** 1 차 촬영에서 월드맵을 `ScreenIn` **중간**에 찍었고,
             // 제목 화소가 배경과 같은 값(27,28,37)으로 나와서 *"디자인이 어둡다"* 로 보고했다 —
             // **잴 수 없는 것에 맞춰 고칠 뻔한** 자리다 (세션 A 가 화소를 떠서 잡았다).
@@ -241,7 +241,7 @@ namespace CrowdRunner.Tests
             for (int i = 1; i <= 10 && loser == null; i++)
             {
                 yield return PlayUntilResult("1-" + i, null);
-                if (GameBoot.Runner.Sim.State == SimState.Lost) loser = "1-" + i; else cleared++;
+                if (GameBoot.Play.Sim.State == SimState.Lost) loser = "1-" + i; else cleared++;
             }
             Debug.Log($"[CR-TEST] 안 만지고: 깬 판 {cleared}/10 · 진 판 {(loser ?? "없음")}");
             if (loser != null)
@@ -278,29 +278,29 @@ namespace CrowdRunner.Tests
             flow.StartLevel(lv);
             float prev = Time.timeScale;
             Time.timeScale = 100f;
-            var runner = GameBoot.Runner;
+            var play = GameBoot.Play;
             // 첫 게이트를 지나 군단이 커진 뒤 — 그때가 이 게임이 어떻게 생겼는지 보이는 자리다.
             //
             // **조작을 넣는다.** 전에는 그냥 기다렸는데, 그건 `targetX = 0` 인 **아무도 안 만진
             // 판**이고 적이 끊임없이 오는 구조에서는 **한 번도 안 커진 채 끝난다**
             // (최고 병력 27 < 시작 30). 게임 화면을 찍는다면서 **아무도 안 하는 플레이**를
             // 찍고 있었던 셈이다
-            for (int i = 0; i < 30000 && runner.Sim != null && runner.Sim.Units <= lv.initialUnits; i++)
+            for (int i = 0; i < 30000 && play.Sim != null && play.Sim.Units <= lv.initialUnits; i++)
             {
-                runner.TargetX = PickLane(runner);
+                play.TargetX = PickLane(play);
                 yield return null;
             }
             for (int i = 0; i < 60; i++) yield return null;
             Time.timeScale = prev;
 
-            AssertNumbersDoNotOverlapOnScreen(runner);
+            AssertNumbersDoNotOverlapOnScreen(play);
             yield return ShootTheOpeningFrame();
-            MeasureGateLabels(runner);
-            yield return ShootTheGatePass(runner);
+            MeasureGateLabels(play);
+            yield return ShootTheGatePass(play);
 
-            MeasureDecisionTime(runner);
-            float share = ShotWorld("game", runner);
-            Debug.Log($"[CR-TEST] 게임 화면: 병력 {runner.Sim.Units} z {runner.Sim.Z:F0} · 그려진 화소 {share:F1}%");
+            MeasureDecisionTime(play);
+            float share = ShotWorld("game", play);
+            Debug.Log($"[CR-TEST] 게임 화면: 병력 {play.Sim.Units} z {play.Sim.Z:F0} · 그려진 화소 {share:F1}%");
             // **군단이 커졌는지는 단언하지 않는다 — 찍어서 알리기만 한다.**
             //
             // 전에는 `Units > initialUnits` 를 단언했다. 적이 끊임없이 오는 구조로 바뀐 뒤
@@ -320,9 +320,9 @@ namespace CrowdRunner.Tests
             // `27` 의 정체도 거기 있다: **1-1 은 20 으로 시작하고 게이트가 `+25 / +7`** 이다.
             // `ShootTheGatePass` 는 조작을 안 넣으니 나쁜 쪽으로 들어가 20 + 7 = 27 이 된다.
             // **그럴듯한 수였다** — 두 자리고, 시작값보다 작고, 설명이 되는 모양이었다
-            var now = runner.Level;
-            if (now != null && runner.Sim.PeakUnits <= now.initialUnits)
-                Debug.LogWarning($"[CR-TEST] ⚠ {runner.levelName}: 최고 병력 {runner.Sim.PeakUnits} 이 " +
+            var now = play.Level;
+            if (now != null && play.Sim.PeakUnits <= now.initialUnits)
+                Debug.LogWarning($"[CR-TEST] ⚠ {play.levelName}: 최고 병력 {play.Sim.PeakUnits} 이 " +
                                  $"시작 {now.initialUnits} 을 **못 넘었다** — 잘 골라도 군단이 한 번도 " +
                                  "안 커지는 판이다. 레벨 쪽에서 볼 자리");
             Assert.Greater(share, 3f, "게임 화면이 거의 비었다 — 군중이 안 그려지는지 보라");
@@ -351,16 +351,16 @@ namespace CrowdRunner.Tests
         /// ③ 배치 창은 640x480 **가로**다. 그 화각으로 재면 세로 9:16 기기의 답이 아니다.
         ///    `cam.aspect` 를 세로로 고정하고 재고 되돌린다.
         /// </summary>
-        static void MeasureDecisionTime(LevelRunner runner)
+        static void MeasureDecisionTime(LevelPlay play)
         {
             var cam = Camera.main;
-            var lv = runner.Level;
+            var lv = play.Level;
             if (cam == null || lv == null) { Debug.LogError("[CR-TEST] 카메라나 레벨이 없다 — 고를 시간을 못 잰다"); return; }
 
             var keepPos = cam.transform.position;
             float keepAspect = cam.aspect;
             // 지금 카메라가 군단에 대해 **어디에 있는지**를 그대로 쓴다 (박아 두지 않는다)
-            var camOff = keepPos - new Vector3(0f, 0f, runner.Sim != null ? runner.Sim.Z : 0f);
+            var camOff = keepPos - new Vector3(0f, 0f, play.Sim != null ? play.Sim.Z : 0f);
             cam.aspect = 1080f / 1920f;       // 세로 기기의 화각으로 — 배치 창(가로)이 아니라
 
             try
@@ -434,7 +434,7 @@ namespace CrowdRunner.Tests
                                        "닿는 순간에도 60px 미만이다");
                     lead = readLead;
                     // 숫자에 뜻을 붙여 둔다 — 다음에 보는 사람이 2.1 초가 좋은지 나쁜지 모른다.
-                    // 광고형 러너의 손가락 반응은 보통 0.3~0.5 초, 숫자 두 개를 **읽고** 고르는 데
+                    // 광고형 이 게임의 손가락 반응은 보통 0.3~0.5 초, 숫자 두 개를 **읽고** 고르는 데
                     // 더 필요하니 1.5 초를 아래 선으로 둔다 (오너 확정 전 [WORKING] 값)
                     if (lead < 1.5f)
                         Debug.LogWarning($"[CR-TEST] ⚠ 고를 시간이 {lead:F2}초다 — 두 숫자를 읽고 고르기엔 짧다. " +
@@ -463,10 +463,10 @@ namespace CrowdRunner.Tests
         /// 확대 한 장이 바로 답했다. 그래서 그 한 장을 매번 찍는다 — 군중 사진에서 사람은 늘
         /// 10 px 짜리라, **고쳤는지 망가뜨렸는지가 거기선 안 보인다.**
         /// </summary>
-        void ShotOneUnit(LevelRunner runner)
+        void ShotOneUnit(LevelPlay play)
         {
             var cam = Camera.main;
-            if (cam == null || runner.Sim == null) return;
+            if (cam == null || play.Sim == null) return;
             var keepPos = cam.transform.position;
             var keepRot = cam.transform.rotation;
             float keepFov = cam.fieldOfView;
@@ -491,11 +491,11 @@ namespace CrowdRunner.Tests
             //
             // 앞에서 보면 복도 안이라 막는 것이 없고, **걸어오는 쪽**이라 팔다리 교차도
             // 보인다 (옆모습만큼은 아니지만 벽에 안 가린다)
-            var target = new Vector3(runner.Sim.X, 0.45f, runner.Sim.Z + 0.8f);
-            cam.transform.position = new Vector3(runner.Sim.X + 1.1f, 1.15f, runner.Sim.Z + 4.6f);
+            var target = new Vector3(play.Sim.X, 0.45f, play.Sim.Z + 0.8f);
+            cam.transform.position = new Vector3(play.Sim.X + 1.1f, 1.15f, play.Sim.Z + 4.6f);
             cam.transform.rotation = Quaternion.LookRotation(target - cam.transform.position);
             cam.fieldOfView = 22f;
-            ShotWorld("unit_closeup", runner);
+            ShotWorld("unit_closeup", play);
 
             // **되돌린다** — 안 되돌리면 뒤이어 찍는 게임 화면이 이 구도로 나간다
             cam.transform.position = keepPos;
@@ -504,7 +504,7 @@ namespace CrowdRunner.Tests
         }
 
         /// <summary>3D 카메라를 뜬다. UI 는 뺀다 (HUD 가 덮으면 게임이 안 보인다)</summary>
-        float ShotWorld(string name, LevelRunner runner)
+        float ShotWorld(string name, LevelPlay play)
         {
             var cam = Camera.main;
             Assert.IsNotNull(cam, "카메라가 없다 — LevelView 가 안 섰다");
@@ -646,8 +646,8 @@ namespace CrowdRunner.Tests
         /// </summary>
         static void AssertLaneThingsStayInTheirLane()
         {
-            var runner = GameBoot.Runner;
-            var lvl = runner != null ? runner.Level : null;
+            var play = GameBoot.Play;
+            var lvl = play != null ? play.Level : null;
             if (lvl == null) return;
             int lanes = 0;
             foreach (var e in lvl.events)
@@ -684,7 +684,7 @@ namespace CrowdRunner.Tests
         /// 그래서 세계 좌표가 아니라 **화면 사각형**을 재서 겹치는지 묻는다. 눈으로 보면
         /// 한 프레임만 보게 되고, 겹치는 구간은 몇 프레임뿐이라 그 프레임을 놓치면 통과한다.
         /// </summary>
-        static void AssertNumbersDoNotOverlapOnScreen(LevelRunner runner)
+        static void AssertNumbersDoNotOverlapOnScreen(LevelPlay play)
         {
             var cam = Camera.main;
             if (cam == null) return;
@@ -769,7 +769,7 @@ namespace CrowdRunner.Tests
             // **레벨이 말하는 수와 맞는가.** 이 한 줄이 없어서 다섯 판이 전부 '글자 2 개' 를
             // 찍는 것을 보고도 한참 뒤에야 알았다 — `GameBoot.Go` 가 어떤 이름을 받든 1-1 을
             // 띄우고 있었다. 세 판이 **똑같은 수**를 낸 것이 유일한 단서였다
-            var lvl = GameBoot.Runner != null ? GameBoot.Runner.Level : null;
+            var lvl = GameBoot.Play != null ? GameBoot.Play.Level : null;
             int want = 0;
             if (lvl != null)
                 foreach (var e in lvl.events)
@@ -798,10 +798,10 @@ namespace CrowdRunner.Tests
                 AssertGateLabelsFitTheirGate(code);
             }
 
-            var runner = GameBoot.Runner;      // 마지막은 1-7
-            Assert.IsNotNull(runner.Sim, "1-7 을 못 띄웠다 — " + runner.Error);
+            var play = GameBoot.Play;      // 마지막은 1-7
+            Assert.IsNotNull(play.Sim, "1-7 을 못 띄웠다 — " + play.Error);
             float zoneZ = float.NaN;
-            foreach (var e in runner.Level.events)
+            foreach (var e in play.Level.events)
                 if (e.kind == EventKind.Zone) { zoneZ = e.z; break; }
             if (float.IsNaN(zoneZ)) { Debug.LogWarning("[CR-TEST] 1-7 에 지역이 없다"); yield break; }
 
@@ -809,13 +809,13 @@ namespace CrowdRunner.Tests
             Time.timeScale = 20f;
             // **고르는 자리에서 찍는다.** 지역 바로 앞이 아니라 43 m 뒤 — 게이트 숫자가
             // 읽히기 시작하는 그 거리다. 거기서 표식이 보여야 "알고 들어간다" 가 된다
-            for (int i = 0; i < 30000 && runner.Sim != null && runner.Sim.Z < zoneZ - 43f; i++)
+            for (int i = 0; i < 30000 && play.Sim != null && play.Sim.Z < zoneZ - 43f; i++)
                 yield return null;
             Time.timeScale = prev;
             yield return null;
             AssertLaneThingsStayInTheirLane();
-            float share = ShotWorld("zone_mark", runner);
-            Debug.Log($"[CR-TEST] 1-7 지역 표식: 지역 z={zoneZ:F0} · 지금 z={runner.Sim.Z:F0} " +
+            float share = ShotWorld("zone_mark", play);
+            Debug.Log($"[CR-TEST] 1-7 지역 표식: 지역 z={zoneZ:F0} · 지금 z={play.Sim.Z:F0} " +
                       $"(43m 앞) · 그려진 화소 {share:F1}%");
         }
 
@@ -829,7 +829,7 @@ namespace CrowdRunner.Tests
         /// 그래서 `Renderer.bounds` 로 **실제 글자 폭**을 재고 두 선택지 사이의 빈 틈을 센다.
         /// 남는 틈이 곧 키울 수 있는 몫이다.
         /// </summary>
-        static void MeasureGateLabels(LevelRunner runner)
+        static void MeasureGateLabels(LevelPlay play)
         {
             var seen = new System.Collections.Generic.Dictionary<float, System.Collections.Generic.List<Bounds>>();
             foreach (var tm in Object.FindObjectsByType<TextMesh>(FindObjectsSortMode.None))
@@ -867,7 +867,7 @@ namespace CrowdRunner.Tests
         /// 그건 **한가운데로 직진**하는 판이다. 그러니까 지금까지 본 것은 *게임* 이 아니라
         /// **게임의 한 단면**이었다.
         ///
-        /// 여기서는 손가락을 넣는다 (`LevelRunner.TargetX`). 고르는 규칙은 단순하다:
+        /// 여기서는 손가락을 넣는다 (`LevelPlay.TargetX`). 고르는 규칙은 단순하다:
         /// **앞의 게이트에서 더 많이 주는 쪽으로 간다** — `Sim.Apply` 로 두 선택지를 실제로
         /// 계산해서 고르므로, *"큰 수가 좋다"* 같은 짐작이 안 들어간다.
         ///
@@ -901,8 +901,8 @@ namespace CrowdRunner.Tests
             yield return null;
             yield return null;
 
-            var runner = GameBoot.Runner;
-            Assert.IsNotNull(runner.Sim, code + " 을 못 띄웠다 — " + runner.Error);
+            var play = GameBoot.Play;
+            Assert.IsNotNull(play.Sim, code + " 을 못 띄웠다 — " + play.Error);
             string dir = $"{Dir}/play/{code}";
             Directory.CreateDirectory(dir);
 
@@ -913,25 +913,25 @@ namespace CrowdRunner.Tests
             float nextShotZ = 0f;
             float every = Mathf.Max(6f, lv.length / 13f);
 
-            while (frame++ < 30000 && runner.Sim != null
-                   && runner.Sim.State != SimState.Won && runner.Sim.State != SimState.Lost)
+            while (frame++ < 30000 && play.Sim != null
+                   && play.Sim.State != SimState.Won && play.Sim.State != SimState.Lost)
             {
-                runner.TargetX = PickLane(runner);
+                play.TargetX = PickLane(play);
                 sinceShot++;
 
                 // **붙는 순간을 놓치지 않는다.** 거리로만 찍으면 교전 중엔 전진이 멈춰 영영
                 // 못 찍고, 시간으로만 찍으면 **짧은 전투**(16 명이면 1.4 초)를 지나쳐 버린다 —
                 // 1-8 이 그래서 교전 프레임이 한 장도 안 걸렸다. 그래서 **사건으로** 찍는다:
                 // 막는 적이 0 에서 0 이 아닌 것으로 바뀌는 그 프레임
-                bool clash = runner.Sim.BlockingEnemies > 0.5f && !wasFighting;
-                wasFighting = runner.Sim.BlockingEnemies > 0.5f;
+                bool clash = play.Sim.BlockingEnemies > 0.5f && !wasFighting;
+                wasFighting = play.Sim.BlockingEnemies > 0.5f;
 
-                if (shot < 16 && (clash || runner.Sim.Z >= nextShotZ || sinceShot > 200))
+                if (shot < 16 && (clash || play.Sim.Z >= nextShotZ || sinceShot > 200))
                 {
                     Time.timeScale = 1f;      // 찍는 동안은 멈춰 세운다 — 흐린 프레임을 안 남긴다
                     yield return null;
-                    var s = runner.Sim;
-                    ShotWorld($"play/{code}/{shot:00}", runner);
+                    var s = play.Sim;
+                    ShotWorld($"play/{code}/{shot:00}", play);
                     Debug.Log($"[CR-TEST] {code} {shot:00}: z {s.Z:F0}m · 아군 {s.Units} · " +
                               $"막는 적 {s.BlockingEnemies:F0} · x {s.X:+0.0;-0.0} · {s.State}");
                     shot++; sinceShot = 0;
@@ -942,7 +942,7 @@ namespace CrowdRunner.Tests
             }
             Time.timeScale = prev;
 
-            var fin = runner.Sim;
+            var fin = play.Sim;
             Debug.Log($"[CR-TEST] {code} 끝: {fin.State} · 남은 {fin.Units} · " +
                       $"{frame} 프레임 · 사진 {shot} 장");
             Assert.AreNotEqual(SimState.Running, fin.State, code + ": 판이 안 끝났다");
@@ -965,29 +965,29 @@ namespace CrowdRunner.Tests
             yield return null;
             yield return null;
 
-            var runner = GameBoot.Runner;
-            Assert.IsNotNull(runner.Sim, "1-1 을 못 띄웠다 — " + runner.Error);
+            var play = GameBoot.Play;
+            Assert.IsNotNull(play.Sim, "1-1 을 못 띄웠다 — " + play.Error);
             Directory.CreateDirectory($"{Dir}/battle");
 
             const int Frames = 44;
             const float Step = 0.24f;
             float next = 0f;
             int shot = 0, guard = 0;
-            while (shot < Frames && guard++ < 20000 && runner.Sim != null
-                   && runner.Sim.State != SimState.Won && runner.Sim.State != SimState.Lost)
+            while (shot < Frames && guard++ < 20000 && play.Sim != null
+                   && play.Sim.State != SimState.Won && play.Sim.State != SimState.Lost)
             {
-                runner.TargetX = PickLane(runner);
-                if (runner.Sim.Time >= next)
+                play.TargetX = PickLane(play);
+                if (play.Sim.Time >= next)
                 {
-                    var s = runner.Sim; var b = s.Battle;
-                    ShotWorld($"battle/{shot:00}", runner);
+                    var s = play.Sim; var b = s.Battle;
+                    ShotWorld($"battle/{shot:00}", play);
                     Debug.Log($"[CR-TEST] 필름 {shot:00}: t {s.Time:F1}s · 아군 {s.Units} · 쏜 병사 {b.FiringThisTick}" +
                               $" · 적 {b.Alive} · 탄환 {b.BulletCount} · z {s.Z:F0}m");
                     shot++; next = s.Time + Step;
                 }
                 yield return null;
             }
-            Debug.Log($"[CR-TEST] 필름 {shot} 장 · {runner.Sim.State} · 남은 {runner.Sim.Units}");
+            Debug.Log($"[CR-TEST] 필름 {shot} 장 · {play.Sim.State} · 남은 {play.Sim.Units}");
             Assert.GreaterOrEqual(shot, 20, "필름이 너무 짧다 — 연속으로 볼 수가 없다");
         }
 
@@ -996,10 +996,10 @@ namespace CrowdRunner.Tests
         /// *"큰 수가 좋다"* 는 이 게임에서 틀린 규칙이다(`+10` 과 `×3` 중 무엇이 큰지는 지금
         /// 병력에 달렸다). 게이트가 없으면 가운데로 돌아온다.
         /// </summary>
-        static float PickLane(LevelRunner runner)
+        static float PickLane(LevelPlay play)
         {
-            var sim = runner.Sim;
-            var lv = runner.Level;
+            var sim = play.Sim;
+            var lv = play.Level;
             float best = 0f, bestZ = float.MaxValue;
             foreach (var e in lv.events)
             {
@@ -1034,11 +1034,11 @@ namespace CrowdRunner.Tests
             flow.StartLevel(lv);
             yield return null;
             yield return null;
-            var runner = GameBoot.Runner;
-            Assert.IsNotNull(runner.Sim, "1-1 을 못 띄웠다 — " + runner.Error);
-            float share = ShotWorld("game_opening", runner);
-            ShotOneUnit(runner);
-            Debug.Log($"[CR-TEST] 시작 화면: 병력 {runner.Sim.Units} · z {runner.Sim.Z:F0} · 그려진 화소 {share:F1}%");
+            var play = GameBoot.Play;
+            Assert.IsNotNull(play.Sim, "1-1 을 못 띄웠다 — " + play.Error);
+            float share = ShotWorld("game_opening", play);
+            ShotOneUnit(play);
+            Debug.Log($"[CR-TEST] 시작 화면: 병력 {play.Sim.Units} · z {play.Sim.Z:F0} · 그려진 화소 {share:F1}%");
         }
 
         /// <summary>
@@ -1048,15 +1048,15 @@ namespace CrowdRunner.Tests
         /// 다음 게이트를 지나는 **그 순간**에 멈춰 찍는다. 조금이라도 늦으면 글자가 다 올라가
         /// 사라진 뒤라 빈 길만 남고, 그 그림은 *"연출이 없다"* 와 똑같이 생긴다.
         /// </summary>
-        IEnumerator ShootTheGatePass(LevelRunner runner)
+        IEnumerator ShootTheGatePass(LevelPlay play)
         {
-            var view = runner.GetComponent<LevelView>();
+            var view = play.GetComponent<LevelView>();
             if (view == null) { Debug.LogWarning("[CR-TEST] LevelView 가 없다 — 연출을 못 찍는다"); yield break; }
             int before = view.GatePops;
             float prev = Time.timeScale;
             Time.timeScale = 20f;       // 100 배면 연출이 한 프레임에 다 지나간다
             int i = 0;
-            for (; i < 30000 && runner.Sim != null && view.GatePops == before; i++) yield return null;
+            for (; i < 30000 && play.Sim != null && view.GatePops == before; i++) yield return null;
             Time.timeScale = prev;
             if (view.GatePops == before)
             {
@@ -1064,7 +1064,7 @@ namespace CrowdRunner.Tests
                 yield break;
             }
             yield return null;          // 연출이 한 프레임 자라게
-            float share = ShotWorld("gate_pass", runner);
+            float share = ShotWorld("gate_pass", play);
             Debug.Log($"[CR-TEST] 게이트 연출 사진: 응답 {view.GatePops} 번째 · 그려진 화소 {share:F1}%");
         }
 
@@ -1171,9 +1171,9 @@ namespace CrowdRunner.Tests
         /// </summary>
         void AssertEveryGateAnswered()
         {
-            var runner = GameBoot.Runner;
-            var view = runner != null ? runner.GetComponent<LevelView>() : null;
-            var lv = runner != null ? runner.Level : null;
+            var play = GameBoot.Play;
+            var view = play != null ? play.GetComponent<LevelView>() : null;
+            var lv = play != null ? play.Level : null;
             Assert.IsNotNull(view, "LevelView 가 없다 — 게이트 응답을 셀 수 없다");
             int gates = 0;
             foreach (var e in lv.events) if (e.kind == EventKind.Gate) gates++;
@@ -1188,35 +1188,35 @@ namespace CrowdRunner.Tests
             var lv = LevelCatalog.Find(code);
             Assert.IsNotNull(lv, code + " 을 목록에서 못 찾았다");
             flow.StartLevel(lv);
-            // **빠르게 돌린다.** 1-9 는 57 초짜리라 실시간이면 주행이 1 분을 넘는다. `LevelRunner` 가
+            // **빠르게 돌린다.** 1-9 는 57 초짜리라 실시간이면 주행이 1 분을 넘는다. `LevelPlay` 가
             // 한 프레임당 0.25 초로 자르고 고정 스텝이라 **배속을 올려도 결과는 같다**
             float prev = Time.timeScale;
             // 배치 모드는 프레임이 아주 짧아(실측 real dt ≈ 0.0002 s) 배속 20 으로는 한 프레임에
             // 0.004 초밖에 안 간다 — 3,600 프레임이 **14 초**였고 1-1 은 24 초짜리라 안 끝났다.
-            // `LevelRunner` 가 프레임당 0.25 초로 자르므로 배속을 올려도 결과는 같다 (고정 스텝)
+            // `LevelPlay` 가 프레임당 0.25 초로 자르므로 배속을 올려도 결과는 같다 (고정 스텝)
             Time.timeScale = 100f;
-            var runner = GameBoot.Runner;
+            var play = GameBoot.Play;
             // **멈췄으면 무엇이 멈췄는지 찍는다.** 1 차에서 3,600 프레임을 돌고도 `Running` 이었는데,
             // 그 한 글자로는 *판이 안 돌았는지* · *다 돌았는데 안 끝났는지* 를 가릴 수 없다
             int i = 0;
             // **끝난 두 상태만** 기다린다. `Running` 만 보면 전투(`Fighting`)·벽(`Breaking`) 에서
             // 빠져나오고, 그때 읽은 상태는 *"안 끝났다"* 로 보인다 — 실제로는 **도는 중**이다
-            for (; i < 30000 && runner.Sim != null
-                   && runner.Sim.State != SimState.Won && runner.Sim.State != SimState.Lost; i++)
+            for (; i < 30000 && play.Sim != null
+                   && play.Sim.State != SimState.Won && play.Sim.State != SimState.Lost; i++)
             {
                 if (i % 5000 == 0)
-                    Debug.Log($"[CR-TEST]   {code} {i}프레임 멈춤={runner.Paused} z={runner.Sim.Z:F0} " +
-                              $"병력={runner.Sim.Units} 상태={runner.Sim.State} dt={Time.deltaTime:F3}");
+                    Debug.Log($"[CR-TEST]   {code} {i}프레임 멈춤={play.Paused} z={play.Sim.Z:F0} " +
+                              $"병력={play.Sim.Units} 상태={play.Sim.State} dt={Time.deltaTime:F3}");
                 yield return null;
             }
             Time.timeScale = prev;
-            Debug.Log($"[CR-TEST]   {code} 끝 {i}프레임 · 상태 {(runner.Sim != null ? runner.Sim.State.ToString() : "Sim 없음")}");
+            Debug.Log($"[CR-TEST]   {code} 끝 {i}프레임 · 상태 {(play.Sim != null ? play.Sim.State.ToString() : "Sim 없음")}");
             // `null` = *"끝나기만 하면 된다"* (어느 쪽인지는 부른 쪽이 본다). 세션 A 의 `SimState` 에
             // 테스트용 값을 더하지 않는다 — 더하면 그 값이 게임 코드의 `switch` 에도 나타난다
             if (want.HasValue)
-                Assert.AreEqual(want.Value, runner.Sim.State, code + " 이 기대한 결과로 안 끝났다");
+                Assert.AreEqual(want.Value, play.Sim.State, code + " 이 기대한 결과로 안 끝났다");
             else
-                Assert.AreNotEqual(SimState.Running, runner.Sim.State, code + " 이 안 끝났다");
+                Assert.AreNotEqual(SimState.Running, play.Sim.State, code + " 이 안 끝났다");
             yield return null; yield return null;    // 결과 화면으로 넘어갈 틱
         }
 

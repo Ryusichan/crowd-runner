@@ -1,6 +1,6 @@
 {
   "name": "CR.Tests.PlayMode",
-  "rootNamespace": "CrowdRunner.Tests",
+  "rootNamespace": "CrowdFire.Tests",
   "references": [
     "CR",
     "CR.Editor",

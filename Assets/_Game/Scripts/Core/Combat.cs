@@ -1,4 +1,4 @@
-namespace CrowdRunner.Core
+namespace CrowdFire.Core
 {
     /// <summary>
     /// 양측 유닛의 수치. 기획서 §4.2 의 초기값에서 출발하되 **좀비는 느리고 많다** (`DESIGN.md` §3b).

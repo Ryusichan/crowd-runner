@@ -1,4 +1,4 @@
-namespace CrowdRunner.Core
+namespace CrowdFire.Core
 {
     /// <summary>
     /// **등급과 해금의 규칙.** 월드맵이 ☣ 를 그리고 어느 판이 열렸는지 정할 때 쓰는 셈이

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace CrowdRunner.View
+namespace CrowdFire.View
 {
     /// <summary>
     /// **고른 것이 고른 것처럼 보이게 한다** — 이 게임의 유일한 조작에 붙는 유일한 피드백.
