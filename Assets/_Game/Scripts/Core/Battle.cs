@@ -34,6 +34,8 @@ namespace CrowdFire.Core
         public const float Contact = 1.2f;
         public const float DeathTime = 0.6f;
         public const float PressureRange = 9f;
+        /// <summary>압력이 최대일 때 깎는 전진 속도 비율 — 바닥은 1 − 이 값이다</summary>
+        public const float MaxSlow = 0.8f;
         public const float FlashTime = 0.055f;
         /// <summary>
         /// 적이 **한 번에 쏟아지지 않고 흘러드는 속도**(초당). 오너 지시 2: *"한 무리를 처리하고
@@ -253,7 +255,12 @@ namespace CrowdFire.Core
                 if (EState[i] != 2 && EZ[i] - allyZ < PressureRange) near++;
             float cap = allies * 0.5f + 4f;
             float p = near / cap; if (p > 1f) p = 1f; if (p < 0f) p = 0f;
-            return 1f - 0.8f * p;
+            // ⚠ **이 바닥을 올려도 판은 안 짧아진다.** 45 % 로 올려 봤더니 1-1 이 60 초에서
+            // **71 초로 늘었다** — 이 판의 길이를 정하는 것은 걷는 시간이 아니라 **적을 다
+            // 지우는 시간**이고(2,200 명 ÷ 초당 40 명), 빨리 가면 최종 방어선 앞에서 그만큼 더
+            // 서 있을 뿐이다. 게다가 다른 판 2 개가 깨졌다. 멈춰 보이는 문제(오너 지시 6)는
+            // 여기가 아니라 **적 수와 흘려보내는 속도**에서 풀어야 한다.
+            return 1f - MaxSlow * p;
         }
 
         /// <summary>예약된 적을 **조금씩** 내보낸다 — 전방에서 끊임없이 다가오게</summary>

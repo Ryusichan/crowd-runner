@@ -1,33 +1,51 @@
-# 1-1 — **숫자는 쏴서 깨는 통이다** (오너 2026-10-12, 레퍼런스 3 장)
+# 1-1 — **대규모 총격전 프로토타입** (오너 2026-10-12 지시 1~7, 레퍼런스 3 장)
 #
-# 전에는 게이트를 **걸어서 지나가면** 병력이 공짜로 들어왔다. 그래서 선택이 산수였고,
-# 총은 적을 지우는 데만 쓰였다. 레퍼런스에서는 숫자가 **드럼통**에 적혀 있고 총으로 깬다 —
-# 통 앞에 선 병사는 그동안 적을 안 막는다. 키우는 일과 버티는 일이 같은 화력을 놓고 다툰다.
+# 손가락은 좌우로만 움직인다. 군단은 알아서 쏜다. 고르는 것은 **무엇을 쏘느냐**다.
+#  · 통(`barrel`) — 숫자를 쏴서 깬다. 통 앞에 선 병사는 그동안 적을 안 막는다
+#  · 게이트(`gate`) — 걸어서 지나가면 공짜로 들어온다 (지시 7: 유지한다)
+#  · 적(`enemies`) — 끊임없이 밀려든다 (지시 2)
+#
+# **큰 통은 화력이 돼야 제때 깨진다.** 사거리 18 m 를 지나는 동안만 쏠 수 있으므로,
+# 욕심이 곧 위험이다 — 못 깨면 그 자리의 작은 통도 같이 놓친다.
 chapter 1
 index 1
 name Choryang Alley
-teaches 숫자는 쏴서 깬다 · 큰 통은 오래 걸린다 · 쏘는 동안 적이 붙는다
+teaches 숫자는 쏴서 깬다 · 큰 통은 화력이 돼야 깨진다 · 쏘는 동안 적이 붙는다
 
 units 20
 road 9
-speed 7.0
-length 300
-rating 89 140 198
+speed 6.5
+length 290
+rating 108 182 266
 
-# 세 통이 나란히 선다 — 작은 것은 금방 깨지고, 큰 것은 화력이 있어야 제때 깨진다
-barrel 55 gives 6 lane L
-barrel 55 gives 25 lane R
+# ① 아직 20 명이다. 큰 쪽(30)은 못 깬다 — 작은 쪽이 맞다
+barrel 50 gives 8 lane L
+barrel 50 gives 30 lane R
 
-barrel 105 gives 10 lane L
-barrel 105 gives 40 lane R
+# 적은 끊이지 않고, **군단이 자라는 만큼 같이 커진다.** 한 번 잰 것이 있다: 군단은 적이
+# 세 배까지는 아무 일도 없고 **5~6 배에서 무너진다.** 그래서 수가 군단을 따라 올라간다 —
+# 안 그러면 뒤로 갈수록 적이 장식이 된다 (2026-10-12 측정: 전투 손실이 전 경로 0 이었다)
+enemy 80 count 70
+enemy 112 count 110
+enemy 144 count 170
+enemy 176 count 240
+enemy 208 count 420
+enemy 240 count 580
 
-barrel 155 gives 16 lane L
-barrel 155 gives 60 lane R
+# ② 큰 쪽이 **왼쪽으로 바뀐다** — 한쪽만 붙들고 있으면 안 된다
+barrel 110 gives 45 lane L
+barrel 110 gives 14 lane R
 
-barrel 205 gives 24 lane L
-barrel 205 gives 90 lane R
+gate 145 | L add 18 | R sub 8
 
-# 쏘는 동안 적이 온다
-enemies 90..230 every 35 count 70
+# ③
+barrel 175 gives 22 lane L
+barrel 175 gives 70 lane R
 
-enemy 255 count 500 final
+gate 210 | R add 26 | L sub 10
+
+# ④ 마지막 통 — 여기서 번 것이 대군을 넘는 힘이다
+barrel 236 gives 110 lane L
+barrel 236 gives 30 lane R
+
+enemy 262 count 620 final

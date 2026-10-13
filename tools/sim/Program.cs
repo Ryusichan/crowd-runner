@@ -101,15 +101,15 @@ namespace CrowdFire.Tools
                 Console.WriteLine($"   ⚠ 게이트가 {gates} 개라 경로 {1 << gates} 가지를 다 안 돌렸다 — **대표 4 가지만** 봤다");
             }
 
-            Console.WriteLine("| 경로 | 결과 | ☣ | 잔여 | 최대 | 전투 | 지역 | 처치 | k | 시간 |");
-            Console.WriteLine("|---|---|---|---|---|---|---|---|---|---|");
+            Console.WriteLine("| 경로 | 결과 | ☣ | 잔여 | 최대 | 통 | 놓침 | 전투 | 지역 | 처치 | k | 시간 |");
+            Console.WriteLine("|---|---|---|---|---|---|---|---|---|---|---|---|");
             foreach (var (path, r) in results)
             {
                 // **등급도 같이 찍는다.** `Core/Grade` 의 셈이 레벨의 잰 수와 맞물리는지 보는
                 // 유일한 자리다 — 화면 없이 확인된다
                 int g = Grade.Of(r.won, r.units, level.rating);
                 string bio = g == 0 ? "–" : new string('*', g);
-                Console.WriteLine($"| {path} | {(r.won ? "클리어" : "실패")} | {bio} | {r.units} | {r.peak} | {r.lost:0} | {r.zone:0} | {r.killed:0} | {r.k:0.00} | {r.time:0.0}s |");
+                Console.WriteLine($"| {path} | {(r.won ? "클리어" : "실패")} | {bio} | {r.units} | {r.peak} | {r.barrel} | {r.missed} | {r.lost:0} | {r.zone:0} | {r.killed:0} | {r.k:0.00} | {r.time:0.0}s |");
             }
 
             rc = Judge(level, results, gates);
@@ -128,7 +128,7 @@ namespace CrowdFire.Tools
             if (rows.Count == 0) return;
             Console.WriteLine("## 장 요약 — 사람이 보는 표");
             Console.WriteLine("| 판 | 이름 | 가르치는 것 | 시작 | 최고 | 클리어 | 잔여 | ☣ 기준 | 최대 증감 | 시간 |");
-            Console.WriteLine("|---|---|---|---|---|---|---|---|---|---|");
+            Console.WriteLine("|---|---|---|---|---|---|---|---|---|---|---|---|");
             foreach (var (level, paths) in rows)
             {
                 int won = 0, best = 0, worst = int.MaxValue, peak = 0, delta = 0;
@@ -277,7 +277,7 @@ namespace CrowdFire.Tools
 
         static int[] Fill(int n, int v) { var a = new int[n]; for (int i = 0; i < n; i++) a[i] = v; return a; }
 
-        struct Run { public bool won; public int units, peak; public float lost, zone, killed, k, time; public int maxDelta; }
+        struct Run { public bool won; public int units, peak; public float lost, zone, killed, k, time; public int maxDelta; public int barrel, missed; }
 
         /// <summary>
         /// 경로 하나. `mask` 의 비트가 게이트마다 **왼쪽(0) / 오른쪽(1)** 을 정한다 —
@@ -325,6 +325,7 @@ namespace CrowdFire.Tools
                 won = sim.State == SimState.Won,
                 units = sim.Units,
                 peak = sim.PeakUnits,
+                barrel = sim.BarrelGained, missed = sim.BarrelsMissed,
                 lost = sim.AlliesLost,
                 zone = sim.ZoneLost,
                 killed = sim.EnemiesKilled,
@@ -348,6 +349,7 @@ namespace CrowdFire.Tools
                 won = sim.State == SimState.Won,
                 units = sim.Units,
                 peak = sim.PeakUnits,
+                barrel = sim.BarrelGained, missed = sim.BarrelsMissed,
                 lost = sim.AlliesLost,
                 zone = sim.ZoneLost,
                 killed = sim.EnemiesKilled,

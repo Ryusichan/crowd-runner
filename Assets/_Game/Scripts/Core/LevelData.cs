@@ -117,8 +117,19 @@ namespace CrowdFire.Core
                 wallHp = hp > 0f ? hp : gives * HpPerSoldier,
             };
 
-        /// <summary>통 1 명당 체력. 피해 10 짜리 총으로 병사 하나를 2.5 발에 번다</summary>
-        public const float HpPerSoldier = 25f;
+        /// <summary>
+        /// 통 1 명당 체력. **이 수가 "얼마나 큰 통까지 깰 수 있는가" 를 정한다.**
+        ///
+        /// 군단 N 이 전원 통을 쏘면 초당 N × (1/0.5) × 10 = 20N 의 피해다. 통이 보이는 창은
+        /// 사거리 18 m 를 지나는 동안이라 속도 v 에서 18/v 초. 그래서 깨지는 조건은
+        /// **G × HpPerSoldier ≤ 20N × 18/v** 이고, v = 6.5 에서 **G ≤ 1.5N** 이 된다
+        /// (36 으로 잡은 이유다). 플레이어가 배울 수 있는 한 줄이 그것이다:
+        /// *"지금 내 군단의 한 배 반까지는 깬다."*
+        ///
+        /// 25 였을 때는 G ≤ 2.2N 이라 **아무 통이나 다 깨졌고**, 그러면 큰 쪽을 고르는 것이
+        /// 늘 정답이라 선택이 아니었다 (2026-10-12 측정: 조준한 통은 8/8 전부 깨졌다).
+        /// </summary>
+        public const float HpPerSoldier = 36f;
 
         /// <summary>좁아지는 구간. `zoneLength` 를 길이로 쓴다 (같은 뜻이라 칸을 또 만들지 않는다)</summary>
         public static LevelEvent Narrow(float z, float width, float length, int lane = 0)
