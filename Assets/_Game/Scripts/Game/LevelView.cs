@@ -66,6 +66,7 @@ namespace CrowdFire.View
         static readonly Color BarrelWood = new Color(0.62f, 0.44f, 0.26f);
         static readonly Color BarrelHit = new Color(0.86f, 0.30f, 0.22f);
         UnityEngine.UI.Text countUi;
+        UnityEngine.UI.Text foeCountUi;
         CasualtyFx fx;
         RoadMarks marks;
         float spreadNow = -1f;
@@ -321,6 +322,9 @@ namespace CrowdFire.View
                 countUi.color = sim.State == SimState.Lost ? new Color(0.92f, 0.46f, 0.44f) : Color.white;
             }
 
+            if (foeCountUi == null) BuildFoeCountUi();
+            if (foeCountUi != null) ShowFoeCount(sim);
+
             // **당긴다.** 19 m 높이 · 26 m 뒤였는데, 시작 지점(10 명)에서 화면의 80 % 가
             // 빈 아스팔트였다 — 군단이 점처럼 작고 길이 화면을 지배했다. 1.5 배 가까이
             // 오면 사람이 1.5 배 커지고 길이 차지하는 비율이 줄어든다.
@@ -375,10 +379,86 @@ namespace CrowdFire.View
             o.effectDistance = new Vector2(3.5f, -3.5f);
         }
 
+        /// <summary>
+        /// **앞의 무리가 몇인지 글자로 말한다.**
+        ///
+        /// 세션 A 가 짚은 자리(`HANDOFF` §9): 1-1 의 방어선은 **620 명**인데 `renderCap` 이
+        /// 400 이라 화면에는 400 만 선다. 숫자가 없으면 플레이어는 **400 이 전부**라고 읽고,
+        /// 그 수로 *지금 더 모아야 하나*를 판단한다 — 틀린 수로 내리는 옳은 판단이다.
+        ///
+        /// 세는 것은 `Battle.Remaining` 이다: 살아 있는 적 + **아직 안 나온 적**. 적이
+        /// 흘러드는 구조라(`Battle.Stream`) 화면에 선 수는 늘 전체보다 적고, 플레이어가
+        /// 알아야 하는 것은 *앞으로 몇이 오는가*다.
+        ///
+        /// 자리는 **적 무리 위**다 — 화면 한구석에 두면 *저 앞의 저것*과 이 수가 같은
+        /// 것인지 알 수 없다. 레퍼런스(탑워 광고)도 무리마다 머리 위에 수를 띄운다.
+        /// </summary>
+        void ShowFoeCount(Sim sim)
+        {
+            var b = sim.Battle;
+            int n = b.Remaining;
+            bool show = n > 0 && !play.Paused && sim.State != SimState.Won && sim.State != SimState.Lost;
+            if (foeCountUi.gameObject.activeSelf != show) foeCountUi.gameObject.SetActive(show);
+            if (!show) return;
+
+            // **가장 가까운 무리의 앞머리**를 가리킨다. 평균을 쓰면 뒤로 길게 늘어선 줄의
+            // 한가운데가 되어 *지금 부딪히는 것*에서 멀어진다
+            float cz = sim.Z + 24f, cx = 0f;
+            float best = float.MaxValue; int cnt = 0;
+            for (int i = 0; i < b.EnemyCount; i++)
+            {
+                if (b.EState[i] == 2) continue;
+                float d = b.EZ[i] - sim.Z;
+                if (d < -2f) continue;
+                if (d < best) { best = d; cz = b.EZ[i]; }
+                cx += b.EX[i]; cnt++;
+            }
+            if (cnt > 0) cx /= cnt;
+
+            var sp = cam.WorldToScreenPoint(new Vector3(cx, 2.6f, cz + 1.2f));
+            // 카메라 뒤로 넘어가면 `WorldToScreenPoint` 가 **뒤집힌 좌표**를 준다 —
+            // 그대로 쓰면 글자가 반대쪽 구석에서 번쩍인다
+            if (sp.z < 0f) { sp.x = Screen.width * 0.5f; sp.y = Screen.height * 0.92f; }
+
+            float scale = foeCountUi.canvas != null ? foeCountUi.canvas.scaleFactor : 1f;
+            if (scale <= 0f) scale = 1f;
+            float x = Mathf.Clamp(sp.x, Screen.width * 0.12f, Screen.width * 0.88f) / scale;
+            float y = Mathf.Clamp(sp.y, Screen.height * 0.30f, Screen.height * 0.93f) / scale;
+            foeCountUi.rectTransform.anchoredPosition = new Vector2(x, y);
+            foeCountUi.text = n.ToString();
+        }
+
+        void BuildFoeCountUi()
+        {
+            var canvas = GameBoot.Overlay;
+            if (canvas == null) return;
+
+            var go = new GameObject("FoeCountUi");
+            go.transform.SetParent(canvas.transform, false);
+            var rt = go.AddComponent<RectTransform>();
+            // 화면 좌표를 그대로 쓰므로 **왼쪽 아래 기준**이다 (`ShowFoeCount` 가 매 프레임 옮긴다)
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.zero;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(360f, 110f);
+
+            foeCountUi = go.AddComponent<UnityEngine.UI.Text>();
+            foeCountUi.font = Resources.Load<Font>("Fonts/Jua-Regular")
+                           ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            foeCountUi.fontSize = 86;
+            foeCountUi.alignment = TextAnchor.MiddleCenter;
+            // 적은 붉은색이다 — 군단(흰색)과 **한눈에** 갈려야 한다
+            foeCountUi.color = new Color(0.98f, 0.42f, 0.38f);
+            foeCountUi.raycastTarget = false;
+            var o = go.AddComponent<UnityEngine.UI.Outline>();
+            o.effectColor = new Color(0.05f, 0.04f, 0.08f, 0.95f);
+            o.effectDistance = new Vector2(3f, -3f);
+        }
+
         void OnDestroy()
         {
             // 캔버스는 판보다 오래 산다 — 내 자식만 치운다
             if (countUi != null) Destroy(countUi.gameObject);
+            if (foeCountUi != null) Destroy(foeCountUi.gameObject);
         }
 
         /// <summary>
