@@ -814,6 +814,7 @@ namespace CrowdFire.View
                 t.position = new Vector3(e.lane * lane, bs.y * k * 0.5f, e.z);
                 mark = t;
                 barrelUpright = bs.y * k;
+                Debug.Log($"[CR] 통 세움: 원상자 {bs0} → 회전 {up.eulerAngles} 배율 {k:F3} 높이 {bs.y * k:F2}");
             }
             else
             {
@@ -1110,6 +1111,8 @@ namespace CrowdFire.View
                 foreach (var f in go.GetComponentsInChildren<MeshFilter>(true))
                     if (f.sharedMesh != null && (best == null || f.sharedMesh.vertexCount > best.vertexCount)) best = f.sharedMesh;
             barrelMeshCache = best;
+            if (best != null)
+                Debug.Log($"[CR] 통 메시 {best.name} 정점 {best.vertexCount} 서브메시 {best.subMeshCount} 상자 {best.bounds.size} 중심 {best.bounds.center}");
             if (barrelMeshCache == null) Debug.LogWarning("[CR] Props/Barrel 을 못 읽었다 — 원통으로 그린다");
             return barrelMeshCache;
         }
