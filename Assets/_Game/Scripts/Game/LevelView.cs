@@ -676,9 +676,12 @@ namespace CrowdFire.View
             var lab = Label("BarrelText", 0.34f);
             lab.transform.SetParent(t, false);
             lab.transform.localPosition = new Vector3(0f, 0.08f, -0.62f);
-            // **0.8 m 다.** 1.55 로 뒀더니 통 두 개의 숫자가 화면을 가로로 덮고 서로 겹쳤다 (docs/shots/barrel_1_z48.png). 게이트 글자가 0.55 인 것과 같은 자리 문제다
-            lab.transform.localScale = new Vector3(0.80f / Mathf.Max(0.1f, t.localScale.x),
-                                                   0.80f / t.localScale.y, 1f);
+            // **통보다 작아야 통에 적힌 것으로 읽힌다.** 1.55 에서는 숫자가 도로를 덮었고
+            // (`docs/shots/barrel_1_z48.png`), 0.80 에서도 웹 사진에서 글자가 통 폭의 1.5 배라
+            // 두 통의 숫자가 서로 붙어 보였다. 통 지름이 3.06 m 이므로 두 자리가 그 안에
+            // 들어가려면 이 정도다
+            lab.transform.localScale = new Vector3(0.45f / Mathf.Max(0.1f, t.localScale.x),
+                                                   0.45f / t.localScale.y, 1f);
             lab.text = e.gives.ToString();
             FitLabel(lab, t.localScale.x * 0.78f);
 
