@@ -71,7 +71,15 @@ namespace CrowdFire.Crowd
             rp = new RenderParams(mat)
             {
                 // **경계 상자를 손으로 준다.** 안 주면 Unity 가 인스턴스마다 컬링을 하려 들고,
-                // 군중은 어차피 한 덩어리로 화면에 있으니 그 계산이 순수한 낭비다
+                // 군중은 어차피 한 덩어리로 화면에 있으니 그 계산이 순수한 낭비다.
+                //
+                // ⚠ 그런데 **원점 고정이면 안 된다.** 이 값은 z −200..+200 이었고, 군단이
+                // z 200 을 넘는 순간 배치 **전체가 컬링되어 화면에서 사라졌다.** 1-1 은 290 m,
+                // 1-10 은 320 m 라 **긴 판의 마지막 3 분의 1 이 통째로 안 그려졌다** — 병력
+                // 323 과 적 688 이 로직에 멀쩡히 있는데 길만 찍힌 사진이 그것이다
+                // (`docs/shots/barrel_4_z234.png`, 2026-10-18). `Sync` 가 매 프레임 군단에
+                // 맞춰 다시 준다 — 아래 주석의 "낭비" 는 인스턴스 **단위** 컬링 이야기이고,
+                // 덩어리 하나의 경계를 옳게 두는 것과는 다른 일이다
                 worldBounds = new Bounds(Vector3.zero, new Vector3(200f, 20f, 400f)),
                 shadowCastingMode = ShadowCastingMode.Off,
                 receiveShadows = false,
@@ -87,8 +95,11 @@ namespace CrowdFire.Crowd
             if (mesh == null || mat == null) { live = 0; return; }
             int n = Mathf.Min(f.Count, inst.Length);
             live = n;
+            float zLo = float.MaxValue, zHi = float.MinValue;
             for (int i = 0; i < n; i++)
             {
+                if (f.Z[i] < zLo) zLo = f.Z[i];
+                if (f.Z[i] > zHi) zHi = f.Z[i];
                 // 적은 반대쪽을 본다 — 두 군단이 마주 달리는 것이 보여야 겹치는 순간이 읽힌다.
                 // `Matrix4x4.TRS` 는 구조체 연산이라 할당이 없다
                 inst[i].objectToWorld = Matrix4x4.TRS(
@@ -97,6 +108,14 @@ namespace CrowdFire.Crowd
                     Vector3.one);
                 inst[i]._Phase = f.Phase[i];
                 inst[i]._Side = f.Side[i];
+            }
+            // **경계를 군단에 맞춘다.** 여유 40 m 는 이 틱과 다음 틱 사이에 움직이는 거리보다
+            // 훨씬 크다 — 딱 맞게 주면 경계 밖으로 한 프레임 삐져나간 군중이 깜빡인다
+            if (n > 0)
+            {
+                float cz = (zLo + zHi) * 0.5f;
+                float dz = (zHi - zLo) + 80f;
+                rp.worldBounds = new Bounds(new Vector3(0f, 1f, cz), new Vector3(200f, 20f, dz));
             }
         }
 

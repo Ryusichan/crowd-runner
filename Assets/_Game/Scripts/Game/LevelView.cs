@@ -596,8 +596,9 @@ namespace CrowdFire.View
             var lab = Label("BarrelText", 0.34f);
             lab.transform.SetParent(t, false);
             lab.transform.localPosition = new Vector3(0f, 0.08f, -0.62f);
-            lab.transform.localScale = new Vector3(1.55f / Mathf.Max(0.1f, t.localScale.x),
-                                                   1.55f / t.localScale.y, 1f);
+            // **0.8 m 다.** 1.55 로 뒀더니 통 두 개의 숫자가 화면을 가로로 덮고 서로 겹쳤다 (docs/shots/barrel_1_z48.png). 게이트 글자가 0.55 인 것과 같은 자리 문제다
+            lab.transform.localScale = new Vector3(0.80f / Mathf.Max(0.1f, t.localScale.x),
+                                                   0.80f / t.localScale.y, 1f);
             lab.text = e.gives.ToString();
             FitLabel(lab, t.localScale.x * 0.78f);
 
@@ -637,6 +638,9 @@ namespace CrowdFire.View
 
                 bool alive = hp01 > 0f;
                 if (alive && barrelZ[i] < sim.Z - 2f) alive = false;
+                // **다음 줄은 아직 안 보여 준다.** 50 m 밖의 통까지 그리면 그 숫자가 지금 줄
+                // 위에 겹쳐서 `45` 와 `14` 가 `4514` 로 읽힌다 (docs/shots/barrel_1_z48.png)
+                if (alive && barrelZ[i] > sim.Z + 50f) alive = false;
 
                 // 깨지는 순간 한 번 부푼다 — 보상이 어디서 나왔는지가 보여야 한다
                 if (!alive && t.gameObject.activeSelf && barrelPop[i] <= 0f) barrelPop[i] = 0.22f;
