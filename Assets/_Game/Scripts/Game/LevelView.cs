@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using CrowdFire.Core;
 using CrowdFire.Game;
 using CrowdFire.Crowd;
@@ -51,6 +52,15 @@ namespace CrowdFire.View
         public int GatePops => fxGate != null ? fxGate.Popped : 0;
         Transform[] zones = new Transform[0];
 
+        /// <summary>
+        /// **길가가 비면 황야다.** 라스트워의 레인은 양옆에 콘크리트 방호벽 토막이 줄지어 있고
+        /// 그 밖으로 폐건물이 지나간다 (`docs/REF_LASTWAR.md` §2e). 전부 상자이지만 **간격·높이가
+        /// 제각각**이면 거리감이 생긴다. 개수를 고정하고 앞으로 보내는 풀이라 판 길이와 무관하다
+        /// </summary>
+        readonly List<Transform> sideProps = new List<Transform>();
+        const int BarrierPerSide = 14, BuildingPerSide = 6;
+        const float BarrierStep = 6f, BuildingStep = 16f;
+
         // ── 드럼통 ───────────────────────────────────────────────────────────
         /// <summary>
         /// 통은 **레벨 글에서 한 번** 세우고, 매 프레임 `Battle` 에서 체력만 읽어 온다.
@@ -64,6 +74,7 @@ namespace CrowdFire.View
         Material[] barrelMat = new Material[0];
         float[] barrelPop = new float[0];
         static readonly Color BarrelWood = new Color(0.62f, 0.44f, 0.26f);
+        float barrelUpright; bool barrelLabelLoose; Transform lastBarrelLabel;
         static readonly Color BarrelHit = new Color(0.86f, 0.30f, 0.22f);
         UnityEngine.UI.Text countUi;
         UnityEngine.UI.Text foeCountUi;
@@ -72,6 +83,7 @@ namespace CrowdFire.View
         float spreadNow = -1f;
         BlobShadows shadows;
         Camera cam;
+        float camK;   // 병력에 따른 카메라 거리 배율 (1 = 20 명 기준)
         float wallHp0;
 
         void Awake()
@@ -79,8 +91,11 @@ namespace CrowdFire.View
             play = GetComponent<LevelPlay>();
             allies = new CrowdField(Sim.MaxUnits, 20261009);
             foes = new CrowdField(Sim.MaxUnits, 77215);
-            allyView = new VatCrowd("_lo");
-            foeView = new VatCrowd("_lo", foe: true);
+            // 2026-10-18: 회색 캡슐 대역(`_lo`) 대신 **파란 군인(+소총)** 과 **좀비** —
+            // `Editor/CrowdBake` 가 굽는다. 오너: *"라스트워처럼."* 구운 것이 없으면 `VatCrowd`
+            // 가 에러를 찍고 안 그리므로, 조용히 대역으로 떨어지지 않는다 (그게 맞다)
+            allyView = new VatCrowd("_soldier");
+            foeView = new VatCrowd("_zombie", foe: true);
             allyView.Init(renderCap); foeView.Init(renderCap);
             allyView.SetActive(true); foeView.SetActive(true);
             gunfire.Init();
@@ -108,11 +123,21 @@ namespace CrowdFire.View
             // 더 눕히면 군중이 화면에 더 넓게 퍼져 GPU 가 싸진다. 지금은 보이는 쪽을 먼저 맞춘다
             // 34° 였는데 군단이 화면 **중간**에 앉고 그 아래가 빈 아스팔트였다. 조금 세우면
             // (= 숙이는 각을 줄이면) 화면의 것들이 전부 아래로 내려오고, 앞쪽이 더 보인다
-            cam.transform.rotation = Quaternion.Euler(30f, 0f, 0f);
-            cam.fieldOfView = 52f;
+            // 2026-10-18 라스트워 프레이밍 (`docs/REF_LASTWAR.md` §2b): 소대가 화면 아래 1/3 에,
+            // 사람 키가 화면 높이의 1/8 쯤. 9.2 m 위 · 10.5 m 뒤 · 30° 에서는 사람이 점이었다
+            // 34° 에서는 헬멧 윗면만 보여 군단이 **파란 돔** 이었다 (z108 사진). 라스트워는 더 낮게 본다 —
+            // 몸통·소총이 보이는 28°, 대신 뒤로 조금 더 물러난다
+            cam.transform.rotation = Quaternion.Euler(28f, 0f, 0f);
+            cam.fieldOfView = 46f;
             cam.farClipPlane = 300f;
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.62f, 0.72f, 0.80f);
+            cam.backgroundColor = new Color(0.74f, 0.80f, 0.86f);
+            // **안개.** 멀리가 하늘색으로 녹아야 길이 지평선으로 사라진다 — 없으면 끝이 칼로 자른 듯 끊긴다
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = cam.backgroundColor;
+            RenderSettings.fogStartDistance = 55f;
+            RenderSettings.fogEndDistance = 130f;
 
             // **주변광을 못 박는다.** 기본값은 하늘(skybox) 기반인데 이 장면에는 하늘이 없어
             // 엔진 기본 하늘을 샘플링한다 — 그 결과 **모든 것이 밝아지고 하늘색으로 물든다.**
@@ -126,6 +151,10 @@ namespace CrowdFire.View
             li.type = LightType.Directional;
             li.intensity = 0.85f;
             li.shadows = LightShadows.None;   // 400 개체의 그림자는 드로우를 두 배로 만든다 (§6b)
+            li.color = new Color(1.0f, 0.95f, 0.86f);   // 오후 햇빛 — 흰 해는 플라스틱처럼 보인다
+            li.intensity = 1.15f;
+            li.transform.rotation = Quaternion.Euler(52f, -28f, 0f);
+            RenderSettings.ambientLight = new Color(0.46f, 0.48f, 0.54f);   // 그늘이 검지 않게
             li.transform.rotation = Quaternion.Euler(52f, -28f, 0f);
 
             // 색은 **대비로** 고른다. 전에는 땅 0.30/0.38/0.28, 길 0.46/0.50/0.44 로 둘 다
@@ -135,12 +164,12 @@ namespace CrowdFire.View
             // **땅이 있어야 길이 길로 보인다.** 길만 그리면 하늘색 위에 떠 있는 리본이고,
             // 그러면 군단이 *어디를* 달리는지가 없다. 땅 한 장 + 연석 둘이면 끝난다 —
             // 광고형 군단가 옆을 비워 두지 않는 이유다
-            ground = Box("Ground", new Color(0.42f, 0.55f, 0.35f));
-            road = Box("Road", new Color(0.52f, 0.52f, 0.55f));
+            ground = Box("Ground", new Color(0.56f, 0.50f, 0.40f));   // 마른 땅 — 라스트워의 황야
+            road = Box("Road", new Color(0.33f, 0.34f, 0.37f));      // 아스팔트는 어둡다 — 밝으면 군중이 묻힌다
             // 연석은 길의 **가장자리를 말한다**. 갇힌 차선 칸막이(`divider`)와 달리 늘 서 있고,
             // 밝아서 길의 폭이 한눈에 읽힌다 — 폭이 좁아지는 구간이 눈에 걸려야 한다
-            curbL = Box("Curb", new Color(0.92f, 0.90f, 0.84f));
-            curbR = Box("Curb", new Color(0.92f, 0.90f, 0.84f));
+            curbL = Box("Curb", new Color(0.93f, 0.78f, 0.22f));   // 노란 가장자리 선
+            curbR = Box("Curb", new Color(0.93f, 0.78f, 0.22f));
 
             // **벽으로 닫는다** (`docs/REF_TOPWAR.md` §2③). 들판 가운데 열린 길은 *어디로
             // 가야 하는지* 는 말하지만 **갇혀 있다** 는 말을 못 한다. 벽이 서면 좌우가 끝이라는
@@ -148,8 +177,63 @@ namespace CrowdFire.View
             // 군중이 **벽에서 벽까지** 차 있는 것이 그 장르의 핵심 그림이다.
             //
             // 길보다 **밝게** 둔다: 어두우면 화면 양끝이 검은 띠가 되어 세로 화면이 더 좁아 보인다
-            wallL = Box("Wall", new Color(0.62f, 0.60f, 0.58f));
-            wallR = Box("Wall", new Color(0.62f, 0.60f, 0.58f));
+            wallL = Box("Wall", new Color(0.74f, 0.72f, 0.68f));   // 콘크리트 방호벽
+            wallR = Box("Wall", new Color(0.74f, 0.72f, 0.68f));
+            BuildSideProps();
+        }
+
+        void BuildSideProps()
+        {
+            foreach (var t in sideProps) if (t) Destroy(t.gameObject);
+            sideProps.Clear();
+            var concrete = new Color(0.80f, 0.78f, 0.74f);
+            var stripe = new Color(0.90f, 0.72f, 0.20f);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                // 방호벽 토막 — 사이사이 틈을 두고, 하나 걸러 노란 줄
+                for (int i = 0; i < BarrierPerSide; i++)
+                {
+                    var b = Box("Barrier", (i & 1) == 0 ? concrete : Color.Lerp(concrete, stripe, 0.35f));
+                    b.localScale = new Vector3(0.55f, 0.95f, 3.6f);
+                    b.name = "Barrier" + (side < 0 ? "L" : "R") + i;
+                    sideProps.Add(b);
+                }
+                // 폐건물 — 높이·폭·색이 제각각인 상자. 멀리 서서 안개에 녹는다
+                for (int i = 0; i < BuildingPerSide; i++)
+                {
+                    float h = 6f + ((i * 7 + (side + 1) * 3) % 5) * 2.2f;
+                    float w = 7f + ((i * 3) % 3) * 2.5f;
+                    float g = 0.42f + ((i * 5 + side + 1) % 4) * 0.05f;
+                    var b = Box("Building", new Color(g, g * 0.97f, g * 0.93f));
+                    b.localScale = new Vector3(w, h, 9f + (i % 2) * 4f);
+                    b.name = "Building" + (side < 0 ? "L" : "R") + i;
+                    sideProps.Add(b);
+                }
+            }
+        }
+
+        /// <summary>풀을 군단 앞뒤로 깐다 — 지나간 것은 앞으로 보낸다</summary>
+        void TickSideProps(float z, float half)
+        {
+            int k = 0;
+            for (int side = -1; side <= 1; side += 2)
+            {
+                float x = side * (half + 0.9f);
+                for (int i = 0; i < BarrierPerSide; i++, k++)
+                {
+                    float bz = Mathf.Floor((z - 18f) / BarrierStep) * BarrierStep + i * BarrierStep;
+                    sideProps[k].position = new Vector3(x, 0.48f, bz);
+                }
+                float bx = side * (half + 7.5f);
+                for (int i = 0; i < BuildingPerSide; i++, k++)
+                {
+                    var t = sideProps[k];
+                    float bz = Mathf.Floor((z - 24f) / BuildingStep) * BuildingStep + i * BuildingStep;
+                    // 좌우 번갈아 조금 더 멀리 — 일직선이면 담장처럼 보인다
+                    float off = ((i + (side + 1)) % 3) * 3.5f;
+                    t.position = new Vector3(bx + side * off, t.localScale.y * 0.5f - 0.05f, bz);
+                }
+            }
         }
 
         /// <summary>`LevelPlay` 가 레벨을 띄운 뒤 부른다 — 게이트·지역·벽을 레벨대로 세운다</summary>
@@ -157,6 +241,9 @@ namespace CrowdFire.View
         {
             foreach (var t in gates) if (t) Destroy(t.gameObject);
             foreach (var t in barrels) if (t) Destroy(t.gameObject);
+            foreach (var t in sideProps) if (t) Destroy(t.gameObject);
+            sideProps.Clear();
+            BuildSideProps();   // 판을 바꿀 때 길가 소품도 새로 세운다
             barrels = new Transform[0]; barrelZ = new float[0]; barrelLane = new int[0];
             barrelBar = new Transform[0]; barrelMat = new Material[0]; barrelPop = new float[0];
             foreach (var t in zones) if (t) Destroy(t.gameObject);
@@ -178,9 +265,13 @@ namespace CrowdFire.View
                 if (e.kind == EventKind.Barrel)
                 {
                     Transform bar, mark;
-                    b.Add(Barrel(e, level, out bar, out mark));
+                    barrelLabelLoose = false;
+                    var bt = Barrel(e, level, out bar, out mark);
+                    b.Add(bt);
                     bz.Add(e.z); bl.Add(e.lane); bbar.Add(bar);
                     bmat.Add(mark.GetComponent<Renderer>().sharedMaterial);
+                    // 글자가 통의 자식이 아니면(진짜 메시) 통이 사라질 때 같이 사라지게 부모를 통으로 — 월드 자세 유지
+                    if (barrelLabelLoose && lastBarrelLabel != null) lastBarrelLabel.SetParent(bt, true);
                 }
                 else if (e.kind == EventKind.Gate)
                     foreach (var o in e.options) { g.Add(Gate(e.z, o)); gz.Add(e.z); gl.Add(o.lane); }
@@ -237,6 +328,7 @@ namespace CrowdFire.View
             curbL.localScale = new Vector3(0.35f, 0.34f, 190f);
             curbR.localScale = curbL.localScale;
             curbL.position = new Vector3(-half, 0.12f, sim.Z + 36f);
+            if (sideProps.Count > 0) TickSideProps(sim.Z, half);
             curbR.position = new Vector3(+half, 0.12f, sim.Z + 36f);
 
             // 벽은 연석 **바깥**에 선다. 높이 2.6 m 는 사람(1.86)보다 높아 *넘을 수 없다* 로
@@ -319,6 +411,12 @@ namespace CrowdFire.View
                 if (countUi.gameObject.activeSelf != playing) countUi.gameObject.SetActive(playing);
 
                 countUi.text = sim.Units.ToString();
+                if (squadHpRt != null)
+                {
+                    float k = Mathf.Clamp01(sim.Units / (float)Mathf.Max(1, sim.PeakUnits));
+                    squadHpRt.sizeDelta = new Vector2(414f * k, -6f);
+                    squadHp.color = Color.Lerp(new Color(0.90f, 0.32f, 0.26f), new Color(0.36f, 0.86f, 0.42f), k);
+                }
                 countUi.color = sim.State == SimState.Lost ? new Color(0.92f, 0.46f, 0.44f) : Color.white;
             }
 
@@ -330,7 +428,12 @@ namespace CrowdFire.View
             // 오면 사람이 1.5 배 커지고 길이 차지하는 비율이 줄어든다.
             //
             // 각도는 그대로 34°다. 각도를 눕히면 겹쳐 그리기가 늘어 GPU 가 비싸진다 (§6b)
-            cam.transform.position = new Vector3(0f, 9.2f, sim.Z - 10.5f);
+            // **군단이 크면 카메라가 물러난다** (라스트워가 그렇다). 20 명일 때 6.8 m 위 · 7.6 m 뒤가
+            // 300 명이 되면 화면이 파란 헬멧으로만 찬다 (2026-10-18 z234 사진). 대형 반지름은
+            // sqrt(병력)에 비례하므로 거리도 그렇게 — 급하게 튀지 않게 한 프레임에 조금씩 따라간다
+            float wantK = Mathf.Clamp(Mathf.Sqrt(Mathf.Max(1f, sim.Units) / 40f), 1f, 1.9f);
+            camK = camK <= 0f ? wantK : Mathf.Lerp(camK, wantK, 1f - Mathf.Exp(-Time.deltaTime * 2.5f));
+            cam.transform.position = new Vector3(0f, 6.0f * camK, sim.Z - 9.2f * camK);
         }
 
         /// <summary>
@@ -377,7 +480,31 @@ namespace CrowdFire.View
             var o = go.AddComponent<UnityEngine.UI.Outline>();
             o.effectColor = new Color(0.05f, 0.04f, 0.08f, 0.92f);
             o.effectDistance = new Vector2(3.5f, -3.5f);
+
+            // **소대 HP 바** (라스트워: 소대 위 얇은 초록 띠). 값은 병력 ÷ 최고 병력 — 통으로 키운 뒤
+            // 깎이는 것이 **길이로** 보여야 "밀리고 있다" 가 숫자를 읽기 전에 들어온다
+            var bgGo = new GameObject("SquadHpBg");
+            bgGo.transform.SetParent(canvas.transform, false);
+            var bgRt = bgGo.AddComponent<RectTransform>();
+            bgRt.anchorMin = bgRt.anchorMax = new Vector2(0.5f, 0f);
+            bgRt.pivot = new Vector2(0.5f, 0f);
+            bgRt.anchoredPosition = new Vector2(0f, 300f);
+            bgRt.sizeDelta = new Vector2(420f, 22f);
+            var bg = bgGo.AddComponent<UnityEngine.UI.Image>();
+            bg.color = new Color(0.05f, 0.04f, 0.08f, 0.75f); bg.raycastTarget = false;
+            var fgGo = new GameObject("SquadHp");
+            fgGo.transform.SetParent(bgGo.transform, false);
+            var fgRt = fgGo.AddComponent<RectTransform>();
+            fgRt.anchorMin = new Vector2(0f, 0f); fgRt.anchorMax = new Vector2(0f, 1f);
+            fgRt.pivot = new Vector2(0f, 0.5f);
+            fgRt.anchoredPosition = new Vector2(3f, 0f);
+            fgRt.sizeDelta = new Vector2(414f, -6f);
+            squadHp = fgGo.AddComponent<UnityEngine.UI.Image>();
+            squadHp.color = new Color(0.36f, 0.86f, 0.42f); squadHp.raycastTarget = false;
+            squadHpRt = fgRt;
         }
+
+        UnityEngine.UI.Image squadHp; RectTransform squadHpRt;
 
         /// <summary>
         /// **앞의 무리가 몇인지 글자로 말한다.**
@@ -658,23 +785,55 @@ namespace CrowdFire.View
             float half = level.roadWidth * 0.17f;
             float lane = level.roadWidth * 0.25f;
 
-            var t = Prim(PrimitiveType.Cylinder, "Barrel", BarrelWood);
-            t.localScale = new Vector3(half * 2f, 1.1f, half * 2f);
-            t.position = new Vector3(e.lane * lane, 1.1f, e.z);
-            mark = t;
-
-            // 테 두 줄 — 원통만 두면 기름통인지 기둥인지 모른다
-            for (int k = 0; k < 2; k++)
+            // **진짜 드럼통** (Quaternius ZA `Barrel.fbx`, CC0 — `THIRD_PARTY_ASSETS` CF_PROP_002).
+            // 없으면 원통 + 쇠테로 떨어진다. 모델 크기는 모르니 **경계 상자로 지름을 맞춘다**
+            Transform t;
+            var barrelMesh = BarrelMesh();
+            if (barrelMesh != null)
             {
-                var hoop = Prim(PrimitiveType.Cylinder, "Hoop", new Color(0.30f, 0.24f, 0.18f));
-                hoop.SetParent(t, false);
-                hoop.localScale = new Vector3(1.04f, 0.07f, 1.04f);
-                hoop.localPosition = new Vector3(0f, k == 0 ? 0.45f : -0.45f, 0f);
+                var go = new GameObject("Barrel");
+                go.transform.SetParent(transform, false);
+                go.AddComponent<MeshFilter>().sharedMesh = barrelMesh;
+                var mr = go.AddComponent<MeshRenderer>();
+                mr.sharedMaterial = Box("BarrelMat", BarrelWood).GetComponent<Renderer>().sharedMaterial;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                t = go.transform;
+                // **세운다.** 모델의 긴 축이 Y 가 아닐 수 있다 — 첫 사진에서 통이 옆으로 누워 있었다.
+                // 긴 축을 보고 돌려 세우고, 돌린 뒤의 상자로 지름과 바닥을 맞춘다
+                var bs0 = barrelMesh.bounds.size;
+                Quaternion up = Quaternion.identity;
+                if (bs0.x >= bs0.y && bs0.x >= bs0.z) up = Quaternion.Euler(0f, 0f, 90f);
+                else if (bs0.z >= bs0.y && bs0.z >= bs0.x) up = Quaternion.Euler(90f, 0f, 0f);
+                t.rotation = up;
+                // 돌린 상자: 축을 바꿔 치환 (균등 배율이라 크기만 섞이면 된다)
+                Vector3 bs = up == Quaternion.identity ? bs0
+                           : (bs0.x >= bs0.y && bs0.x >= bs0.z ? new Vector3(bs0.y, bs0.x, bs0.z) : new Vector3(bs0.x, bs0.z, bs0.y));
+                float k = (half * 2f) / Mathf.Max(0.01f, Mathf.Max(bs.x, bs.z));
+                t.localScale = new Vector3(k, k, k);
+                // 바닥: 돌린 뒤 중심이 상자 중심이라 가정하고 높이 절반만큼 띄운다
+                t.position = new Vector3(e.lane * lane, bs.y * k * 0.5f, e.z);
+                mark = t;
+                barrelUpright = bs.y * k;
+            }
+            else
+            {
+                t = Prim(PrimitiveType.Cylinder, "Barrel", BarrelWood);
+                t.localScale = new Vector3(half * 2f, 1.1f, half * 2f);
+                t.position = new Vector3(e.lane * lane, 1.1f, e.z);
+                mark = t;
+                for (int k = 0; k < 2; k++)
+                {
+                    var hoop = Prim(PrimitiveType.Cylinder, "Hoop", new Color(0.30f, 0.24f, 0.18f));
+                    hoop.SetParent(t, false);
+                    hoop.localScale = new Vector3(1.04f, 0.07f, 1.04f);
+                    hoop.localPosition = new Vector3(0f, k == 0 ? 0.45f : -0.45f, 0f);
+                }
             }
 
             // **숫자.** 부모가 지름만큼 늘어나 있으므로 지역 배율로 되돌린다
-            var lab = Label("BarrelText", 0.34f);
+            var lab = OutlinedLabel("BarrelText", 0.34f);
             lab.transform.SetParent(t, false);
+            lastBarrelLabel = lab.transform;
             lab.transform.localPosition = new Vector3(0f, 0.08f, -0.62f);
             // **글자 폭을 통 지름에서 역산한다.** 기본값을 1.55 → 0.80 → 0.45 로 세 번 줄였는데
             // 웹 사진에서 숫자는 계속 통만 했다. 이유는 FitLabel 이었다: 넘긴 최대 폭이 커서
@@ -684,12 +843,22 @@ namespace CrowdFire.View
             // 그래서 짐작을 버리고 **사진에서 쟀다**: 통 지름 3.06 m 옆에서 두 자리 45 가
             // 3.33 m 였고 그때 월드 배율이 0.81 이었으므로, 한 자리는 배율 1 당 2.06 m 다.
             // 지름의 72 % 안에 글자 수만큼 들어가게 맞춘다 — 110 처럼 세 자리면 저절로 좁아진다.
-            lab.text = e.gives.ToString();
+            SetOutlined(lab, e.gives.ToString());
             const float WidthPerDigit = 2.06f;
-            float want = t.localScale.x * 0.72f;
+            float diameter = barrelMesh != null ? half * 2f : t.localScale.x;
+            float want = diameter * 0.72f;
             float world = want / (Mathf.Max(1, lab.text.Length) * WidthPerDigit);
             lab.transform.localScale = new Vector3(world / Mathf.Max(0.1f, t.localScale.x),
-                                                   world / t.localScale.y, 1f);
+                                                   world / Mathf.Max(0.1f, t.localScale.y), 1f);
+            if (barrelMesh != null)
+            {
+                // 통이 돌아가 있을 수 있으니 **월드 좌표**로 앞면 가운데에 둔다 (카메라는 -Z 에서 본다)
+                lab.transform.SetParent(transform, false);
+                lab.transform.rotation = Quaternion.identity;
+                lab.transform.position = new Vector3(e.lane * lane, barrelUpright * 0.55f, e.z - half - 0.06f);
+                lab.transform.localScale = new Vector3(world, world, 1f);
+                barrelLabelLoose = true;
+            }
 
             // 체력 띠 — 가운데에서 줄어들지 않고 **왼쪽에서부터** 줄게 부모를 하나 둔다
             var pivot = new GameObject("BarrelBarPivot").transform;
@@ -769,7 +938,9 @@ namespace CrowdFire.View
             // **둘 사이를 벌린다.** 전에는 폭 0.90 · 중심 0.50 이라 틈이 0.35 m 뿐이었고,
             // 멀리서 보면 **두 문이 아니라 간판 하나**로 읽혔다 (오너 폰 사진). 이 게임의
             // 조작이 *둘 중 하나* 라서, 둘로 안 보이면 조작이 화면에서 사라진 것이다
-            var t = Box("Gate", col);
+            // **반투명 판.** 라스트워의 게이트는 유리 같은 판이라 뒤의 적이 비친다 — 불투명 네모는
+            // 벽으로 읽혀 *지나가도 되나* 를 망설이게 한다
+            var t = Pane("Gate", new Color(col.r, col.g, col.b, 0.55f));
             t.localScale = new Vector3(lane * 0.78f, 3.2f, 0.25f);
             t.position = new Vector3(o.lane * lane * 0.60f, 1.6f, z);
             // **테두리.** 색판만 있으면 공중에 뜬 종이로 보인다. 뒤에 조금 큰 어두운 판을
@@ -778,20 +949,21 @@ namespace CrowdFire.View
             // **문의 자식으로 붙인다.** 따로 두면 `gates[]` 가 모르니 지나간 뒤에도 남고,
             // 연출(`GatePassFx`)이 문을 터뜨려도 테두리만 제자리에 서 있다 — 문이 사라진
             // 자리에 틀만 남는 그림이다
-            var frame = Box("GateFrame", new Color(0.16f, 0.17f, 0.22f));
+            // 테두리는 **밝게** — 유리판의 가장자리는 빛을 받는다. 어두운 틀은 창살처럼 보였다
+            var frame = Box("GateFrame", Color.Lerp(col, Color.white, 0.55f));
             frame.SetParent(t, false);
             frame.localScale = new Vector3(1f + 0.34f / t.localScale.x,
                                            1f + 0.30f / t.localScale.y,
                                            0.16f / t.localScale.z);
             frame.localPosition = new Vector3(0f, 0.01f, 0.4f);
-            var lab = Label("GateText", 0.34f);
+            var lab = OutlinedLabel("GateText", 0.34f);
             lab.transform.SetParent(t, false);
             lab.transform.localPosition = new Vector3(0f, 0.06f, -0.6f);
             // 부모가 차선만큼 넓어졌으므로 **자식의 지역 배율로 돌려놓는다** — 안 그러면
             // 글자가 네모와 같이 늘어나 길쭉해진다
             lab.transform.localScale = new Vector3(0.55f / Mathf.Max(0.1f, t.localScale.x),
                                                    0.55f / t.localScale.y, 1f);
-            lab.text = Sign(o.op) + o.value;
+            SetOutlined(lab, Sign(o.op) + o.value);
             FitLabel(lab, t.localScale.x * 0.80f);
             return t;
         }
@@ -925,6 +1097,31 @@ namespace CrowdFire.View
 
         Transform Box(string name, Color c) { return Prim(PrimitiveType.Cube, name, c); }
 
+        static Mesh barrelMeshCache; static bool barrelMeshTried;
+        static Mesh BarrelMesh()
+        {
+            if (barrelMeshTried) return barrelMeshCache;
+            barrelMeshTried = true;
+            var go = Resources.Load<GameObject>("Props/Barrel");
+            var mf = go != null ? go.GetComponentInChildren<MeshFilter>() : null;
+            barrelMeshCache = mf != null ? mf.sharedMesh : null;
+            if (barrelMeshCache == null) Debug.LogWarning("[CR] Props/Barrel 을 못 읽었다 — 원통으로 그린다");
+            return barrelMeshCache;
+        }
+
+        /// <summary>반투명 판. `Legacy Shaders/Transparent/Diffuse` — `WebBuild.EnsureShaders` 에 올려 둔 것</summary>
+        Transform Pane(string name, Color c)
+        {
+            var t = Prim(PrimitiveType.Cube, name, c);
+            var sh = Shader.Find("Legacy Shaders/Transparent/Diffuse");
+            if (sh != null)
+            {
+                var m = new Material(sh) { color = c };
+                t.GetComponent<Renderer>().sharedMaterial = m;
+            }
+            return t;
+        }
+
         Transform Prim(PrimitiveType kind, string name, Color c)
         {
             var go = GameObject.CreatePrimitive(kind);
@@ -954,6 +1151,30 @@ namespace CrowdFire.View
             if (m.HasProperty("_SpecColor")) m.SetColor("_SpecColor", Color.black);
             go.GetComponent<Renderer>().sharedMaterial = m;
             return go.transform;
+        }
+
+        /// <summary>
+        /// **흰 글자 + 짙은 외곽선** (라스트워의 숫자). `TextMesh` 에는 외곽선이 없으니 같은 글자를
+        /// 어둡게 한 장 더, 살짝 뒤·아래에 둔다 — 드로우 하나 값으로 글자가 어디서나 읽힌다.
+        /// 돌려주는 것은 앞 글자이고, 뒷 글자는 자식이라 같이 움직인다. `text` 는 `SetOutlined` 로 넣는다.
+        /// </summary>
+        TextMesh OutlinedLabel(string name, float size)
+        {
+            var front = Label(name, size);
+            var back = Label(name + "Outline", size);
+            back.transform.SetParent(front.transform, false);
+            back.transform.localPosition = new Vector3(0.035f, -0.035f, 0.02f);
+            back.color = new Color(0.06f, 0.05f, 0.08f, 1f);
+            back.fontStyle = FontStyle.Bold;
+            return front;
+        }
+
+        static void SetOutlined(TextMesh front, string text)
+        {
+            front.text = text;
+            front.fontStyle = FontStyle.Bold;
+            var back = front.transform.childCount > 0 ? front.transform.GetChild(0).GetComponent<TextMesh>() : null;
+            if (back != null) back.text = text;
         }
 
         TextMesh Label(string name, float size)

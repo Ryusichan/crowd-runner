@@ -65,6 +65,9 @@ namespace CrowdFire.EditorTools
             M0Assets.Bake(300, "_lo");
             VatBaker.Bake("_lo");
             M0Assets.BakeFlatMaterials();
+            // 진짜 캐릭터 (파란 군인 + 좀비) — Resources/M0 는 추적하지 않으므로 빌드가 굽는다
+            CrowdBake.Soldier();
+            CrowdBake.Zombie();
             AssetDatabase.SaveAssets();
             AssertEverythingLoadedByNameExists();
             EnsureScene();
@@ -193,7 +196,7 @@ namespace CrowdFire.EditorTools
             var arr = so.FindProperty("m_AlwaysIncludedShaders");
             if (arr == null) { Debug.LogError("[CR] m_AlwaysIncludedShaders 가 없다"); return; }
 
-            foreach (var name in new[] { "Legacy Shaders/Diffuse", "Standard" })
+            foreach (var name in new[] { "Legacy Shaders/Diffuse", "Legacy Shaders/Transparent/Diffuse", "Standard" })
             {
                 var sh = Shader.Find(name);
                 if (sh == null) { Debug.LogError($"[CR] 셰이더 '{name}' 를 못 찾았다 — 웹에서 그 네모들이 안 보인다"); continue; }

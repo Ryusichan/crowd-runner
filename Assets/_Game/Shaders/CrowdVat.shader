@@ -21,6 +21,9 @@ Shader "Game/CrowdVat"
         _Frames ("구운 프레임 수", Float) = 32
         _Verts ("정점 수", Float) = 1500
         _ClipSpeed ("클립 속도 (초당 바퀴)", Float) = 1.25
+        // 진짜 모델(UACP)은 머티리얼 단색을 **정점색**으로 옮겨 굽는다 (`CrowdBake`). 1 이면
+        // 정점색 × 틴트, 0 이면 예전처럼 틴트만 (대역 캡슐에는 정점색이 없다)
+        _UseVertexColor ("정점색 사용", Float) = 0
     }
     SubShader
     {
@@ -38,7 +41,7 @@ Shader "Game/CrowdVat"
 
             sampler2D _Vat;
             float4 _Color, _EnemyColor;
-            float _Frames, _Verts, _ClipSpeed;
+            float _Frames, _Verts, _ClipSpeed, _UseVertexColor;
 
             // 인스턴스마다 다른 둘: **걸음 위상**과 **편**(아군/적).
             // 위상이 같으면 1,000 명이 한 몸처럼 움직여 군중으로 안 읽힌다 — `CrowdField.Phase` 가
@@ -53,6 +56,7 @@ Shader "Game/CrowdVat"
                 float4 vertex : POSITION;
                 float3 normal : NORMAL;
                 float2 uv2 : TEXCOORD1;     // x = 정점 번호 / (정점 수 - 1)
+                float4 color : COLOR;       // 모델의 머티리얼 색 (굽는 쪽이 넣는다)
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
             struct v2f
@@ -86,6 +90,8 @@ Shader "Game/CrowdVat"
                 // 그때 두 번째 텍스처를 굽는다
                 o.nrm = UnityObjectToWorldNormal(v.normal);
                 o.col = lerp(_Color, _EnemyColor, side);
+                // 모델이 색을 들고 왔으면 그 색이 주인이고 팀 틴트는 거든다
+                o.col.rgb = lerp(o.col.rgb, o.col.rgb * v.color.rgb, _UseVertexColor);
                 // **개체마다 조금씩 다르게.** 400 명이 한 색이면 군중이 아니라 **덩어리**로
                 // 보인다 — 수가 많을수록 더 그렇다. 인스턴스 프로퍼티를 늘리지 않고
                 // 이미 있는 위상에서 뽑는다 (위상은 개체마다 다르다)

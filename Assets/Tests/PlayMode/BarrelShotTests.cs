@@ -54,6 +54,16 @@ namespace CrowdFire.Tests
                 if (play.Sim.Z >= marks[next])
                 {
                     Shot("barrel_" + next + "_z" + Mathf.RoundToInt(play.Sim.Z), play);
+                    // **큰 물체가 화면을 덮으면 이름으로 찍는다.** 사진만 보면 "회색 판" 이고, 그걸로는
+                    // 고칠 수 없다 — 2026-10-18 한 장이 그랬다
+                    foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                    {
+                        var sz = r.bounds.size;
+                        if (!r.enabled || !r.gameObject.activeInHierarchy) continue;
+                        if (r.name == "Ground" || r.name == "Road" || r.name == "Wall" || r.name == "Curb") continue;
+                        if (Mathf.Max(sz.x, Mathf.Max(sz.y, sz.z)) > 6f)
+                            Debug.Log($"[CR-TEST]   큰 렌더러 {r.name} 크기 {sz} 중심 {r.bounds.center} 배율 {r.transform.lossyScale}");
+                    }
                     var c0 = Camera.main;
                     Debug.Log($"[CR-TEST] cam {(c0 != null ? c0.transform.position.ToString("F0") : "none")}"
                             + $" · 그린 아군 {Mathf.Min(play.Sim.Battle.AllyCount, 400)} · 적개체 {play.Sim.Battle.EnemyCount}");

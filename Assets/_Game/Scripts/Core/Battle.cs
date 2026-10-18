@@ -159,7 +159,11 @@ namespace CrowdFire.Core
             if (n > AllyCap) n = AllyCap;
             if (n < 0) n = 0;
 
-            const float PerPerson = 0.19f * 0.78f * 0.78f;
+            // 2026-10-18: 0.19×0.78² (피치 0.34 m) 는 진짜 모델(어깨 0.5 m)에서 **헬멧이 겹쳐 파란 돔**이
+            // 됐다 (`docs/shots`). 라스트워는 병사 하나하나가 읽힌다 — 피치 0.55 m. 109 명이면 반지름 3.2 m 로
+            // 9 m 길에 들어간다
+            // 1.25² (피치 0.55) 도 헬멧이 맞닿았다 — 이 모델은 머리가 크다. 피치 0.7 (1.6²)
+            const float PerPerson = 0.19f * 1.6f * 1.6f;
             float r = (float)System.Math.Sqrt(n * PerPerson / 3.14159265f);
             float lim = roadWidth * 0.5f - 0.3f;
             const float Golden = 2.39996323f;
@@ -168,11 +172,14 @@ namespace CrowdFire.Core
             {
                 float rad = n > 1 ? r * (float)System.Math.Sqrt((i + 0.5f) / n) : 0f;
                 float a = i * Golden;
-                float x = cx + (float)System.Math.Cos(a) * rad;
+                // **길을 따라 길쭉한 타원.** 원반이면 300 명이 길 폭(9 m)에 눌려 헬멧이 맞닿은 돔이
+                // 된다 (z234 사진). 라스트워 소대는 앞뒤로 긴 대열이다 — 폭 0.78 배, 길이 1.55 배
+                const float ElongX = 0.78f, ElongZ = 1.55f;
+                float x = cx + (float)System.Math.Cos(a) * rad * ElongX;
                 if (x < -lim) x = -lim;
                 if (x > lim) x = lim;
                 AX[i] = x;
-                AZ[i] = cz + (float)System.Math.Sin(a) * rad;
+                AZ[i] = cz + (float)System.Math.Sin(a) * rad * ElongZ;
                 // **새로 들어온 병사는 발사 시점을 흩어 둔다.** 전부 0 이면 600 발이 한 프레임에
                 // 몰려 나가고 그다음 반 초는 아무도 안 쏜다 — 화면이 깜빡인다
                 if (i >= AllyCount) { aFireT[i] = (i % 31) / 31f * UnitStats.Ally.interval; AFlash[i] = 0f; }

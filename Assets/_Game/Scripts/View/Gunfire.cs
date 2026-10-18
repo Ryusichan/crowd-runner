@@ -91,10 +91,12 @@ namespace CrowdFire.View
             {
                 var dir = new Vector3(b.BDX[i], 0f, b.BDZ[i]);
                 if (dir.sqrMagnitude < 1e-6f) dir = Vector3.forward;
+                // 2026-10-18 라스트워 레퍼런스: 예광탄은 **가늘고 길다**. 0.07 굵기는 멀리서 막대로
+                // 보였고, 진짜 군인 모델이 들어오면서 총구 높이도 1.05 → 1.22 (소총은 가슴 높이)
                 tracers[i] = Matrix4x4.TRS(
-                    new Vector3(b.BX[i], 1.05f, b.BZ[i]),
+                    new Vector3(b.BX[i], 1.22f, b.BZ[i]),
                     Quaternion.LookRotation(dir, Vector3.up),
-                    new Vector3(0.07f, 0.07f, 0.85f));
+                    new Vector3(0.04f, 0.04f, 1.45f));
             }
             LastTracers = n;
             if (n > 0) Graphics.RenderMeshInstanced(rpTracer, mesh, 0, tracers, n);
@@ -109,11 +111,12 @@ namespace CrowdFire.View
             {
                 if (b.AFlash[i] <= 0f) continue;
                 float k = b.AFlash[i] / Battle.FlashTime;
-                float s = 0.13f + k * 0.22f;
+                float s = 0.16f + k * 0.26f;
+                // 납작한 별 모양에 가깝게 — 정육면체 덩어리는 불이 아니라 상자로 읽혔다
                 muzzles[m++] = Matrix4x4.TRS(
-                    new Vector3(b.AX[i], 1.06f, b.AZ[i] + 0.6f),
-                    Quaternion.identity,
-                    new Vector3(s, s, s * 1.7f));
+                    new Vector3(b.AX[i], 1.22f, b.AZ[i] + 0.75f),
+                    Quaternion.Euler(0f, 45f * (i & 1), 0f),
+                    new Vector3(s * 1.5f, s * 0.35f, s * 1.5f));
             }
             LastMuzzles = m;
             if (m > 0) Graphics.RenderMeshInstanced(rpMuzzle, mesh, 0, muzzles, m);
