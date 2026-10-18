@@ -676,14 +676,20 @@ namespace CrowdFire.View
             var lab = Label("BarrelText", 0.34f);
             lab.transform.SetParent(t, false);
             lab.transform.localPosition = new Vector3(0f, 0.08f, -0.62f);
-            // **통보다 작아야 통에 적힌 것으로 읽힌다.** 1.55 에서는 숫자가 도로를 덮었고
-            // (`docs/shots/barrel_1_z48.png`), 0.80 에서도 웹 사진에서 글자가 통 폭의 1.5 배라
-            // 두 통의 숫자가 서로 붙어 보였다. 통 지름이 3.06 m 이므로 두 자리가 그 안에
-            // 들어가려면 이 정도다
-            lab.transform.localScale = new Vector3(0.45f / Mathf.Max(0.1f, t.localScale.x),
-                                                   0.45f / t.localScale.y, 1f);
+            // **글자 폭을 통 지름에서 역산한다.** 기본값을 1.55 → 0.80 → 0.45 로 세 번 줄였는데
+            // 웹 사진에서 숫자는 계속 통만 했다. 이유는 FitLabel 이었다: 넘긴 최대 폭이 커서
+            // 늘 **키우는 쪽 상한(1.8 배)** 에 걸렸고, 기본값을 줄인 만큼 1.8 배가 도로 붙었다.
+            // 줄인 수가 줄지 않는데 세 번을 줄인 것이다.
+            //
+            // 그래서 짐작을 버리고 **사진에서 쟀다**: 통 지름 3.06 m 옆에서 두 자리 45 가
+            // 3.33 m 였고 그때 월드 배율이 0.81 이었으므로, 한 자리는 배율 1 당 2.06 m 다.
+            // 지름의 72 % 안에 글자 수만큼 들어가게 맞춘다 — 110 처럼 세 자리면 저절로 좁아진다.
             lab.text = e.gives.ToString();
-            FitLabel(lab, t.localScale.x * 0.78f);
+            const float WidthPerDigit = 2.06f;
+            float want = t.localScale.x * 0.72f;
+            float world = want / (Mathf.Max(1, lab.text.Length) * WidthPerDigit);
+            lab.transform.localScale = new Vector3(world / Mathf.Max(0.1f, t.localScale.x),
+                                                   world / t.localScale.y, 1f);
 
             // 체력 띠 — 가운데에서 줄어들지 않고 **왼쪽에서부터** 줄게 부모를 하나 둔다
             var pivot = new GameObject("BarrelBarPivot").transform;
