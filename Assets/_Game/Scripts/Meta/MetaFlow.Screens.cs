@@ -208,6 +208,8 @@ namespace CrowdFire.Meta
             g.raycastTarget = true;
             var btn = g.gameObject.AddComponent<Button>();
             btn.targetGraphic = g;
+            string who = g.gameObject.name;
+            btn.onClick.AddListener(delegate { Debug.Log("[CR] tap " + who); });
             btn.onClick.AddListener(onClick);
         }
 

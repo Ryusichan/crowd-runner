@@ -205,6 +205,9 @@ namespace CrowdFire.Meta
         // ── 화면 전환 ────────────────────────────────────────────────────────────
         public void Show(MetaScreen s)
         {
+            // 2026-10-18: 월드맵의 1-1 칸이 빌드에서만 안 열린다. 에디터 레이캐스트로는
+            // 그 칸이 맨 위에 멀쩡히 잡힌다 — 그러면 **빌드가 말하게** 해야 한다
+            Debug.Log("[CR] Show " + s);
             screen = s;
             for (int i = root.childCount - 1; i >= 0; i--) Destroy(root.GetChild(i).gameObject);
 
@@ -235,6 +238,7 @@ namespace CrowdFire.Meta
         /// <summary>스테이지 카드를 띄운다 (월드맵에서 탭)</summary>
         public void OpenCard(LevelData level)
         {
+            Debug.Log("[CR] OpenCard " + (level != null ? level.Code : "null"));
             current = level;
             Show(MetaScreen.StageCard);
         }
