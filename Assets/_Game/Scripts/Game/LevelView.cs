@@ -50,6 +50,21 @@ namespace CrowdFire.View
         /// </summary>
         public int GatePops => fxGate != null ? fxGate.Popped : 0;
         Transform[] zones = new Transform[0];
+
+        // ── 드럼통 ───────────────────────────────────────────────────────────
+        /// <summary>
+        /// 통은 **레벨 글에서 한 번** 세우고, 매 프레임 `Battle` 에서 체력만 읽어 온다.
+        /// `Battle` 쪽 배열은 지나가면 지워지므로(`PruneBarrels`) 거기 맞춰 만들었다 지웠다
+        /// 하면 깜빡인다 — 그래서 **화면 쪽은 레벨이 주인**이고 상태만 빌려 온다.
+        /// </summary>
+        Transform[] barrels = new Transform[0];
+        float[] barrelZ = new float[0];
+        int[] barrelLane = new int[0];
+        Transform[] barrelBar = new Transform[0];
+        Material[] barrelMat = new Material[0];
+        float[] barrelPop = new float[0];
+        static readonly Color BarrelWood = new Color(0.62f, 0.44f, 0.26f);
+        static readonly Color BarrelHit = new Color(0.86f, 0.30f, 0.22f);
         UnityEngine.UI.Text countUi;
         CasualtyFx fx;
         RoadMarks marks;
@@ -140,6 +155,9 @@ namespace CrowdFire.View
         public void OnLevelLoaded(LevelData level)
         {
             foreach (var t in gates) if (t) Destroy(t.gameObject);
+            foreach (var t in barrels) if (t) Destroy(t.gameObject);
+            barrels = new Transform[0]; barrelZ = new float[0]; barrelLane = new int[0];
+            barrelBar = new Transform[0]; barrelMat = new Material[0]; barrelPop = new float[0];
             foreach (var t in zones) if (t) Destroy(t.gameObject);
             if (wall) Destroy(wall.gameObject);
             if (divider) Destroy(divider.gameObject);
@@ -149,9 +167,21 @@ namespace CrowdFire.View
             var gz = new System.Collections.Generic.List<float>();
             var gl = new System.Collections.Generic.List<int>();
             var z = new System.Collections.Generic.List<Transform>();
+            var b = new System.Collections.Generic.List<Transform>();
+            var bz = new System.Collections.Generic.List<float>();
+            var bl = new System.Collections.Generic.List<int>();
+            var bbar = new System.Collections.Generic.List<Transform>();
+            var bmat = new System.Collections.Generic.List<Material>();
             foreach (var e in level.events)
             {
-                if (e.kind == EventKind.Gate)
+                if (e.kind == EventKind.Barrel)
+                {
+                    Transform bar, mark;
+                    b.Add(Barrel(e, level, out bar, out mark));
+                    bz.Add(e.z); bl.Add(e.lane); bbar.Add(bar);
+                    bmat.Add(mark.GetComponent<Renderer>().sharedMaterial);
+                }
+                else if (e.kind == EventKind.Gate)
                     foreach (var o in e.options) { g.Add(Gate(e.z, o)); gz.Add(e.z); gl.Add(o.lane); }
                 else if (e.kind == EventKind.Zone)
                 {
@@ -172,6 +202,12 @@ namespace CrowdFire.View
             gateZ = gz.ToArray();
             gateLane = gl.ToArray();
             zones = z.ToArray();
+            barrels = b.ToArray();
+            barrelZ = bz.ToArray();
+            barrelLane = bl.ToArray();
+            barrelBar = bbar.ToArray();
+            barrelMat = bmat.ToArray();
+            barrelPop = new float[barrels.Length];
 
             // 차선 칸막이 — 게이트를 고르면 합류 지점까지 **길이 갇힌다** (세션 A `commitUntilZ`).
             // 안 보이면 플레이어는 **자기가 왜 못 넘어가는지 모른다** — 광고 그림처럼 벽이 서야 한다
@@ -258,6 +294,8 @@ namespace CrowdFire.View
                 bool ahead = gateZ[i] > sim.Z - 2f;
                 if (gates[i].gameObject.activeSelf != ahead) gates[i].gameObject.SetActive(ahead);
             }
+
+            TickBarrels(sim);
 
             // **있을 때 만든다.** `GameBoot.Go` 는 `LevelView` 를 붙인 **뒤에** 오버레이를
             // 세우고(`AddComponent` 가 즉시 `Awake` 를 돌린다), `GameBoot.Reset` 은 오버레이를
@@ -530,6 +568,100 @@ namespace CrowdFire.View
             Disc(f, 0, f.Count, cx, cz, w);
         }
 
+        /// <summary>
+        /// 통 하나. **숫자가 통에 적혀 있는 것**이 이 게임의 간판이라(오너 레퍼런스 3 장)
+        /// 글자를 통 지름만큼 크게 쓰고, 그 아래 체력 띠를 둔다 — 쏘는 동안 줄어드는 것이
+        /// 보여야 *"지금 이걸 쏘고 있다"* 가 읽힌다.
+        /// </summary>
+        Transform Barrel(in LevelEvent e, LevelData level, out Transform bar, out Transform mark)
+        {
+            float half = level.roadWidth * 0.17f;
+            float lane = level.roadWidth * 0.25f;
+
+            var t = Prim(PrimitiveType.Cylinder, "Barrel", BarrelWood);
+            t.localScale = new Vector3(half * 2f, 1.1f, half * 2f);
+            t.position = new Vector3(e.lane * lane, 1.1f, e.z);
+            mark = t;
+
+            // 테 두 줄 — 원통만 두면 기름통인지 기둥인지 모른다
+            for (int k = 0; k < 2; k++)
+            {
+                var hoop = Prim(PrimitiveType.Cylinder, "Hoop", new Color(0.30f, 0.24f, 0.18f));
+                hoop.SetParent(t, false);
+                hoop.localScale = new Vector3(1.04f, 0.07f, 1.04f);
+                hoop.localPosition = new Vector3(0f, k == 0 ? 0.45f : -0.45f, 0f);
+            }
+
+            // **숫자.** 부모가 지름만큼 늘어나 있으므로 지역 배율로 되돌린다
+            var lab = Label("BarrelText", 0.34f);
+            lab.transform.SetParent(t, false);
+            lab.transform.localPosition = new Vector3(0f, 0.08f, -0.62f);
+            lab.transform.localScale = new Vector3(1.55f / Mathf.Max(0.1f, t.localScale.x),
+                                                   1.55f / t.localScale.y, 1f);
+            lab.text = e.gives.ToString();
+            FitLabel(lab, t.localScale.x * 0.78f);
+
+            // 체력 띠 — 가운데에서 줄어들지 않고 **왼쪽에서부터** 줄게 부모를 하나 둔다
+            var pivot = new GameObject("BarrelBarPivot").transform;
+            pivot.SetParent(transform, false);
+            pivot.position = new Vector3(e.lane * lane - half, 2.45f, e.z - half * 0.9f);
+            bar = Box("BarrelBar", new Color(0.95f, 0.86f, 0.35f));
+            bar.SetParent(pivot, false);
+            bar.localScale = new Vector3(half * 2f, 0.14f, 0.12f);
+            bar.localPosition = new Vector3(half, 0f, 0f);
+            return t;
+        }
+
+        /// <summary>
+        /// 통의 상태는 **`Battle` 이 들고 있다.** z 로 맞춰 읽는다 — 화면 쪽에서 따로 세면
+        /// 둘이 어긋나고, 어긋난 쪽이 플레이어에게 보이는 쪽이다.
+        /// </summary>
+        void TickBarrels(Sim sim)
+        {
+            var bt = sim.Battle;
+            for (int i = 0; i < barrels.Length; i++)
+            {
+                var t = barrels[i];
+                if (t == null) continue;
+
+                float hp01 = -1f;
+                for (int k = 0; k < bt.BarrelCount; k++)
+                {
+                    if (Mathf.Abs(bt.RZ[k] - barrelZ[i]) > 0.5f) continue;
+                    if (barrelLane[i] != 0 && Mathf.Sign(bt.RX[k]) != Mathf.Sign(barrelLane[i])) continue;
+                    hp01 = bt.RMaxHp[k] > 0f ? bt.RHp[k] / bt.RMaxHp[k] : 0f;
+                    break;
+                }
+                // 아직 `Battle` 에 안 올라왔으면(사거리 밖) 멀쩡한 통이다
+                if (hp01 < 0f) hp01 = barrelZ[i] > sim.Z ? 1f : 0f;
+
+                bool alive = hp01 > 0f;
+                if (alive && barrelZ[i] < sim.Z - 2f) alive = false;
+
+                // 깨지는 순간 한 번 부푼다 — 보상이 어디서 나왔는지가 보여야 한다
+                if (!alive && t.gameObject.activeSelf && barrelPop[i] <= 0f) barrelPop[i] = 0.22f;
+                if (barrelPop[i] > 0f)
+                {
+                    barrelPop[i] -= Time.deltaTime;
+                    float k = Mathf.Clamp01(barrelPop[i] / 0.22f);
+                    t.localScale = new Vector3(t.localScale.x, 1.1f * (1f + (1f - k) * 0.6f), t.localScale.z);
+                    alive = true;
+                    if (barrelPop[i] <= 0f) alive = false;
+                }
+
+                if (t.gameObject.activeSelf != alive) t.gameObject.SetActive(alive);
+                var pivot = barrelBar[i] != null ? barrelBar[i].parent : null;
+                if (pivot != null && pivot.gameObject.activeSelf != alive) pivot.gameObject.SetActive(alive);
+                if (!alive) continue;
+
+                // **맞고 있는 통은 붉어진다** — 레퍼런스에서 지금 쏘는 통만 빨갛게 물려 있다
+                if (barrelMat[i] != null) barrelMat[i].color = Color.Lerp(BarrelHit, BarrelWood, hp01);
+                // 띠는 **왼쪽 끝을 축으로** 줄인다 — 부모만 눌러 주면 된다
+                if (barrelBar[i] != null && barrelBar[i].parent != null)
+                    barrelBar[i].parent.localScale = new Vector3(Mathf.Max(0.001f, hp01), 1f, 1f);
+            }
+        }
+
         Transform Gate(float z, GateOption o)
         {
             // 색으로 종류를, 글자로 값을 말한다. 색만으로는 `+10` 과 `×3` 이 구별되지 않고,
@@ -698,9 +830,11 @@ namespace CrowdFire.View
             into.Add(bar);
         }
 
-        Transform Box(string name, Color c)
+        Transform Box(string name, Color c) { return Prim(PrimitiveType.Cube, name, c); }
+
+        Transform Prim(PrimitiveType kind, string name, Color c)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var go = GameObject.CreatePrimitive(kind);
             go.name = name;
             // **자기 밑에 단다.** 부모가 없으면 판 오브젝트를 지워도 길·게이트·벽이 장면에
             // 남는다 — 판을 바꿀 때마다 쌓이고, 해가 넷이면 화면이 하얗게 날아간다.
