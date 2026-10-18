@@ -48,7 +48,9 @@ namespace CrowdFire.EditorTools
                  Root + "/Weapons/Rifle.fbx", "Fist.R",
                  // 소총 메시의 긴 축은 Y (경계 0.00 × 0.02 × 0.01). X 로 +90° 돌리면 Y → 앞(Z).
                  // 손에서 조금 앞·위로 — 사진 보고 다듬는다
-                 new Vector3(0f, 0.03f, 0.18f), Quaternion.Euler(90f, 0f, 0f), 1.0f,
+                 // 잰 값(2026-10-18): 소총 긴 축은 메시 Y, 손 뼈의 Y 축이 세계 앞쪽. 그래서 회전 없음,
+                 // 손 뼈 Y 로 0.28 m 밀어 개머리판은 손에, 총구는 앞에
+                 new Vector3(0f, 0.28f, 0f), Quaternion.identity, 1.0f,
                  new Color(0.46f, 0.76f, 0.86f), 1.80f);
         }
 
@@ -267,6 +269,17 @@ namespace CrowdFire.EditorTools
                     var wn = wMesh.normals;
                     for (int i = 0; i < nWeapon; i++) { verts[nBody + i] = m.MultiplyPoint3x4(wv[i]) * fitK; norms[nBody + i] = wn != null && i < wn.Length ? m.MultiplyVector(wn[i]).normalized : Vector3.up; }
                 }
+            }
+            // **소총이 어디에 어떻게 놓였는지 수치로 찍는다.** 사진으로는 "안 보인다" 까지만 알 수 있다 —
+            // 손 뼈의 축이 어느 쪽인지 모른 채 회전을 돌려 맞추면 한 번에 10 분씩 든다
+            if (wMesh != null)
+            {
+                var lo = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue); var hi = -lo;
+                for (int i = 0; i < nWeapon; i++) { var v = verts[nBody + i]; lo = Vector3.Min(lo, v); hi = Vector3.Max(hi, v); }
+                var handPos = BoneFrame(root, bone).MultiplyPoint3x4(Vector3.zero) * fitK;
+                var boneFwd = BoneFrame(root, bone).MultiplyVector(Vector3.forward);
+                var boneUp = BoneFrame(root, bone).MultiplyVector(Vector3.up);
+                Debug.Log($"[CR] {suffix} 소총 범위 {lo} ~ {hi} (크기 {hi - lo}) · 손 {handPos} · 손뼈 Z축 {boneFwd} Y축 {boneUp}");
             }
             var tris = new List<int>(src.triangles);
             if (wMesh != null) foreach (int t in wMesh.triangles) tris.Add(nBody + t);

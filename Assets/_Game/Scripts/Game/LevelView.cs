@@ -1103,8 +1103,13 @@ namespace CrowdFire.View
             if (barrelMeshTried) return barrelMeshCache;
             barrelMeshTried = true;
             var go = Resources.Load<GameObject>("Props/Barrel");
-            var mf = go != null ? go.GetComponentInChildren<MeshFilter>() : null;
-            barrelMeshCache = mf != null ? mf.sharedMesh : null;
+            // **정점이 가장 많은 메시를 고른다.** FBX 에 메시가 여럿이면(충돌용 상자 등) 첫 번째가
+            // 에디터와 빌드에서 다를 수 있다 — 웹에서 통이 네모 상자로 나왔다 (2026-10-18)
+            Mesh best = null;
+            if (go != null)
+                foreach (var f in go.GetComponentsInChildren<MeshFilter>(true))
+                    if (f.sharedMesh != null && (best == null || f.sharedMesh.vertexCount > best.vertexCount)) best = f.sharedMesh;
+            barrelMeshCache = best;
             if (barrelMeshCache == null) Debug.LogWarning("[CR] Props/Barrel 을 못 읽었다 — 원통으로 그린다");
             return barrelMeshCache;
         }
