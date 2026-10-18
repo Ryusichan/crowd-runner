@@ -38,6 +38,23 @@ namespace CrowdFire.EditorTools
         [MenuItem("CR/Build WebGL")]
         public static void Web()
         {
+            // ⚠ **엔진 코드 스트리핑을 끈다.**
+            //
+            // 켜 두면 올린 데모가 매 프레임 이것을 뱉는다 (2026-10-18 에 브라우저 콘솔에서
+            // 1 분에 **13,095 번**):
+            //
+            //   Could not produce class with ID 115.
+            //   This could be caused by a class being stripped from the build even though
+            //   it is needed. Try disabling 'Strip Engine Code' in Player Settings.
+            //
+            // 115 는 `MonoScript` 다 — 빌드가 떼어낸 클래스를 런타임이 만들려 한다는 뜻이고,
+            // 그 뒤에 무엇이 안 도는지는 **보이지 않게** 망가진다. 화면은 떠 있으니
+            // *"되는데 뭔가 이상하다"* 가 되고, 그 상태가 가장 오래 안 잡힌다.
+            //
+            // 값은 빌드 크기뿐이다. 오너가 보는 데모에서 **동작이 조용히 빠지는 것**보다
+            // 몇 MB 가 싸다.
+            PlayerSettings.stripEngineCode = false;
+
             EnsureShaders();
             AssetDatabase.SaveAssets();
 
