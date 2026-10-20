@@ -32,6 +32,26 @@ namespace CrowdFire.View
 
         LevelPlay play;
         CrowdField allies, foes;
+
+        // ── 반응 (2026-10-20) ────────────────────────────────────────────────────
+        // 오너: *"3d 반응쪽 부족부분 전부 보충해줘."* 진단은 넷이었다 — 적이 맞아도 반응이 없다 ·
+        // 손가락을 움직여도 총이 따라오는 게 안 보인다 · 군단이 커지는 순간이 숫자로만 온다 ·
+        // 질 때 소대가 줄어드는 게 안 보인다. 아래가 그 넷을 그린다. **로직은 한 줄도 안 바꾼다** —
+        // `Battle` 이 남기는 기록(조준점 · 사망 자리 · 깨진 통)을 읽기만 한다.
+        VatCrowd corpseView, allyDownView;
+        CrowdField corpses, allyDowns;
+        const int CorpseCap = 300, AllyDownCap = 160;
+        readonly float[] corpseT = new float[CorpseCap], allyDownT = new float[AllyDownCap];
+        int corpseHead, allyDownHead, seenDeath, seenBroke;
+        float[] prevAX = new float[0], prevAZ = new float[0], allyYaw = new float[0];
+        float[] spawnT = new float[0], spawnX = new float[0], spawnZ = new float[0];
+        int prevAllyN = -1, prevUnits = -1;
+        float prevSimX, countPunch, countFlash, lossHeat, camKick;
+        Color countFlashColor = Color.white;
+        UnityEngine.UI.Image vignette;
+        TextMesh[] floaters; float[] floaterT; Vector3[] floaterAt; int floaterHead;
+        const float SpawnDur = 0.5f;
+        static readonly int[] Milestones = { 50, 100, 150, 200, 300 };
         readonly Gunfire gunfire = new Gunfire();
         VatCrowd allyView, foeView;
         Transform road, wall, divider, ground, curbL, curbR, wallL, wallR;
@@ -98,6 +118,14 @@ namespace CrowdFire.View
             foeView = new VatCrowd("_zombie", foe: true);
             allyView.Init(renderCap); foeView.Init(renderCap);
             allyView.SetActive(true); foeView.SetActive(true);
+            // 쓰러진 몸 — 같은 모델을 **포즈를 얼려** 눕힌다 (`VatCrowd.FreezePose`)
+            corpseView = new VatCrowd("_zombie", foe: true); corpseView.Init(CorpseCap);
+            corpseView.SetActive(true); corpseView.FreezePose = true;
+            allyDownView = new VatCrowd("_soldier"); allyDownView.Init(AllyDownCap);
+            allyDownView.SetActive(true); allyDownView.FreezePose = true;
+            corpses = new CrowdField(CorpseCap, 31337); allyDowns = new CrowdField(AllyDownCap, 4242);
+            prevAX = new float[renderCap]; prevAZ = new float[renderCap]; allyYaw = new float[renderCap];
+            spawnT = new float[renderCap]; spawnX = new float[renderCap]; spawnZ = new float[renderCap];
             gunfire.Init();
             fx = new CasualtyFx(); fx.Init();
             marks = new RoadMarks();
@@ -338,10 +366,15 @@ namespace CrowdFire.View
             wallL.position = new Vector3(-half - 0.45f, 1.3f, sim.Z + 36f);
             wallR.position = new Vector3(+half + 0.45f, 1.3f, sim.Z + 36f);
 
+            ReadEvents(sim);
             SyncAllies(sim);
             allyView.Sync(allies); allyView.Draw();
+            TickDowns(sim);
+            allyDownView.Sync(allyDowns); allyDownView.Draw();
 
             DrawFoes(sim, w);
+            corpseView.Sync(corpses); corpseView.Draw();
+            TickFloaters();
             gunfire.Draw(sim.Battle, sim.X, sim.Z, Time.deltaTime);
 
             // **벽은 비율을 정직하게 따라가야 한다.** 세션 A 측정: 벽 HP 2400 과 3200 이 네 경로
@@ -417,7 +450,37 @@ namespace CrowdFire.View
                     squadHpRt.sizeDelta = new Vector2(414f * k, -6f);
                     squadHp.color = Color.Lerp(new Color(0.90f, 0.32f, 0.26f), new Color(0.36f, 0.86f, 0.42f), k);
                 }
-                countUi.color = sim.State == SimState.Lost ? new Color(0.92f, 0.46f, 0.44f) : Color.white;
+                int u = sim.Units;
+                float dtc = Time.deltaTime;
+                if (prevUnits >= 0 && u != prevUnits)
+                {
+                    if (u > prevUnits)
+                    {
+                        countPunch = 0.35f; countFlash = 0.35f; countFlashColor = new Color(0.55f, 1f, 0.45f);
+                        foreach (int m in Milestones)
+                            if (prevUnits < m && u >= m) { camKick = 0.18f; countPunch = 0.6f; }
+                    }
+                    else
+                    {
+                        countPunch = Mathf.Max(countPunch, 0.18f); countFlash = 0.35f; countFlashColor = new Color(1f, 0.36f, 0.32f);
+                        // 잃은 비율이 **열**이 된다 — 빨리 잃을수록 화면 가장자리가 붉어지고 카메라가 떤다
+                        lossHeat += (prevUnits - u) / Mathf.Max(10f, prevUnits);
+                    }
+                }
+                prevUnits = u;
+                countPunch = Mathf.Max(0f, countPunch - dtc); countFlash = Mathf.Max(0f, countFlash - dtc);
+                lossHeat = Mathf.Max(0f, lossHeat - dtc * 0.9f);
+                camKick = Mathf.Max(0f, camKick - dtc * 0.35f);
+                float pk = countPunch > 0f ? Mathf.Sin(Mathf.Clamp01(countPunch / 0.35f) * Mathf.PI) : 0f;
+                countUi.rectTransform.localScale = Vector3.one * (1f + 0.32f * pk);
+                var baseC = sim.State == SimState.Lost ? new Color(0.92f, 0.46f, 0.44f) : Color.white;
+                countUi.color = Color.Lerp(baseC, countFlashColor, countFlash / 0.35f);
+                if (vignette != null)
+                {
+                    float va = Mathf.Clamp01(lossHeat * 3f) * 0.6f;
+                    if (sim.State == SimState.Lost) va = 0.5f;
+                    vignette.color = new Color(0.85f, 0.08f, 0.06f, va);
+                }
             }
 
             if (foeCountUi == null) BuildFoeCountUi();
@@ -431,9 +494,12 @@ namespace CrowdFire.View
             // **군단이 크면 카메라가 물러난다** (라스트워가 그렇다). 20 명일 때 6.8 m 위 · 7.6 m 뒤가
             // 300 명이 되면 화면이 파란 헬멧으로만 찬다 (2026-10-18 z234 사진). 대형 반지름은
             // sqrt(병력)에 비례하므로 거리도 그렇게 — 급하게 튀지 않게 한 프레임에 조금씩 따라간다
-            float wantK = Mathf.Clamp(Mathf.Sqrt(Mathf.Max(1f, sim.Units) / 40f), 1f, 1.9f);
+            // 상한 1.9 에서는 300 명이 화면을 꽉 채워 앞이 안 보였다 (burst 필름) — 2.6 까지 물러난다
+            float wantK = Mathf.Clamp(Mathf.Sqrt(Mathf.Max(1f, sim.Units) / 40f), 1f, 2.6f);
             camK = camK <= 0f ? wantK : Mathf.Lerp(camK, wantK, 1f - Mathf.Exp(-Time.deltaTime * 2.5f));
-            cam.transform.position = new Vector3(0f, 6.0f * camK, sim.Z - 9.2f * camK);
+            float ck = camK + camKick;
+            var shake = lossHeat > 0.02f ? Random.insideUnitSphere * Mathf.Min(0.22f, lossHeat * 0.5f) : Vector3.zero;
+            cam.transform.position = new Vector3(0f, 6.0f * ck, sim.Z - 9.2f * ck) + shake;
         }
 
         /// <summary>
@@ -457,6 +523,15 @@ namespace CrowdFire.View
         {
             var canvas = GameBoot.Overlay;
             if (canvas == null) return;    // 아직 안 섰다 — 다음 프레임에 다시 본다
+
+            // **잃을 때 화면 가장자리가 붉어진다** — 숫자를 안 읽어도 *밀리고 있다* 가 들어온다
+            var vgo = new GameObject("LossVignette");
+            vgo.transform.SetParent(canvas.transform, false);
+            var vrt = vgo.AddComponent<RectTransform>();
+            vrt.anchorMin = Vector2.zero; vrt.anchorMax = Vector2.one; vrt.offsetMin = vrt.offsetMax = Vector2.zero;
+            vignette = vgo.AddComponent<UnityEngine.UI.Image>();
+            vignette.sprite = VignetteSprite(); vignette.raycastTarget = false;
+            vignette.color = new Color(0.85f, 0.08f, 0.06f, 0f);
 
             var go = new GameObject("CountUi");
             go.transform.SetParent(canvas.transform, false);
@@ -505,6 +580,24 @@ namespace CrowdFire.View
         }
 
         UnityEngine.UI.Image squadHp; RectTransform squadHpRt;
+
+        /// <summary>가운데는 투명, 가장자리로 갈수록 진해지는 원 — 코드로 굽는다(자산이 없다)</summary>
+        static Sprite VignetteSprite()
+        {
+            const int N = 64;
+            var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var px = new Color[N * N];
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    float dx = (x + 0.5f) / N * 2f - 1f, dy = (y + 0.5f) / N * 2f - 1f;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    float a = Mathf.Clamp01((d - 0.55f) / 0.6f);
+                    px[y * N + x] = new Color(1f, 1f, 1f, a * a);
+                }
+            tex.SetPixels(px); tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f));
+        }
 
         /// <summary>
         /// **앞의 무리가 몇인지 글자로 말한다.**
@@ -679,14 +772,173 @@ namespace CrowdFire.View
             var b = sim.Battle;
             allies.Clear();
             int n = Mathf.Min(b.AllyCount, renderCap);
+            float dt = Mathf.Max(1e-4f, Time.deltaTime);
+
+            // **새로 온 병사는 어디선가 온다.** 통이 깨졌으면 그 통에서 튀어나와 대열로 달려가고,
+            // 아니면(게이트) 앞에서 합류한다. 숫자만 뛰던 자리가 *쏟아지는 그림* 이 된다
+            if (prevAllyN >= 0 && n > prevAllyN)
+            {
+                bool fromBarrel = b.BrokeSerial != seenBroke;
+                float ox = fromBarrel ? b.LastBrokeX : sim.X;
+                float oz = fromBarrel ? b.LastBrokeZ : sim.Z + 3.5f;
+                for (int i = prevAllyN; i < n; i++)
+                {
+                    float stagger = Mathf.Min(0.4f, (i - prevAllyN) * 0.006f);
+                    spawnT[i] = SpawnDur + stagger;
+                    spawnX[i] = ox + Mathf.Sin(i * 2.399f) * 0.6f;
+                    spawnZ[i] = oz + Mathf.Cos(i * 2.399f) * 0.4f;
+                }
+            }
+            // **잃은 병사는 그 자리에 쓰러진다.** 바깥 고리(번호가 큰 쪽)부터 빠지므로 지난 프레임의
+            // 그 자리에 눕힌다 — 소대가 *깎여 나가는* 것이 보여야 질 때 긴장이 생긴다
+            if (prevAllyN > n)
+                for (int i = n; i < prevAllyN; i++) PushAllyDown(prevAX[i], prevAZ[i], allyYaw[i]);
+            if (b.BrokeSerial != seenBroke)
+            {
+                Floater("+" + b.LastBrokeGives, new Vector3(b.LastBrokeX, 2.6f, b.LastBrokeZ), new Color(0.55f, 1f, 0.45f));
+                seenBroke = b.BrokeSerial;
+            }
+
+            // 손가락을 끄는 쪽으로 몸이 기운다 — 조작이 화면에서 바로 읽히게
+            float vx = (sim.X - prevSimX) / dt; prevSimX = sim.X;
+            float steer = Mathf.Clamp(vx * 2.2f, -16f, 16f);
+            float ky = 1f - Mathf.Exp(-dt * 10f);
+
             for (int i = 0; i < n; i++)
             {
                 int k = allies.Count;
                 allies.Add(1, 0, 0f, 1f);
-                allies.X[k] = b.AX[i]; allies.Z[k] = b.AZ[i];
+                float x = b.AX[i], z = b.AZ[i], lift = 0f;
+                if (spawnT[i] > 0f)
+                {
+                    spawnT[i] -= dt;
+                    float s01 = 1f - Mathf.Clamp01(spawnT[i] / SpawnDur);
+                    float e = s01 * s01 * (3f - 2f * s01);
+                    x = Mathf.Lerp(spawnX[i], x, e); z = Mathf.Lerp(spawnZ[i], z, e);
+                    lift = Mathf.Sin(Mathf.PI * s01) * 1.4f;
+                }
+                // **겨눈 쪽으로 돈다.** `Battle` 이 병사마다 마지막 표적을 남긴다 — 통을 쏘는 병사는
+                // 통을, 나머지는 적을 본다. 조준이 *위치 선택* 이라는 게 몸의 방향으로 읽힌다
+                float dx = b.AAimX[i] - x, dz = b.AAimZ[i] - z;
+                float want = dz > 0.5f ? Mathf.Clamp(Mathf.Atan2(dx, dz) * Mathf.Rad2Deg, -55f, 55f) : 0f;
+                allyYaw[i] = Mathf.Lerp(allyYaw[i], want + steer, ky);
+                // **반동.** 쏜 순간 0.06 초 동안 뒤로 젖혀진다 — 300 명이 각자 다른 박자로 튄다
+                float kick = b.AFlash[i] > 0f ? b.AFlash[i] / Battle.FlashTime : 0f;
+                allies.X[k] = x; allies.Z[k] = z;
+                allies.Yaw[k] = allyYaw[i]; allies.Lean[k] = 7f * kick; allies.Lift[k] = lift;
                 allies.SideTarget[k] = b.AX[i];
                 float ph = i * 0.113f + Time.time * 1.7f;
                 allies.Phase[k] = ph - Mathf.Floor(ph);
+                prevAX[i] = x; prevAZ[i] = z;
+            }
+            prevAllyN = n;
+        }
+
+        /// <summary>
+        /// `Battle` 의 사망 기록을 새것만 읽어 시체 링에 넣는다. 번호가 줄면 판이 바뀐 것이다 —
+        /// 새 `Battle` 은 0 부터 센다
+        /// </summary>
+        void ReadEvents(Sim sim)
+        {
+            var b = sim.Battle;
+            if (b.DeathSerial < seenDeath) { seenDeath = 0; corpses.Count = 0; allyDowns.Count = 0; prevAllyN = -1; prevUnits = -1; }
+            if (b.BrokeSerial < seenBroke) seenBroke = 0;
+            if (b.DeathSerial - seenDeath > Battle.DeathRing) seenDeath = b.DeathSerial - Battle.DeathRing;
+            for (; seenDeath < b.DeathSerial; seenDeath++)
+            {
+                int r = seenDeath & (Battle.DeathRing - 1);
+                PushCorpse(b.DeadX[r], b.DeadZ[r]);
+            }
+        }
+
+        /// <summary>같은 자리는 같은 각 — 넘어지는 몸과 남는 시체가 같은 방향을 봐야 이어진다</summary>
+        static float HashYaw(float x, float z)
+        {
+            float h = Mathf.Sin(x * 12.9898f + z * 78.233f) * 43758.5453f;
+            return ((h - Mathf.Floor(h)) - 0.5f) * 70f;
+        }
+
+        void PushCorpse(float x, float z)
+        {
+            int k = corpseHead++ % CorpseCap;
+            if (corpses.Count < CorpseCap) corpses.Count++;
+            corpses.X[k] = x; corpses.Z[k] = z + 0.7f; corpses.Side[k] = 1;
+            corpses.Lean[k] = 90f; corpses.Yaw[k] = HashYaw(x, z); corpses.Scale[k] = 1f; corpses.Lift[k] = -20f;
+            corpses.Phase[k] = (k * 0.37f) % 1f;
+            // 넘어지는 동안은 `DrawFoes` 가 그리고, 다 넘어간 뒤에 이쪽이 이어받는다
+            corpseT[k] = Time.time + Battle.DeathTime;
+        }
+
+        void PushAllyDown(float x, float z, float yaw)
+        {
+            int k = allyDownHead++ % AllyDownCap;
+            if (allyDowns.Count < AllyDownCap) allyDowns.Count++;
+            allyDowns.X[k] = x; allyDowns.Z[k] = z; allyDowns.Side[k] = 0;
+            allyDowns.Lean[k] = 0f; allyDowns.Yaw[k] = yaw; allyDowns.Scale[k] = 1f; allyDowns.Lift[k] = 0f;
+            allyDowns.Phase[k] = (k * 0.29f) % 1f;
+            allyDownT[k] = Time.time;
+        }
+
+        /// <summary>
+        /// 시체와 쓰러진 병사 — **남는다.** 6 초 누워 있다가 가라앉는다. 사라지는 것과 쓰러지는 것은
+        /// 다르다: 바닥에 쌓인 몸이 *"얼마나 막았나"* 의 기록이다 (HOTD 분석 2026-10-12)
+        /// </summary>
+        void TickDowns(Sim sim)
+        {
+            float now = Time.time, behind = sim.Z - 14f;
+            for (int i = 0; i < corpses.Count; i++)
+            {
+                float age = now - corpseT[i];
+                if (age < 0f || corpses.Z[i] < behind) { corpses.Lift[i] = -20f; continue; }
+                corpses.Lift[i] = age < 6f ? 0.15f : (age < 7.2f ? Mathf.Lerp(0.15f, -0.7f, (age - 6f) / 1.2f) : -20f);
+            }
+            for (int i = 0; i < allyDowns.Count; i++)
+            {
+                float age = now - allyDownT[i];
+                if (allyDowns.Z[i] < behind) { allyDowns.Lift[i] = -20f; continue; }
+                // 0.35 초 동안 뒤로 넘어간다
+                float t = Mathf.Clamp01(age / 0.35f);
+                allyDowns.Lean[i] = 90f * t * t;
+                allyDowns.Lift[i] = age < 5f ? 0.15f * t : (age < 6.2f ? Mathf.Lerp(0.15f, -0.7f, (age - 5f) / 1.2f) : -20f);
+            }
+        }
+
+        /// <summary>떠오르는 숫자 — 통이 깨진 자리에서 `+30` 이 튀어 오른다</summary>
+        void Floater(string text, Vector3 at, Color c)
+        {
+            if (floaters == null)
+            {
+                floaters = new TextMesh[6]; floaterT = new float[6]; floaterAt = new Vector3[6];
+                for (int i = 0; i < floaters.Length; i++)
+                {
+                    floaters[i] = OutlinedLabel("Floater", 0.34f);
+                    floaters[i].gameObject.SetActive(false);
+                    floaterT[i] = -1f;
+                }
+            }
+            int k = floaterHead++ % floaters.Length;
+            SetOutlined(floaters[k], text);
+            floaters[k].color = c;
+            floaterAt[k] = at; floaterT[k] = 0f;
+            floaters[k].gameObject.SetActive(true);
+        }
+
+        void TickFloaters()
+        {
+            if (floaters == null) return;
+            for (int i = 0; i < floaters.Length; i++)
+            {
+                if (floaterT[i] < 0f) continue;
+                floaterT[i] += Time.deltaTime;
+                float t = floaterT[i];
+                var tr = floaters[i].transform;
+                if (t > 0.95f) { floaters[i].gameObject.SetActive(false); floaterT[i] = -1f; continue; }
+                // 100 → 125 → 100 (UI 움직임 규격과 같은 오버슈트) 후 떠오른다
+                float s = t < 0.12f ? Mathf.Lerp(0.3f, 1.25f, t / 0.12f) : Mathf.Lerp(1.25f, 1f, Mathf.Clamp01((t - 0.12f) / 0.12f));
+                tr.position = floaterAt[i] + Vector3.up * (t * 2.2f);
+                if (cam != null) tr.rotation = cam.transform.rotation;
+                // 1.1 은 화면을 덮었다 (burst 필름) — 통 숫자보다 약간 큰 정도가 맞다
+                tr.localScale = Vector3.one * (0.36f * s);
             }
         }
 
@@ -697,12 +949,27 @@ namespace CrowdFire.View
             int cap = renderCap;
             for (int i = 0; i < b.EnemyCount && foes.Count < cap; i++)
             {
-                // 쓰러진 것은 여기서 빼고 `Gunfire` 가 **바닥에 누워** 그린다 — 군중 렌더러는
-                // 선 자세 하나뿐이라 눕힐 수가 없다
-                if (b.EState[i] == 2) continue;
                 int k = foes.Count;
                 foes.Add(1, 1, 0f, 1f);
-                foes.X[k] = b.EX[i]; foes.Z[k] = b.EZ[i];
+                float fx = b.EX[i], fz = b.EZ[i], lean = 0f, yaw = 0f, sc = 1f, lift = 0f;
+                if (b.EState[i] == 2)
+                {
+                    // **넘어간다.** 전에는 군중에서 빼고 올리브 상자를 눕혔다 — 맞았는지가 안 읽혔다.
+                    // 발을 축으로 뒤로 젖히며 맞은 힘에 0.7 m 밀린다. 끝나면 `corpses` 가 이어받는다
+                    float t = Mathf.Clamp01(b.EDieT[i] / Battle.DeathTime);
+                    float e = t * t * (3f - 2f * t);
+                    lean = 90f * e; fz += 0.7f * e; lift = 0.15f * e;
+                    yaw = HashYaw(b.EX[i], b.EZ[i]);
+                }
+                else if (b.EHurt[i] > 0f)
+                {
+                    // **비틀거린다.** 한 발 맞을 때마다 0.12 초 동안 뒤로 젖혀지고 밀리고 부푼다 —
+                    // 300 명이 쏘면 앞줄 좀비 머리가 계속 튕긴다. 그게 *"맞고 있다"* 다
+                    float h = b.EHurt[i] / 0.12f;
+                    lean = 24f * h; fz += 0.28f * h; sc = 1f + 0.07f * h;
+                }
+                foes.X[k] = fx; foes.Z[k] = fz;
+                foes.Lean[k] = lean; foes.Yaw[k] = yaw; foes.Scale[k] = sc; foes.Lift[k] = lift;
                 foes.SideTarget[k] = b.EX[i];
                 // **위상을 번호에서 만든다.** `CrowdField.Add` 는 매번 새 난수를 넣는데 이 배열은
                 // 프레임마다 다시 채워지므로, 그대로 두면 걸음이 **매 프레임 튄다**. 번호 + 시간은
@@ -814,7 +1081,7 @@ namespace CrowdFire.View
                 t.position = new Vector3(e.lane * lane, bs.y * k * 0.5f, e.z);
                 mark = t;
                 barrelUpright = bs.y * k;
-                Debug.Log($"[CR] 통 세움: 원상자 {bs0} → 회전 {up.eulerAngles} 배율 {k:F3} 높이 {bs.y * k:F2}");
+                Debug.Log($"[CR] 통 세움: 원상자 ({bs0.x:F5}, {bs0.y:F5}, {bs0.z:F5}) → 회전 {up.eulerAngles} 배율 {k:F3} 높이 {bs.y * k:F2}");
             }
             else
             {
@@ -1112,7 +1379,21 @@ namespace CrowdFire.View
                     if (f.sharedMesh != null && (best == null || f.sharedMesh.vertexCount > best.vertexCount)) best = f.sharedMesh;
             barrelMeshCache = best;
             if (best != null)
-                Debug.Log($"[CR] 통 메시 {best.name} 정점 {best.vertexCount} 서브메시 {best.subMeshCount} 상자 {best.bounds.size} 중심 {best.bounds.center}");
+            {
+                var bsz = best.bounds.size;
+                Debug.Log($"[CR] 통 메시 {best.name} 정점 {best.vertexCount} 서브메시 {best.subMeshCount} 상자 ({bsz.x:F5}, {bsz.y:F5}, {bsz.z:F5}) 중심 {best.bounds.center}");
+#if UNITY_EDITOR
+                // 에디터에서만: 정점으로 실제 축을 잰다 (플레이어는 isReadable 이 꺼져 있다)
+                if (best.isReadable)
+                {
+                    var lo = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue); var hi = -lo;
+                    foreach (var v in best.vertices) { lo = Vector3.Min(lo, v); hi = Vector3.Max(hi, v); }
+                    var e = hi - lo;
+                    Debug.Log($"[CR] 통 정점축 ({e.x:F5}, {e.y:F5}, {e.z:F5}) — 가장 긴 축이 통의 높이다");
+                }
+                else Debug.Log("[CR] 통 정점축: 메시가 readable 이 아니다");
+#endif
+            }
             if (barrelMeshCache == null) Debug.LogWarning("[CR] Props/Barrel 을 못 읽었다 — 원통으로 그린다");
             return barrelMeshCache;
         }

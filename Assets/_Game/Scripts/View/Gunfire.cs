@@ -94,7 +94,7 @@ namespace CrowdFire.View
                 // 2026-10-18 라스트워 레퍼런스: 예광탄은 **가늘고 길다**. 0.07 굵기는 멀리서 막대로
                 // 보였고, 진짜 군인 모델이 들어오면서 총구 높이도 1.05 → 1.22 (소총은 가슴 높이)
                 tracers[i] = Matrix4x4.TRS(
-                    new Vector3(b.BX[i], 1.22f, b.BZ[i]),
+                    new Vector3(b.BX[i], 1.0f, b.BZ[i]),
                     Quaternion.LookRotation(dir, Vector3.up),
                     new Vector3(0.04f, 0.04f, 1.45f));
             }
@@ -114,7 +114,7 @@ namespace CrowdFire.View
                 float s = 0.16f + k * 0.26f;
                 // 납작한 별 모양에 가깝게 — 정육면체 덩어리는 불이 아니라 상자로 읽혔다
                 muzzles[m++] = Matrix4x4.TRS(
-                    new Vector3(b.AX[i], 1.22f, b.AZ[i] + 0.75f),
+                    new Vector3(b.AX[i], 1.0f, b.AZ[i] + 1.0f),
                     Quaternion.Euler(0f, 45f * (i & 1), 0f),
                     new Vector3(s * 1.5f, s * 0.35f, s * 1.5f));
             }
@@ -153,12 +153,13 @@ namespace CrowdFire.View
                 if (b.EState[i] != 2) continue;
                 float t = Mathf.Clamp01(b.EDieT[i] / Battle.DeathTime);
                 // 넘어가는 동안 높이가 줄고 길이가 는다 — 서 있던 것이 눕는 모양
-                float h = Mathf.Lerp(0.9f, 0.14f, t);
-                float len = Mathf.Lerp(0.5f, 1.25f, t);
+                // 2026-10-20: 몸은 이제 `LevelView` 가 진짜 모델로 넘어뜨린다. 여기는 **바닥 얼룩**만 —
+                // 쓰러지는 자리에 번지는 어두운 자국
+                float r = Mathf.Lerp(0.3f, 1.1f, t);
                 downs[d++] = Matrix4x4.TRS(
-                    new Vector3(b.EX[i], h * 0.5f, b.EZ[i]),
+                    new Vector3(b.EX[i], 0.02f, b.EZ[i] + 0.5f),
                     Quaternion.identity,
-                    new Vector3(0.52f, h, len));
+                    new Vector3(r, 0.02f, r * 1.3f));
             }
             if (d > 0) Graphics.RenderMeshInstanced(rpDown, mesh, 0, downs, d);
         }

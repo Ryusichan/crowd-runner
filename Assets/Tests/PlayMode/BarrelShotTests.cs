@@ -54,6 +54,24 @@ namespace CrowdFire.Tests
                 if (play.Sim.Z >= marks[next])
                 {
                     Shot("barrel_" + next + "_z" + Mathf.RoundToInt(play.Sim.Z), play);
+                    // **반응은 움직임이다** — 정지 사진 한 장으로는 비틀거림·반동·쏟아짐이 안 보인다.
+                    // 두 자리(첫 통 · 큰 교전)에서 **실시간 속도로** 연속 12 장을 찍어 필름으로 묶는다
+                    // (`tools/film.py`)
+                    if (next == 1 || next == 4)
+                    {
+                        float keep = Time.timeScale;
+                        Time.timeScale = 1f;
+                        for (int f = 0; f < 12; f++)
+                        {
+                            for (int w = 0; w < 4; w++)
+                            {
+                                play.TargetX = BiggestBarrelLane(play.Sim) * play.Sim.RoadWidth * 0.25f;
+                                yield return null;
+                            }
+                            Shot("burst" + next + "_" + f.ToString("00"), play);
+                        }
+                        Time.timeScale = keep;
+                    }
                     // **큰 물체가 화면을 덮으면 이름으로 찍는다.** 사진만 보면 "회색 판" 이고, 그걸로는
                     // 고칠 수 없다 — 2026-10-18 한 장이 그랬다
                     foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))

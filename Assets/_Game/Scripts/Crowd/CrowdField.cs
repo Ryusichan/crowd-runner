@@ -28,6 +28,13 @@ namespace CrowdFire.Crowd
         public readonly float[] SpeedMul;
         /// <summary>0 = 아군, 1 = 적. 색만 가른다 (전투는 `Core` 의 일)</summary>
         public readonly byte[] Side;
+        /// <summary>
+        /// **개체별 자세** (2026-10-20, 반응 보충). 군중 렌더러는 클립 하나라 몸짓을 못 바꾸지만
+        /// 몸 전체를 기울이고 돌리고 띄우는 것은 행렬 하나로 된다. 그것만으로 비틀거림 · 넘어짐 ·
+        /// 사격 반동 · 통에서 튀어나옴이 전부 나온다.
+        /// `Lean` 은 **뒤로 젖히는 각(도)** — 90 이면 등을 대고 눕는다. `Yaw` 는 바라보는 쪽 보정(도).
+        /// </summary>
+        public readonly float[] Lean, Yaw, Lift, Scale;
 
         readonly System.Random rng;
 
@@ -37,6 +44,7 @@ namespace CrowdFire.Crowd
             X = new float[cap]; Z = new float[cap];
             SideTarget = new float[cap]; Phase = new float[cap];
             SpeedMul = new float[cap]; Side = new byte[cap];
+            Lean = new float[cap]; Yaw = new float[cap]; Lift = new float[cap]; Scale = new float[cap];
             rng = new System.Random(seed);
         }
 
@@ -60,6 +68,7 @@ namespace CrowdFire.Crowd
                 Phase[k] = (float)rng.NextDouble();
                 SpeedMul[k] = Rand(0.92f, 1.08f);
                 Side[k] = side;
+                Lean[k] = 0f; Yaw[k] = 0f; Lift[k] = 0f; Scale[k] = 1f;
             }
             return added;
         }

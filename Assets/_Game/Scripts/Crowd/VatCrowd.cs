@@ -68,6 +68,7 @@ namespace CrowdFire.Crowd
                                ") — VatBaker.Bake 를 먼저 돌려라. B 측정은 **무효**다");
                 return;
             }
+            if (mat.HasProperty("_ClipSpeed")) clipSpeed = mat.GetFloat("_ClipSpeed");
             rp = new RenderParams(mat)
             {
                 // **경계 상자를 손으로 준다.** 안 주면 Unity 가 인스턴스마다 컬링을 하려 들고,
@@ -90,6 +91,10 @@ namespace CrowdFire.Crowd
 
         public void SetActive(bool v) { on = v; if (!v) live = 0; }
 
+        /// <summary>참이면 개체마다 자세가 멈춘다 — 쓰러진 몸용</summary>
+        public bool FreezePose;
+        float clipSpeed = 1f;
+
         public void Sync(CrowdField f)
         {
             if (mesh == null || mat == null) { live = 0; return; }
@@ -102,11 +107,16 @@ namespace CrowdFire.Crowd
                 if (f.Z[i] > zHi) zHi = f.Z[i];
                 // 적은 반대쪽을 본다 — 두 군단이 마주 달리는 것이 보여야 겹치는 순간이 읽힌다.
                 // `Matrix4x4.TRS` 는 구조체 연산이라 할당이 없다
+                // 발을 축으로 돈다(정점의 원점이 발이다) — 그래서 젖히면 **넘어진다**
+                var rot = (f.Side[i] == 0 ? Fwd : Back)
+                        * Quaternion.Euler(0f, f.Yaw[i], 0f)
+                        * Quaternion.Euler(-f.Lean[i], 0f, 0f);
+                float sc = f.Scale[i] > 0f ? f.Scale[i] : 1f;
                 inst[i].objectToWorld = Matrix4x4.TRS(
-                    new Vector3(f.X[i], 0f, f.Z[i]),
-                    f.Side[i] == 0 ? Fwd : Back,
-                    Vector3.one);
-                inst[i]._Phase = f.Phase[i];
+                    new Vector3(f.X[i], f.Lift[i], f.Z[i]), rot, new Vector3(sc, sc, sc));
+                // **시체는 걸음을 멈춘다.** 셰이더가 `_Time.y` 로 클립을 돌리므로, 그만큼 위상을
+                // 거꾸로 빼면 화면의 자세가 고정된다. 누운 몸이 다리를 휘저으면 우스꽝스럽다
+                inst[i]._Phase = FreezePose ? f.Phase[i] - Time.timeSinceLevelLoad * clipSpeed : f.Phase[i];
                 inst[i]._Side = f.Side[i];
             }
             // **경계를 군단에 맞춘다.** 여유 40 m 는 이 틱과 다음 틱 사이에 움직이는 거리보다

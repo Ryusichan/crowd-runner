@@ -58,6 +58,18 @@ namespace CrowdFire.Core
         public readonly float[] AZ = new float[AllyCap];
         /// <summary>남은 총구 화염 시간. 표현이 **쏜 병사 자리에** 불을 띄운다</summary>
         public readonly float[] AFlash = new float[AllyCap];
+        /// <summary>
+        /// 병사가 **마지막으로 겨눈 자리** — 화면이 병사를 그쪽으로 돌린다 (2026-10-20 반응 보충).
+        /// 쏘는 판정에는 안 쓰인다. 기록일 뿐이라 시뮬 결과는 한 숫자도 안 바뀐다
+        /// </summary>
+        public readonly float[] AAimX = new float[AllyCap], AAimZ = new float[AllyCap];
+
+        /// <summary>적이 쓰러진 자리 — 링 버퍼. 화면이 `DeathSerial` 로 새것만 읽어 시체를 눕힌다</summary>
+        public const int DeathRing = 512;
+        public readonly float[] DeadX = new float[DeathRing], DeadZ = new float[DeathRing];
+        public int DeathSerial;
+        /// <summary>마지막으로 깨진 통 — 자리 · 나온 병사 · 일련번호 (화면이 병사를 거기서 쏟는다)</summary>
+        public float LastBrokeX, LastBrokeZ; public int LastBrokeGives, BrokeSerial;
         readonly float[] aFireT = new float[AllyCap];
 
         // ── 적 (개체다 — 묶지 않는다) ─────────────────────────────────────────────
@@ -411,6 +423,7 @@ namespace CrowdFire.Core
                 }
 
                 aFireT[i] += a.interval;
+                AAimX[i] = tx; AAimZ[i] = tz;
                 FiringThisTick++; ShotsThisTick++; HitsThisTick++;
                 AFlash[i] = FlashTime;
 
@@ -425,6 +438,8 @@ namespace CrowdFire.Core
                     if (EHp[t] <= 0f)
                     {
                         EHp[t] = 0f; EState[t] = 2; EDieT[t] = 0f;
+                        int dk = DeathSerial++ & (DeathRing - 1);
+                        DeadX[dk] = EX[t]; DeadZ[dk] = EZ[t];
                         KilledThisTick++; EnemiesKilled += 1f;
                         // 죽은 것은 후보에서 뺀다 — 안 그러면 이번 틱의 뒷 병사들이 시체에 쏜다
                         for (int c = 0; c < candCount; c++)
@@ -439,6 +454,7 @@ namespace CrowdFire.Core
                     {
                         RHp[b] = 0f;
                         BrokenThisTick += RGives[b]; BrokeCountThisTick++;
+                        LastBrokeX = RX[b]; LastBrokeZ = RZ[b]; LastBrokeGives = RGives[b]; BrokeSerial++;
                     }
                 }
                 else
