@@ -93,8 +93,21 @@ $fit = @'
                 touch-action:none;-ms-touch-action:none}
   #unity-footer{display:none}
   #unity-loading-bar{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%)}
+  /* **세로 고정** (오너 2026-10-20). 웹은 방향을 강제할 수 없으니 터치 기기를 가로로 들면
+     게임을 가리고 돌려 달라고 한다 — 가로로 두면 9:16 캔버스가 가운데 좁은 띠가 된다 */
+  #cf-rotate{display:none}
+  @media (orientation:landscape) and (pointer:coarse){
+    #unity-container{visibility:hidden}
+    #cf-rotate{display:flex;position:fixed;inset:0;z-index:10000;background:#1b1426;color:#e9e2f5;
+               align-items:center;justify-content:center;flex-direction:column;font:600 18px/1.5 sans-serif;text-align:center}
+  }
 </style>
 '@
+$rotate = '<div id="cf-rotate"><div style="font-size:44px">&#x21BB;</div>휴대폰을 세로로 돌려 주세요</div>' +
+          '<script>(function(){try{var o=screen.orientation;if(o&&o.lock){document.addEventListener("pointerdown",function f(){' +
+          'var d=document.documentElement;(d.requestFullscreen?d.requestFullscreen():Promise.resolve()).then(function(){return o.lock("portrait")}).catch(function(){});' +
+          'document.removeEventListener("pointerdown",f)},{once:true})}}catch(e){}})();</script>'
+if ($html -match '</body>') { $html = $html -replace '</body>', ($rotate + '</body>') }
 if ($html -match '</head>') { $html = $html -replace '</head>', ($fit + '</head>') }
 else { throw "index.html 에 </head> 가 없다 — 템플릿이 바뀌었다" }
 

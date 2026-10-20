@@ -40,7 +40,8 @@ namespace CrowdFire.View
         // `Battle` 이 남기는 기록(조준점 · 사망 자리 · 깨진 통)을 읽기만 한다.
         VatCrowd corpseView, allyDownView;
         CrowdField corpses, allyDowns;
-        const int CorpseCap = 300, AllyDownCap = 160;
+        // 시체도 정점을 먹는다 — 300 이면 그것만으로 군단 하나 값이었다
+        const int CorpseCap = 110, AllyDownCap = 80;
         readonly float[] corpseT = new float[CorpseCap], allyDownT = new float[AllyDownCap];
         int corpseHead, allyDownHead, seenDeath, seenBroke;
         float[] prevAX = new float[0], prevAZ = new float[0], allyYaw = new float[0];
@@ -173,8 +174,11 @@ namespace CrowdFire.View
             // 사람 키가 화면 높이의 1/8 쯤. 9.2 m 위 · 10.5 m 뒤 · 30° 에서는 사람이 점이었다
             // 34° 에서는 헬멧 윗면만 보여 군단이 **파란 돔** 이었다 (z108 사진). 라스트워는 더 낮게 본다 —
             // 몸통·소총이 보이는 28°, 대신 뒤로 조금 더 물러난다
-            cam.transform.rotation = Quaternion.Euler(28f, 0f, 0f);
-            cam.fieldOfView = 46f;
+            // 2026-10-20 오너 레퍼런스(탑워 광고 화면): *"화면 구도가 너무 가깝다."* 카메라가 **높고
+            // 가파르게** 내려다보고, 내 소대는 화면 **아래 1/3** 에 작게, 위 2/3 는 몰려오는 적과 길이다.
+            // 45° · 16 m 높이 · 11 m 뒤 → 소대가 화면 70 % 높이, 화면 위 끝이 소대 앞 약 33 m
+            cam.transform.rotation = Quaternion.Euler(45f, 0f, 0f);
+            cam.fieldOfView = 50f;
             cam.farClipPlane = 300f;
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.74f, 0.80f, 0.86f);
@@ -182,8 +186,8 @@ namespace CrowdFire.View
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = cam.backgroundColor;
-            RenderSettings.fogStartDistance = 55f;
-            RenderSettings.fogEndDistance = 130f;
+            RenderSettings.fogStartDistance = 75f;
+            RenderSettings.fogEndDistance = 160f;
 
             // **주변광을 못 박는다.** 기본값은 하늘(skybox) 기반인데 이 장면에는 하늘이 없어
             // 엔진 기본 하늘을 샘플링한다 — 그 결과 **모든 것이 밝아지고 하늘색으로 물든다.**
@@ -514,11 +518,12 @@ namespace CrowdFire.View
             // 300 명이 되면 화면이 파란 헬멧으로만 찬다 (2026-10-18 z234 사진). 대형 반지름은
             // sqrt(병력)에 비례하므로 거리도 그렇게 — 급하게 튀지 않게 한 프레임에 조금씩 따라간다
             // 상한 1.9 에서는 300 명이 화면을 꽉 채워 앞이 안 보였다 (burst 필름) — 2.6 까지 물러난다
-            float wantK = Mathf.Clamp(Mathf.Sqrt(Mathf.Max(1f, sim.Units) / 40f), 1f, 2.6f);
+            // 높이 올라간 만큼 커지는 군단을 이미 담는다 — 물러나는 폭은 작게
+            float wantK = Mathf.Clamp(Mathf.Sqrt(Mathf.Max(1f, sim.Units) / 140f), 1f, 1.45f);
             camK = camK <= 0f ? wantK : Mathf.Lerp(camK, wantK, 1f - Mathf.Exp(-Time.deltaTime * 2.5f));
             float ck = camK + camKick;
             var shake = lossHeat > 0.02f ? Random.insideUnitSphere * Mathf.Min(0.22f, lossHeat * 0.5f) : Vector3.zero;
-            cam.transform.position = new Vector3(0f, 6.0f * ck, sim.Z - 9.2f * ck) + shake;
+            cam.transform.position = new Vector3(0f, 16.0f * ck, sim.Z - 11.2f * ck) + shake;
         }
 
         /// <summary>
@@ -869,9 +874,8 @@ namespace CrowdFire.View
                 }
                 // **겨눈 쪽으로 돈다.** `Battle` 이 병사마다 마지막 표적을 남긴다 — 통을 쏘는 병사는
                 // 통을, 나머지는 적을 본다. 조준이 *위치 선택* 이라는 게 몸의 방향으로 읽힌다
-                float dx = b.AAimX[i] - x, dz = b.AAimZ[i] - z;
-                float want = dz > 0.5f ? Mathf.Clamp(Mathf.Atan2(dx, dz) * Mathf.Rad2Deg, -55f, 55f) : 0f;
-                allyYaw[i] = Mathf.Lerp(allyYaw[i], want + steer, ky);
+                // 총이 곧게만 나가므로 몸도 **앞만 본다** — 끄는 쪽으로 기우는 것만 남긴다
+                allyYaw[i] = Mathf.Lerp(allyYaw[i], steer, ky);
                 // **움찔한다.** 0.25 초 안에 1.6 m 안에서 물렸으면 뒤로 젖혀지며 밀린다 — 앞줄이 물결친다
                 float flinch = 0f, now = Time.time;
                 for (int h = 0; h < RecentHits; h++)
@@ -888,7 +892,7 @@ namespace CrowdFire.View
                 float kick = b.AFlash[i] > 0f ? b.AFlash[i] / Battle.FlashTime : 0f;
                 kick += flinch * 3f;
                 allies.X[k] = x; allies.Z[k] = z;
-                allies.Yaw[k] = allyYaw[i]; allies.Lean[k] = 7f * kick; allies.Lift[k] = lift;
+                allies.Yaw[k] = allyYaw[i]; allies.Lean[k] = 2.5f * kick; allies.Lift[k] = lift;
                 allies.SideTarget[k] = b.AX[i];
                 float ph = i * 0.113f + Time.time * 1.7f;
                 allies.Phase[k] = ph - Mathf.Floor(ph);
@@ -924,7 +928,7 @@ namespace CrowdFire.View
                 int h = hitHead++ % RecentHits;
                 hitX[h] = x; hitZ[h] = z; hitT[h] = Time.time;
                 // 물 때마다 조각 둘 — 앞줄에서 계속 튄다
-                Burst(new Vector3(x, 1.0f, z - 0.5f), 2);
+                if ((seenAllyHit & 1) == 0) Burst(new Vector3(x, 1.0f, z - 0.5f), 1);
             }
             deathsNow.Clear();
             for (; seenAllyDeath < b.AllyDeathSerial; seenAllyDeath++)
@@ -986,7 +990,7 @@ namespace CrowdFire.View
             float dx = px - x, dz = pz - z, d = Mathf.Max(0.01f, Mathf.Sqrt(dx * dx + dz * dz));
             allyDownVX[k] = dx / d * 0.7f; allyDownVZ[k] = dz / d * 0.7f;
             allyDownSign[k] = -1f;
-            Burst(new Vector3(x, 1.0f, z), 7);
+            Burst(new Vector3(x, 1.0f, z), 4);
         }
 
         /// <summary>
@@ -1133,15 +1137,17 @@ namespace CrowdFire.View
                         float a = b.EAttack[i];
                         float lunge = a > 0.85f ? (a - 0.85f) / 0.15f : (a < 0.15f ? 1f - a / 0.15f : 0f);
                         float wind = a > 0.5f && a <= 0.85f ? (a - 0.5f) / 0.35f : 0f;
-                        lean = -30f * lunge + 12f * wind;
+                        lean = -18f * lunge + 8f * wind;
                         fz += (fz >= sim.Z ? -1f : 1f) * 0.4f * lunge;
                     }
                     if (b.EHurt[i] > 0f)
                     {
                         // **비틀거린다.** 한 발 맞을 때마다 0.12 초 동안 뒤로 젖혀지고 밀리고 부푼다 —
                         // 300 명이 쏘면 앞줄 좀비 머리가 계속 튕긴다. 그게 *"맞고 있다"* 다
+                        // 24° · 0.28 m · 부풂 이었는데 총알 한 발마다 걸려서 좀비가 **쉬지 않고 떨었다**
+                        // (오너: *"적이 뜨리뜨리 어색하다"*). 살짝 움찔하는 정도만
                         float h = b.EHurt[i] / 0.12f;
-                        lean += 24f * h; fz += 0.28f * h; sc = 1f + 0.07f * h;
+                        lean += 6f * h; fz += 0.06f * h;
                     }
                 }
                 foes.X[k] = fx; foes.Z[k] = fz;

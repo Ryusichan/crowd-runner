@@ -284,6 +284,48 @@ namespace CrowdFire.EditorTools
             var tris = new List<int>(src.triangles);
             if (wMesh != null) foreach (int t in wMesh.triangles) tris.Add(nBody + t);
 
+            // ── 단순화 (2026-10-20) ────────────────────────────────────────────
+            // 오너: *"인물들도 훨씬 lite 하게 — 많은 수의 적이 등장할 때 느려진다."* 좀비 한 명이
+            // 정점 5,971, 군인이 4,475(소총만 2,706)였다. 400 명이면 매 프레임 수백만 정점이다.
+            // **정점 군집**으로 줄인다: 0 프레임 자세에서 같은 칸(+ 같은 색)에 든 정점을 하나로 합치고,
+            // 그 대표의 프레임별 위치만 텍스처에 남긴다. 칸 크기가 곧 디테일이다 — 화면의 사람이
+            // 1 m 남짓이라 6 cm 밑의 굴곡은 안 보인다
+            {
+                float cell = suffix == "_zombie" ? 0.075f : 0.065f;
+                int n0 = n;
+                var colorId = new Dictionary<Color, int>();
+                var keyTo = new Dictionary<long, int>();
+                var remap = new int[n0]; var rep = new List<int>();
+                for (int i = 0; i < n0; i++)
+                {
+                    int cid; if (!colorId.TryGetValue(colors[i], out cid)) { cid = colorId.Count; colorId[colors[i]] = cid; }
+                    var p = verts[i];
+                    long kx = Mathf.FloorToInt(p.x / cell) + 4096, ky = Mathf.FloorToInt(p.y / cell) + 4096, kz = Mathf.FloorToInt(p.z / cell) + 4096;
+                    long key = ((kx * 8192 + ky) * 8192 + kz) * 64 + cid;
+                    int j; if (!keyTo.TryGetValue(key, out j)) { j = rep.Count; rep.Add(i); keyTo[key] = j; }
+                    remap[i] = j;
+                }
+                int m2 = rep.Count;
+                var v2 = new Vector3[m2]; var nm2 = new Vector3[m2]; var c2 = new Color[m2];
+                for (int j = 0; j < m2; j++) { v2[j] = verts[rep[j]]; nm2[j] = norms[rep[j]]; c2[j] = colors[rep[j]]; }
+                var t2 = new List<int>(tris.Count);
+                for (int t = 0; t + 2 < tris.Count; t += 3)
+                {
+                    int a = remap[tris[t]], bb = remap[tris[t + 1]], cc = remap[tris[t + 2]];
+                    if (a == bb || bb == cc || a == cc) continue;
+                    t2.Add(a); t2.Add(bb); t2.Add(cc);
+                }
+                var px2 = new Color[m2 * Frames];
+                for (int f = 0; f < Frames; f++)
+                    for (int j = 0; j < m2; j++) px2[f * m2 + j] = px[f * n0 + rep[j]];
+                var tex2 = new Texture2D(m2, Frames, TextureFormat.RGBAHalf, false, true)
+                { name = tex.name, filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+                tex2.SetPixels(px2); tex2.Apply(false, false);
+                Object.DestroyImmediate(tex); tex = tex2;
+                Debug.Log($"[CR] {suffix} 단순화: 정점 {n0} → {m2} · 삼각형 {tris.Count / 3} → {t2.Count / 3} (칸 {cell * 100:F1} cm)");
+                n = m2; verts = v2; norms = nm2; colors = c2; tris = t2;
+            }
+
             var mesh = new Mesh { name = "standin_vat_mesh" + suffix, indexFormat = n > 65000 ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16 };
             mesh.SetVertices(verts); mesh.SetNormals(norms); mesh.SetColors(colors);
             mesh.SetTriangles(tris, 0);

@@ -22,6 +22,10 @@ namespace CrowdFire.Tools
             // 레벨은 **파일에서** 온다 — 코드에 박으면 10 개를 못 만든다 (기획서 §12)
             string dir = System.IO.Path.GetFullPath(System.IO.Path.Combine(
                 AppContext.BaseDirectory, "../../../../../Assets/_Game/Resources/Levels"));
+            // **탐침** — 한 판 한 경로를 1 초 단위로 찍는다: 쏜 수 · 죽인 수 · 접촉한 적 · 병력.
+            //   dotnet run -c Release -- --probe 1-1 RRRRRR
+            // 판정표만으로는 *어디서* 무너지는지 안 보인다 (2026-10-20 곧은 총알 전환에서 필요했다)
+            if (args.Length >= 3 && args[0] == "--probe") return Probe(dir, args[1], args[2]);
             if (args.Length > 0) dir = args[0];
             if (!System.IO.Directory.Exists(dir)) { Console.WriteLine("레벨 폴더가 없다: " + dir); return 1; }
 
@@ -284,6 +288,34 @@ namespace CrowdFire.Tools
         /// 사람이 드래그하는 것과 **같은 문**(`Step(desiredX)`)으로 들어간다. 다른 문을 쓰면
         /// 도구가 잰 것과 사람이 한 것이 다른 게임이 된다.
         /// </summary>
+        static int Probe(string dir, string code, string path)
+        {
+            string err;
+            var level = LevelFile.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(dir, code + ".txt")), out err);
+            if (level == null) { Console.WriteLine(err); return 1; }
+            var choices = ChoiceZs(level);
+            var sim = new Sim(level);
+            float half = level.roadWidth * 0.5f;
+            int held = -1, shots = 0, kills = 0, steps = 0;
+            Console.WriteLine("초 | z | 병력 | 쏜 | 처치 | 살아있는 적 | 접촉 | 대형 rx·rz");
+            for (int step = 0; step < 60 * 600 && sim.State != SimState.Won && sim.State != SimState.Lost; step++)
+            {
+                int bit = NextChoice(choices, sim.Z);
+                if (bit >= 0 && bit < path.Length) held = path[bit] == 'L' ? -1 : +1;
+                sim.Step(held * half * 0.5f);
+                shots += sim.Battle.ShotsThisTick; kills += sim.Battle.KilledThisTick;
+                if (++steps % 60 == 0)
+                {
+                    var b = sim.Battle; int contact = 0;
+                    for (int i = 0; i < b.EnemyCount; i++) if (b.EState[i] == 1) contact++;
+                    Console.WriteLine($"{steps / 60,3} | {sim.Z,5:F0} | {sim.Units,4} | {shots,4} | {kills,4} | {b.Alive,4} | {contact,4} | {b.FormRx:F1}·{b.FormRz:F1}");
+                    shots = 0; kills = 0;
+                }
+            }
+            Console.WriteLine("끝: " + sim.State + " 병력 " + sim.Units);
+            return 0;
+        }
+
         static Run RunOne(LevelData level, int mask)
         {
             var sim = new Sim(level);

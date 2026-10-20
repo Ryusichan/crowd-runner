@@ -16,21 +16,22 @@ units 20
 road 9
 speed 6.5
 length 290
-rating 95 184 286
+rating 6 58 118
 
 # ① 아직 20 명이다. 큰 쪽(30)은 못 깬다 — 작은 쪽이 맞다
 barrel 50 gives 8 lane L
 barrel 50 gives 30 lane R
 
+# 2026-10-20 곧은 총알 · 지나가는 적으로 규칙이 바뀌어 ×0.6, 최종 1000 으로 다시 쟀다 (살아서 끝에 닿으면 돌파이므로 방어선이 두꺼워야 관문이다).
 # 적은 끊이지 않고, **군단이 자라는 만큼 같이 커진다.** 한 번 잰 것이 있다: 군단은 적이
 # 세 배까지는 아무 일도 없고 **5~6 배에서 무너진다.** 그래서 수가 군단을 따라 올라간다 —
 # 안 그러면 뒤로 갈수록 적이 장식이 된다 (2026-10-12 측정: 전투 손실이 전 경로 0 이었다)
-enemy 80 count 70
-enemy 112 count 110
-enemy 144 count 170
-enemy 176 count 240
-enemy 208 count 420
-enemy 240 count 580
+enemy 80 count 42
+enemy 112 count 66
+enemy 144 count 102
+enemy 176 count 144
+enemy 208 count 252
+enemy 240 count 348
 
 # ② 큰 쪽이 **왼쪽으로 바뀐다** — 한쪽만 붙들고 있으면 안 된다
 barrel 110 gives 45 lane L
@@ -48,4 +49,4 @@ gate 210 | R add 26 | L sub 10
 barrel 236 gives 110 lane L
 barrel 236 gives 30 lane R
 
-enemy 262 count 620 final
+enemy 262 count 1000 final

@@ -99,6 +99,8 @@ namespace CrowdFire.Core
         public int AllyDeathSerial;
         /// <summary>대형 반지름 (가로 · 세로) — 화면이 좀비를 대열 **앞 가장자리**에 세우는 데 쓴다</summary>
         public float FormRx, FormRz;
+        /// <summary>소대 옆을 지나쳐 흘려보낸 적 수</summary>
+        public int Passed;
 
         // ── 탄환 (보이는 것만 — 피해는 이미 들어갔다) ─────────────────────────────
         public int BulletCount;
@@ -287,7 +289,12 @@ namespace CrowdFire.Core
 
             int near = 0;
             for (int i = 0; i < EnemyCount; i++)
-                if (EState[i] != 2 && EZ[i] - allyZ < PressureRange) near++;
+            {
+                // **소대와 겹친 적만** 발을 묶는다 — 옆을 지나가는 적까지 세면 1-1 이 99 초로 늘어졌다
+                if (EState[i] == 2 || EZ[i] - allyZ >= PressureRange) continue;
+                float pu = (EX[i] - allyX) / (FormRx > 0.6f ? FormRx : 0.6f);
+                if (pu > -1.15f && pu < 1.15f) near++;
+            }
             float cap = allies * 0.5f + 4f;
             float p = near / cap; if (p > 1f) p = 1f; if (p < 0f) p = 0f;
             // ⚠ **이 바닥을 올려도 판은 안 짧아진다.** 45 % 로 올려 봤더니 1-1 이 60 초에서
@@ -356,8 +363,19 @@ namespace CrowdFire.Core
                 }
 
                 float dz = EZ[i] - allyZ;
-                if (dz <= Contact && dz >= -Contact)
+                // **대열 가장자리에서 문다** (2026-10-20). 전에는 소대 *중심* z 기준이라 좀비가 대열 한가운데까지
+                // 들어와 섰고, 총알이 앞으로만 나가게 되자 앞줄이 등 뒤의 좀비를 못 쏴 소대가 안에서 녹았다.
+                // 타원 대형의 그 x 에서의 가장자리까지가 몸이다 — 그 밖 `Contact` 안에 들면 문다
+                float u = (EX[i] - allyX) / (FormRx > 0.6f ? FormRx : 0.6f);
+                float edge = u > -1f && u < 1f ? FormRz * (float)System.Math.Sqrt(1f - u * u) : 0f;
+                float gap = (dz >= 0f ? dz : -dz) - edge;
+                // **좌우로 겹친 적만 부딪힌다.** 옆을 지나가는 적은 소대를 못 문다 — 라스트워처럼
+                // 좌우 이동이 곧 *어느 적과 싸울지* 를 고르는 일이다 (2026-10-20 곧은 총알과 한 짝)
+                bool overlaps = u > -1.15f && u < 1.15f;
+                if (overlaps && gap <= Contact)
                 {
+                    // 가장자리 안으로는 못 들어온다 — 소대가 전진하면 **밀린다** (전선이 움직인다)
+                    if (gap < 0.3f) EZ[i] = allyZ + (dz >= 0f ? edge + 0.3f : -(edge + 0.3f));
                     // 닿은 적은 **전부** 때린다 — 전선 폭 제한이 없다. 둘러싸이면 빨리 녹는다
                     EState[i] = 1;
                     eAtkT[i] += dt;
@@ -388,11 +406,11 @@ namespace CrowdFire.Core
                     // 표적도 아니고 죽지도 않아서, 화면에서는 *지나쳐 버린 것*으로 보이고
                     // 판정에서는 *아직 안 끝난 전투*로 남는다
                     EState[i] = 0; EAttack[i] = 0f;
-                    EZ[i] += (dz > 0f ? -1f : 1f) * e.speed * dt;
-                    float dx = allyX - EX[i];
-                    float step = e.speed * 0.4f * dt;
-                    if (dx > step) dx = step; else if (dx < -step) dx = -step;
-                    EX[i] += dx;
+                    // **곧게 내려온다.** 전에는 소대를 쫓아 가로로 모여들었다 — 그러면 옆구리에 붙어
+                    // 아무 병사의 앞 줄에도 없이 물기만 했다 (탐침: 병사 50 명이 초당 4~13 발만 쐈다).
+                    // 지나쳐 뒤로 8 m 넘게 빠진 적은 **흘려보낸 것**이다 — 사라진다
+                    EZ[i] -= e.speed * dt;
+                    if (dz < -8f) { Remove(i); Passed++; continue; }
                 }
             }
         }
@@ -432,10 +450,13 @@ namespace CrowdFire.Core
                 {
                     tx = RX[b]; tz = RZ[b];
                 }
-                else if (candCount > 0)
+                else if (candCount > 0 && (t = LaneTarget(AX[i], AZ[i])) >= 0)
                 {
-                    t = cand[(i + frame) % candCount];
-                    tx = EX[t]; tz = EZ[t];
+                    // **총알은 곧게만 간다** (오너 2026-10-20: *"좌우로 움직이는 만큼 총은 직선으로만
+                    // 날라가야 해"*). 전에는 사거리 안 아무 적이나 나눠 맡아 비스듬히 쐈다. 이제 병사는
+                    // **자기 앞 줄**(좌우 ±LaneHalf)에 든 가장 가까운 적만 맞힌다 — 손가락으로 옮기는
+                    // 것이 곧 조준이고, 대열 폭 밖으로 비켜 온 적은 아무도 못 쏜다
+                    tx = AX[i]; tz = EZ[t];
                 }
                 else if (HasWall && WallHp > 0f && WallZ - AZ[i] <= Range)
                 {
@@ -505,13 +526,32 @@ namespace CrowdFire.Core
             if (tracerAccum < 1f || BulletCount >= BulletCap) return;
             tracerAccum -= 1f;
 
-            float dx = tx - sx, dz = tz - sz;
-            float len = (float)System.Math.Sqrt(dx * dx + dz * dz);
+            // 곧게 앞으로 — 표적까지의 **z 거리**만큼 날아간다
+            float len = tz - sz;
             if (len < 1e-3f) return;
             int b = BulletCount++;
             BX[b] = sx; BZ[b] = sz;
-            BDX[b] = dx / len; BDZ[b] = dz / len;
+            BDX[b] = 0f; BDZ[b] = 1f;
             bLife[b] = 0f; bRange[b] = len;
+        }
+
+        /// <summary>병사 한 줄의 반폭 — 좀비 어깨(0.5 m)와 병사 간격(0.7 m) 사이라 줄이 빈틈없이 이어진다</summary>
+        public const float LaneHalf = 0.42f;
+
+        /// <summary>그 병사 **바로 앞 줄**에서 가장 가까운 적. 없으면 −1</summary>
+        int LaneTarget(float x, float z)
+        {
+            int best = -1; float bd = float.MaxValue;
+            for (int c = 0; c < candCount; c++)
+            {
+                int e = cand[c];
+                float dz = EZ[e] - z;
+                if (dz <= 0f || dz > Range) continue;
+                float dx = EX[e] - x;
+                if (dx > LaneHalf || dx < -LaneHalf) continue;
+                if (dz < bd) { bd = dz; best = e; }
+            }
+            return best;
         }
 
         void StepBullets(float dt)
