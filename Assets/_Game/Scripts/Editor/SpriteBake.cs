@@ -59,7 +59,9 @@ namespace CrowdFire.EditorTools
                 for (int i = 0; i < ms.Length; i++)
                 {
                     var c = queen ? Color.white : Palette(ms[i] != null ? ms[i].name : "", zombie);
-                    ms[i] = new Material(sh) { color = c, mainTexture = qtex };
+                    // 퀸은 **조명 없이** 텍스처 색 그대로 — 빛을 받으면 하얗게 날아갔다 (첫 굽기)
+                    ms[i] = queen ? new Material(Shader.Find("Unlit/Texture")) { mainTexture = qtex }
+                                  : new Material(sh) { color = c, mainTexture = qtex };
                 }
                 r.sharedMaterials = ms;
             }
