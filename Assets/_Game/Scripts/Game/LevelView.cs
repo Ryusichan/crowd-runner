@@ -28,7 +28,8 @@ namespace CrowdFire.View
         /// 보여 주고 몸만 상한까지** 그린다 — 400 과 600 의 차이는 화면에서 구분되지 않고,
         /// 구분되지 않는 것에 프레임을 쓰면 **구분되는 것이 사라진다**.
         /// </summary>
-        public int renderCap = 400;
+        // 400 → 260 (2026-10-20 끊김). 화면 숫자는 **실제 병력**을 그대로 말한다 — 그리는 것은 대표다
+        public int renderCap = 260;
 
         LevelPlay play;
         CrowdField allies, foes;
@@ -41,7 +42,7 @@ namespace CrowdFire.View
         VatCrowd corpseView, allyDownView;
         CrowdField corpses, allyDowns;
         // 시체도 정점을 먹는다 — 300 이면 그것만으로 군단 하나 값이었다
-        const int CorpseCap = 110, AllyDownCap = 80;
+        const int CorpseCap = 60, AllyDownCap = 40;
         readonly float[] corpseT = new float[CorpseCap], allyDownT = new float[AllyDownCap];
         int corpseHead, allyDownHead, seenDeath, seenBroke;
         float[] prevAX = new float[0], prevAZ = new float[0], allyYaw = new float[0];
@@ -1005,7 +1006,8 @@ namespace CrowdFire.View
             {
                 float age = now - corpseT[i];
                 if (age < 0f || corpses.Z[i] < behind) { corpses.Lift[i] = -20f; continue; }
-                corpses.Lift[i] = age < 6f ? 0.15f : (age < 7.2f ? Mathf.Lerp(0.15f, -0.7f, (age - 6f) / 1.2f) : -20f);
+                // **2 초 안에 사라진다** (오너 2026-10-20). 1.3 초 누웠다가 0.7 초 동안 가라앉는다
+                corpses.Lift[i] = age < 1.3f ? 0.15f : (age < 2f ? Mathf.Lerp(0.15f, -0.7f, (age - 1.3f) / 0.7f) : -20f);
             }
             for (int i = 0; i < allyDowns.Count; i++)
             {
@@ -1018,7 +1020,7 @@ namespace CrowdFire.View
                 allyDowns.X[i] = allyDownBX[i] + allyDownVX[i] * e;
                 allyDowns.Z[i] = allyDownBZ[i] + allyDownVZ[i] * e;
                 float jolt = Mathf.Sin(Mathf.PI * t) * 0.35f * (allyDownSign[i] < 0f ? 1f : 0f);
-                allyDowns.Lift[i] = age < 5f ? 0.15f * t + jolt : (age < 6.2f ? Mathf.Lerp(0.15f, -0.7f, (age - 5f) / 1.2f) : -20f);
+                allyDowns.Lift[i] = age < 1.3f ? 0.15f * t + jolt : (age < 2f ? Mathf.Lerp(0.15f, -0.7f, (age - 1.3f) / 0.7f) : -20f);
             }
         }
 
@@ -1034,6 +1036,8 @@ namespace CrowdFire.View
                 for (int i = 0; i < BitCap; i++)
                 {
                     bits[i] = Box("Bit", new Color(0.52f, 0.06f, 0.10f));
+                    // 머티리얼 하나를 같이 쓴다 — 72 개가 각자 머티리얼이면 드로우가 72 번이다
+                    if (i > 0) bits[i].GetComponent<Renderer>().sharedMaterial = bits[0].GetComponent<Renderer>().sharedMaterial;
                     bits[i].gameObject.SetActive(false);
                     bitT[i] = -1f;
                 }

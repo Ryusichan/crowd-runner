@@ -150,6 +150,10 @@ namespace CrowdFire.Game
             // 긴 멈춤(앱 복귀·로딩) 뒤에 수백 틱을 몰아 돌리면 **그 프레임이 통째로 멈춘다**.
             // 따라잡기를 포기하는 쪽이 낫다 — 잃는 것은 시간이고, 지키는 것은 조작이다
             if (accumulator > 0.25f) accumulator = 0.25f;
+            // **한 프레임에 세 틱까지.** 늦은 프레임을 따라잡으려 15 틱을 몰아 돌리면 그 프레임이 더
+            // 늦어지고, 다음 프레임은 더 많이 따라잡아야 한다 — 웹에서 끊김이 그렇게 굳었다.
+            // 넘친 시간은 버린다: 기기가 느리면 게임이 조금 느려질 뿐, 멈추지는 않는다
+            if (accumulator > Sim.FixedStep * 3f) accumulator = Sim.FixedStep * 3f;
             while (accumulator >= Sim.FixedStep)
             {
                 accumulator -= Sim.FixedStep;

@@ -108,6 +108,12 @@ $rotate = '<div id="cf-rotate"><div style="font-size:44px">&#x21BB;</div>휴대�
           'var d=document.documentElement;(d.requestFullscreen?d.requestFullscreen():Promise.resolve()).then(function(){return o.lock("portrait")}).catch(function(){});' +
           'document.removeEventListener("pointerdown",f)},{once:true})}}catch(e){}})();</script>'
 if ($html -match '</body>') { $html = $html -replace '</body>', ($rotate + '</body>') }
+
+# ⑤ **폰도 1 배 해상도로 그린다** (2026-10-20 끊김). Unity 템플릿은 이 줄을 주석으로 둔다 —
+#    그대로면 화소 3 배 폰은 9 배 화소를 칠한다. 이 게임은 작은 사람 수백을 그리는 쪽이라 그 값이 가장 크다
+$dpr = '// config.devicePixelRatio = 1;'
+if ($html.Contains($dpr)) { $html = $html.Replace($dpr, 'config.devicePixelRatio = 1;') }
+elseif (-not $html.Contains('config.devicePixelRatio = 1;')) { throw "devicePixelRatio 줄을 못 찾았다 — 템플릿이 바뀌었다" }
 if ($html -match '</head>') { $html = $html -replace '</head>', ($fit + '</head>') }
 else { throw "index.html 에 </head> 가 없다 — 템플릿이 바뀌었다" }
 

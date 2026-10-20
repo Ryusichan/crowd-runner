@@ -291,7 +291,9 @@ namespace CrowdFire.EditorTools
             // 그 대표의 프레임별 위치만 텍스처에 남긴다. 칸 크기가 곧 디테일이다 — 화면의 사람이
             // 1 m 남짓이라 6 cm 밑의 굴곡은 안 보인다
             {
-                float cell = suffix == "_zombie" ? 0.075f : 0.065f;
+                // 6.5/7.5 cm → 10/11 cm (2026-10-20 끊김). 카메라가 28 m 로 멀어져 사람이 화면 높이의
+                // 1/25 쯤이다 — 10 cm 밑은 한 화소도 안 된다
+                float cell = suffix == "_zombie" ? 0.11f : 0.10f;
                 int n0 = n;
                 var colorId = new Dictionary<Color, int>();
                 var keyTo = new Dictionary<long, int>();

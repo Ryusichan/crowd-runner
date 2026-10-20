@@ -316,7 +316,7 @@ namespace CrowdFire.Core
                 int left = pending[0].left;
                 float laneX = pending[0].laneX, roadWidth = pending[0].roadWidth, pz = pending[0].z;
                 bool band = pending[0].band;
-                var rng = new System.Random(pending[0].seed + left);
+                int hs = pending[0].seed * 7919 + left * 104729;
 
                 int i = EnemyCount++;
                 float half = roadWidth * 0.5f;
@@ -330,13 +330,13 @@ namespace CrowdFire.Core
                 }
                 else
                 {
-                    EX[i] = laneX + (float)(rng.NextDouble() - 0.5) * roadWidth * 0.85f;
+                    EX[i] = laneX + (Hash01(hs) - 0.5f) * roadWidth * 0.85f;
                     if (EX[i] < -half) EX[i] = -half;
                     if (EX[i] > half) EX[i] = half;
                     // **군단 앞에서 생긴다.** 사건의 z 에 고정하면 군단이 지나친 뒤에 나와
                     // 뒤에서 쫓아오는 꼴이 된다
                     float z0 = allyZ + StreamAhead; if (z0 < pz) z0 = pz;
-                    EZ[i] = z0 + (float)rng.NextDouble() * 6f;
+                    EZ[i] = z0 + Hash01(hs + 1) * 6f;
                 }
                 EHp[i] = EMaxHp[i] = UnitStats.Zombie.hp * 3f;
                 EState[i] = 0; EDieT[i] = 0f; eAtkT[i] = 0f; EHurt[i] = 0f; EAttack[i] = 0f;
@@ -430,6 +430,37 @@ namespace CrowdFire.Core
                 if (dz < -6f || dz > Range) continue;
                 cand[candCount++] = i;
             }
+            // **칸으로 나눈다.** 곧은 총알은 자기 줄만 보므로, 병사마다 후보 전부(160)를 훑으면
+            // 400 × 160 이 틱마다 돈다 — 웹에서 한 번 늦어지면 따라잡기 틱이 쌓여 계속 끊겼다
+            // (오너 2026-10-20 *"플레이가 끊겨서 진행이 안 된다"*). 0.84 m 칸에 나눠 넣고 이웃 칸만 본다
+            for (int k = 0; k < BinCount; k++) binN[k] = 0;
+            for (int c = 0; c < candCount; c++)
+            {
+                int k = Bin(EX[cand[c]]);
+                if (binN[k] < BinCap) bins[k * BinCap + binN[k]++] = cand[c];
+            }
+        }
+
+        const int BinCount = 24, BinCap = 24;
+        const float BinW = LaneHalf * 2f, BinX0 = -BinCount * BinW * 0.5f;
+        readonly int[] bins = new int[BinCount * BinCap];
+        readonly int[] binN = new int[BinCount];
+        static int Bin(float x)
+        {
+            int k = (int)((x - BinX0) / BinW);
+            return k < 0 ? 0 : (k >= BinCount ? BinCount - 1 : k);
+        }
+
+        /// <summary>할당 없는 0..1 난수 — 적 하나 나올 때마다 `new System.Random` 을 만들어 웹에서 GC 끊김이 났다</summary>
+        static float Hash01(int n)
+        {
+            unchecked
+            {
+                uint x = (uint)n * 747796405u + 2891336453u;
+                x = ((x >> (int)((x >> 28) + 4u)) ^ x) * 277803737u;
+                x = (x >> 22) ^ x;
+                return (x & 0xFFFFFF) / 16777216f;
+            }
         }
 
         /// <summary>
@@ -464,9 +495,11 @@ namespace CrowdFire.Core
                 }
                 else
                 {
-                    // 쏠 것이 없다 — **타이머를 돌리지 않는다.** 돌리면 적이 나타나는 순간
-                    // 전원이 한 프레임에 쏘고 그다음 반 초가 비어, 첫 교전이 깜빡인다
-                    aFireT[i] = 0f;
+                    // **쏠 것이 없어도 쏜다** (오너 2026-10-20: *"총도 계속 쏘아야 하는데 안 쏜다"*).
+                    // 앞 줄이 비면 총알은 사거리 끝까지 곧게 날아가 사라질 뿐 — 피해는 없다
+                    aFireT[i] += a.interval;
+                    AFlash[i] = FlashTime;
+                    Tracer(dt, AX[i], AZ[i], AX[i], AZ[i] + Range);
                     continue;
                 }
 
@@ -542,14 +575,20 @@ namespace CrowdFire.Core
         int LaneTarget(float x, float z)
         {
             int best = -1; float bd = float.MaxValue;
-            for (int c = 0; c < candCount; c++)
+            int k0 = Bin(x);
+            for (int k = k0 - 1; k <= k0 + 1; k++)
             {
-                int e = cand[c];
+                if (k < 0 || k >= BinCount) continue;
+                for (int q = 0; q < binN[k]; q++)
+                {
+                int e = bins[k * BinCap + q];
+                if (EState[e] == 2) continue;
                 float dz = EZ[e] - z;
                 if (dz <= 0f || dz > Range) continue;
                 float dx = EX[e] - x;
                 if (dx > LaneHalf || dx < -LaneHalf) continue;
                 if (dz < bd) { bd = dz; best = e; }
+                }
             }
             return best;
         }

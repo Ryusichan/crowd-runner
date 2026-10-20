@@ -386,7 +386,7 @@ namespace CrowdFire.Core
             // 2026-10-20: 적이 **곧게 지나가게** 되면서 판단을 바꾼다 — 최종 방어선을 만난 뒤 **살아서
             // 길 끝에 닿으면 돌파**다. 전에는 옆을 지나가는 중인 적까지 남았다고 쳐서 병사 100 명이
             // 멀쩡히 살아 결승선에 닿고도 졌다 (검증기 표의 *실패 · 잔여 96~126* 줄들)
-            State = finalSpawned && Allies > 0f ? SimState.Won : SimState.Lost;
+            State = finalSpawned && Allies >= 1f ? SimState.Won : SimState.Lost;   // 0.4 명은 0 명이다 — 화면 숫자가 0 인데 이겼다고 할 수 없다
         }
 
         public static float Apply(float count, GateOp op, int value)
