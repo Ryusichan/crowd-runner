@@ -16,7 +16,7 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'docs', 's
 
 def main():
     made = 0
-    for tag in sorted({os.path.basename(p).split('_')[0] for p in glob.glob(os.path.join(ROOT, 'burst*_*.png'))}):
+    for tag in sorted({os.path.basename(p).split('_')[0] for p in (glob.glob(os.path.join(ROOT, 'burst*_*.png')) + glob.glob(os.path.join(ROOT, 'loss*_*.png')))}):
         frames = sorted(glob.glob(os.path.join(ROOT, tag + '_*.png')))
         if not frames:
             continue

@@ -52,6 +52,23 @@ namespace CrowdFire.View
         TextMesh[] floaters; float[] floaterT; Vector3[] floaterAt; int floaterHead;
         const float SpawnDur = 0.5f;
         static readonly int[] Milestones = { 50, 100, 150, 200, 300 };
+
+        // ── 충돌 (2026-10-20) ────────────────────────────────────────────────────
+        // 오너: *"인원충돌로 우리쪽 인원 줄어드는 효과등도 좀더 디테일하게."* 전에는 잃은 병사를
+        // 대열 **바깥 번호부터** 눕혔다 — 좀비가 문 자리와 상관없이. 이제 `Battle` 이 남기는
+        // *문 자리* · *죽은 자리* 를 읽어 그 앞에서 움찔하고, 그 앞에서 끌려 넘어진다
+        int seenAllyHit, seenAllyDeath;
+        const int RecentHits = 64;
+        readonly float[] hitX = new float[RecentHits], hitZ = new float[RecentHits], hitT = new float[RecentHits];
+        int hitHead;
+        readonly List<Vector2> deathsNow = new List<Vector2>();
+        readonly float[] allyDownBX = new float[AllyDownCap], allyDownBZ = new float[AllyDownCap];
+        readonly float[] allyDownVX = new float[AllyDownCap], allyDownVZ = new float[AllyDownCap];
+        readonly float[] allyDownSign = new float[AllyDownCap];
+        int[] usedStamp = new int[0]; int stamp;
+        float lossFloatAcc, lossFloatT; Vector3 lossFloatAt;
+        Transform[] bits; Vector3[] bitV; float[] bitT; int bitHead;
+        const int BitCap = 72;
         readonly Gunfire gunfire = new Gunfire();
         VatCrowd allyView, foeView;
         Transform road, wall, divider, ground, curbL, curbR, wallL, wallR;
@@ -126,6 +143,7 @@ namespace CrowdFire.View
             corpses = new CrowdField(CorpseCap, 31337); allyDowns = new CrowdField(AllyDownCap, 4242);
             prevAX = new float[renderCap]; prevAZ = new float[renderCap]; allyYaw = new float[renderCap];
             spawnT = new float[renderCap]; spawnX = new float[renderCap]; spawnZ = new float[renderCap];
+            usedStamp = new int[renderCap];
             gunfire.Init();
             fx = new CasualtyFx(); fx.Init();
             marks = new RoadMarks();
@@ -375,6 +393,7 @@ namespace CrowdFire.View
             DrawFoes(sim, w);
             corpseView.Sync(corpses); corpseView.Draw();
             TickFloaters();
+            TickBits();
             gunfire.Draw(sim.Battle, sim.X, sim.Z, Time.deltaTime);
 
             // **벽은 비율을 정직하게 따라가야 한다.** 세션 A 측정: 벽 HP 2400 과 3200 이 네 경로
@@ -791,8 +810,39 @@ namespace CrowdFire.View
             }
             // **잃은 병사는 그 자리에 쓰러진다.** 바깥 고리(번호가 큰 쪽)부터 빠지므로 지난 프레임의
             // 그 자리에 눕힌다 — 소대가 *깎여 나가는* 것이 보여야 질 때 긴장이 생긴다
-            if (prevAllyN > n)
-                for (int i = n; i < prevAllyN; i++) PushAllyDown(prevAX[i], prevAZ[i], allyYaw[i]);
+            // **죽은 자리에서 죽는다.** 문 좀비에게 가장 가까운 병사가 그쪽으로 끌려 넘어진다.
+            // 게이트 뺄셈처럼 문 자리가 없는 손실만 예전처럼 대열 바깥에서 쓰러진다
+            int used = 0;
+            stamp++;
+            if (prevAllyN > 0)
+                foreach (var p in deathsNow)
+                {
+                    int best = -1; float bd = float.MaxValue;
+                    for (int i = 0; i < prevAllyN; i++)
+                    {
+                        if (usedStamp[i] == stamp) continue;
+                        float ddx = prevAX[i] - p.x, ddz = prevAZ[i] - p.y, d2 = ddx * ddx + ddz * ddz;
+                        if (d2 < bd) { bd = d2; best = i; }
+                    }
+                    if (best < 0) break;
+                    usedStamp[best] = stamp;
+                    PushAllyDownAt(prevAX[best], prevAZ[best], p.x, p.y);
+                    used++;
+                }
+            if (deathsNow.Count > 0)
+            {
+                lossFloatAcc += deathsNow.Count;
+                lossFloatAt = new Vector3(deathsNow[0].x, 2.3f, deathsNow[0].y - 0.6f);
+            }
+            // 숫자는 0.3 초마다 모아서 — 매 프레임 띄우면 글자가 겹쳐 읽히지 않는다
+            lossFloatT -= dt;
+            if (lossFloatAcc > 0f && lossFloatT <= 0f)
+            {
+                Floater("-" + Mathf.RoundToInt(lossFloatAcc), lossFloatAt, new Color(1f, 0.34f, 0.30f));
+                lossFloatAcc = 0f; lossFloatT = 0.3f;
+            }
+            int rest = (prevAllyN > n ? prevAllyN - n : 0) - used;
+            for (int i = n; i < prevAllyN && rest > 0; i++, rest--) PushAllyDown(prevAX[i], prevAZ[i], allyYaw[i]);
             if (b.BrokeSerial != seenBroke)
             {
                 Floater("+" + b.LastBrokeGives, new Vector3(b.LastBrokeX, 2.6f, b.LastBrokeZ), new Color(0.55f, 1f, 0.45f));
@@ -822,8 +872,21 @@ namespace CrowdFire.View
                 float dx = b.AAimX[i] - x, dz = b.AAimZ[i] - z;
                 float want = dz > 0.5f ? Mathf.Clamp(Mathf.Atan2(dx, dz) * Mathf.Rad2Deg, -55f, 55f) : 0f;
                 allyYaw[i] = Mathf.Lerp(allyYaw[i], want + steer, ky);
+                // **움찔한다.** 0.25 초 안에 1.6 m 안에서 물렸으면 뒤로 젖혀지며 밀린다 — 앞줄이 물결친다
+                float flinch = 0f, now = Time.time;
+                for (int h = 0; h < RecentHits; h++)
+                {
+                    float age = now - hitT[h];
+                    if (age > 0.25f || age < 0f) continue;
+                    float hx = x - hitX[h], hz = z - hitZ[h], d2 = hx * hx + hz * hz;
+                    if (d2 > 2.56f) continue;
+                    float f = (1f - age / 0.25f) * (1f - Mathf.Sqrt(d2) / 1.6f);
+                    if (f > flinch) flinch = f;
+                }
+                if (flinch > 0f) z -= 0.35f * flinch;
                 // **반동.** 쏜 순간 0.06 초 동안 뒤로 젖혀진다 — 300 명이 각자 다른 박자로 튄다
                 float kick = b.AFlash[i] > 0f ? b.AFlash[i] / Battle.FlashTime : 0f;
+                kick += flinch * 3f;
                 allies.X[k] = x; allies.Z[k] = z;
                 allies.Yaw[k] = allyYaw[i]; allies.Lean[k] = 7f * kick; allies.Lift[k] = lift;
                 allies.SideTarget[k] = b.AX[i];
@@ -849,6 +912,40 @@ namespace CrowdFire.View
                 int r = seenDeath & (Battle.DeathRing - 1);
                 PushCorpse(b.DeadX[r], b.DeadZ[r]);
             }
+
+            if (b.AllyHitSerial < seenAllyHit) seenAllyHit = 0;
+            if (b.AllyDeathSerial < seenAllyDeath) seenAllyDeath = 0;
+            if (b.AllyHitSerial - seenAllyHit > Battle.HitRing) seenAllyHit = b.AllyHitSerial - Battle.HitRing;
+            if (b.AllyDeathSerial - seenAllyDeath > Battle.HitRing) seenAllyDeath = b.AllyDeathSerial - Battle.HitRing;
+            for (; seenAllyHit < b.AllyHitSerial; seenAllyHit++)
+            {
+                int r = seenAllyHit & (Battle.HitRing - 1);
+                float x = b.AllyHitX[r], z = Edge(b, sim, b.AllyHitX[r], b.AllyHitZ[r]);
+                int h = hitHead++ % RecentHits;
+                hitX[h] = x; hitZ[h] = z; hitT[h] = Time.time;
+                // 물 때마다 조각 둘 — 앞줄에서 계속 튄다
+                Burst(new Vector3(x, 1.0f, z - 0.5f), 2);
+            }
+            deathsNow.Clear();
+            for (; seenAllyDeath < b.AllyDeathSerial; seenAllyDeath++)
+            {
+                int r = seenAllyDeath & (Battle.HitRing - 1);
+                deathsNow.Add(new Vector2(b.AllyDeathX[r], Edge(b, sim, b.AllyDeathX[r], b.AllyDeathZ[r])));
+            }
+        }
+
+        /// <summary>
+        /// **좀비는 대열 가장자리에서 문다.** 로직의 접촉은 소대 *중심* z 기준이라 좀비가 군중 한가운데까지
+        /// 들어가 섞여 보였다 (burst 필름). 규칙은 그대로 두고, 그리는 자리만 타원 대형의 앞(또는 뒤)
+        /// 가장자리로 옮긴다. 옆으로 붙은 것은 그대로 둔다
+        /// </summary>
+        static float Edge(Battle b, Sim sim, float x, float z)
+        {
+            float rx = Mathf.Max(0.6f, b.FormRx), rz = Mathf.Max(0.6f, b.FormRz);
+            float u = (x - sim.X) / rx;
+            if (u <= -1f || u >= 1f) return z;
+            float off = rz * Mathf.Sqrt(1f - u * u) + 0.45f;
+            return z >= sim.Z ? Mathf.Max(z, sim.Z + off) : Mathf.Min(z, sim.Z - off);
         }
 
         /// <summary>같은 자리는 같은 각 — 넘어지는 몸과 남는 시체가 같은 방향을 봐야 이어진다</summary>
@@ -877,6 +974,19 @@ namespace CrowdFire.View
             allyDowns.Lean[k] = 0f; allyDowns.Yaw[k] = yaw; allyDowns.Scale[k] = 1f; allyDowns.Lift[k] = 0f;
             allyDowns.Phase[k] = (k * 0.29f) % 1f;
             allyDownT[k] = Time.time;
+            allyDownBX[k] = x; allyDownBZ[k] = z; allyDownVX[k] = 0f; allyDownVZ[k] = 0f; allyDownSign[k] = 1f;
+        }
+
+        /// <summary>물린 병사 — 좀비 쪽으로 **끌려 앞으로** 쓰러지고 조각이 튄다</summary>
+        void PushAllyDownAt(float x, float z, float px, float pz)
+        {
+            float yaw = Mathf.Atan2(px - x, pz - z) * Mathf.Rad2Deg;
+            PushAllyDown(x, z, Mathf.Clamp(yaw, -80f, 80f));
+            int k = (allyDownHead - 1) % AllyDownCap;
+            float dx = px - x, dz = pz - z, d = Mathf.Max(0.01f, Mathf.Sqrt(dx * dx + dz * dz));
+            allyDownVX[k] = dx / d * 0.7f; allyDownVZ[k] = dz / d * 0.7f;
+            allyDownSign[k] = -1f;
+            Burst(new Vector3(x, 1.0f, z), 7);
         }
 
         /// <summary>
@@ -896,10 +1006,62 @@ namespace CrowdFire.View
             {
                 float age = now - allyDownT[i];
                 if (allyDowns.Z[i] < behind) { allyDowns.Lift[i] = -20f; continue; }
-                // 0.35 초 동안 뒤로 넘어간다
+                // 0.35 초 동안 넘어간다 — 물린 병사는 끌려가며 앞으로, 나머지는 뒤로
                 float t = Mathf.Clamp01(age / 0.35f);
-                allyDowns.Lean[i] = 90f * t * t;
-                allyDowns.Lift[i] = age < 5f ? 0.15f * t : (age < 6.2f ? Mathf.Lerp(0.15f, -0.7f, (age - 5f) / 1.2f) : -20f);
+                float e = t * t;
+                allyDowns.Lean[i] = allyDownSign[i] * 90f * e;
+                allyDowns.X[i] = allyDownBX[i] + allyDownVX[i] * e;
+                allyDowns.Z[i] = allyDownBZ[i] + allyDownVZ[i] * e;
+                float jolt = Mathf.Sin(Mathf.PI * t) * 0.35f * (allyDownSign[i] < 0f ? 1f : 0f);
+                allyDowns.Lift[i] = age < 5f ? 0.15f * t + jolt : (age < 6.2f ? Mathf.Lerp(0.15f, -0.7f, (age - 5f) / 1.2f) : -20f);
+            }
+        }
+
+        /// <summary>
+        /// 문 자리에서 튀는 조각 — 작은 상자를 위로 던지고 중력으로 떨어뜨린다. 바닥에 닿으면
+        /// 잠깐 남는다. 개수가 적어(72) 개체로 둔다
+        /// </summary>
+        void Burst(Vector3 at, int count)
+        {
+            if (bits == null)
+            {
+                bits = new Transform[BitCap]; bitV = new Vector3[BitCap]; bitT = new float[BitCap];
+                for (int i = 0; i < BitCap; i++)
+                {
+                    bits[i] = Box("Bit", new Color(0.52f, 0.06f, 0.10f));
+                    bits[i].gameObject.SetActive(false);
+                    bitT[i] = -1f;
+                }
+            }
+            for (int c = 0; c < count; c++)
+            {
+                int k = bitHead++ % BitCap;
+                bits[k].position = at + Random.insideUnitSphere * 0.2f;
+                bitV[k] = new Vector3(Random.Range(-2.4f, 2.4f), Random.Range(2.2f, 4.6f), Random.Range(-2.4f, 1.2f));
+                bitT[k] = 0f;
+                bits[k].gameObject.SetActive(true);
+            }
+        }
+
+        void TickBits()
+        {
+            if (bits == null) return;
+            float dt = Time.deltaTime;
+            for (int i = 0; i < BitCap; i++)
+            {
+                if (bitT[i] < 0f) continue;
+                bitT[i] += dt;
+                if (bitT[i] > 0.9f) { bits[i].gameObject.SetActive(false); bitT[i] = -1f; continue; }
+                var p = bits[i].position;
+                if (p.y > 0.04f)
+                {
+                    bitV[i].y -= 16f * dt;
+                    p += bitV[i] * dt;
+                    if (p.y < 0.04f) { p.y = 0.04f; bitV[i] = Vector3.zero; }
+                    bits[i].position = p;
+                }
+                float sz = 0.16f * (1f - Mathf.Clamp01((bitT[i] - 0.5f) / 0.4f));
+                bits[i].localScale = new Vector3(sz, p.y <= 0.05f ? sz * 0.3f : sz, sz);
             }
         }
 
@@ -908,7 +1070,7 @@ namespace CrowdFire.View
         {
             if (floaters == null)
             {
-                floaters = new TextMesh[6]; floaterT = new float[6]; floaterAt = new Vector3[6];
+                floaters = new TextMesh[12]; floaterT = new float[12]; floaterAt = new Vector3[12];
                 for (int i = 0; i < floaters.Length; i++)
                 {
                     floaters[i] = OutlinedLabel("Floater", 0.34f);
@@ -961,12 +1123,26 @@ namespace CrowdFire.View
                     lean = 90f * e; fz += 0.7f * e; lift = 0.15f * e;
                     yaw = HashYaw(b.EX[i], b.EZ[i]);
                 }
-                else if (b.EHurt[i] > 0f)
+                else
                 {
-                    // **비틀거린다.** 한 발 맞을 때마다 0.12 초 동안 뒤로 젖혀지고 밀리고 부푼다 —
-                    // 300 명이 쏘면 앞줄 좀비 머리가 계속 튕긴다. 그게 *"맞고 있다"* 다
-                    float h = b.EHurt[i] / 0.12f;
-                    lean = 24f * h; fz += 0.28f * h; sc = 1f + 0.07f * h;
+                    if (b.EState[i] == 1)
+                    {
+                        // **문다.** 대열 가장자리에 걸려 서서, 박자 끝에 몸을 앞으로 내던졌다 돌아온다.
+                        // 0.5~0.85 는 뒤로 젖혀 힘을 모으고, 0.85~1·0~0.15 는 덤빈다
+                        fz = Edge(b, sim, fx, fz);
+                        float a = b.EAttack[i];
+                        float lunge = a > 0.85f ? (a - 0.85f) / 0.15f : (a < 0.15f ? 1f - a / 0.15f : 0f);
+                        float wind = a > 0.5f && a <= 0.85f ? (a - 0.5f) / 0.35f : 0f;
+                        lean = -30f * lunge + 12f * wind;
+                        fz += (fz >= sim.Z ? -1f : 1f) * 0.4f * lunge;
+                    }
+                    if (b.EHurt[i] > 0f)
+                    {
+                        // **비틀거린다.** 한 발 맞을 때마다 0.12 초 동안 뒤로 젖혀지고 밀리고 부푼다 —
+                        // 300 명이 쏘면 앞줄 좀비 머리가 계속 튕긴다. 그게 *"맞고 있다"* 다
+                        float h = b.EHurt[i] / 0.12f;
+                        lean += 24f * h; fz += 0.28f * h; sc = 1f + 0.07f * h;
+                    }
                 }
                 foes.X[k] = fx; foes.Z[k] = fz;
                 foes.Lean[k] = lean; foes.Yaw[k] = yaw; foes.Scale[k] = sc; foes.Lift[k] = lift;

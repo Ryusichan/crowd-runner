@@ -85,6 +85,21 @@ namespace CrowdFire.Core
         public readonly float[] EHurt = new float[EnemyCap];
         readonly float[] eAtkT = new float[EnemyCap];
 
+        // ── 충돌 기록 (2026-10-20) ─────────────────────────────────────────────
+        // 오너: *"인원충돌로 우리쪽 인원 줄어드는 효과등도 좀더 디테일하게."* 손실은 수치로만 깎여
+        // **어디서 누가 죽었는지** 가 없었다. 화면이 그 자리를 그리도록 남긴다 — 규칙은 그대로다
+        /// <summary>공격 박자 0..1 (1 이 무는 순간). 접촉 중이 아니면 0</summary>
+        public readonly float[] EAttack = new float[EnemyCap];
+        public const int HitRing = 256;
+        /// <summary>좀비가 문 자리 (한 번 물 때마다 하나)</summary>
+        public readonly float[] AllyHitX = new float[HitRing], AllyHitZ = new float[HitRing];
+        public int AllyHitSerial;
+        /// <summary>병사가 **한 명 줄어든** 자리 — 그 순간 문 좀비의 위치 (정수 경계를 넘을 때마다 하나)</summary>
+        public readonly float[] AllyDeathX = new float[HitRing], AllyDeathZ = new float[HitRing];
+        public int AllyDeathSerial;
+        /// <summary>대형 반지름 (가로 · 세로) — 화면이 좀비를 대열 **앞 가장자리**에 세우는 데 쓴다</summary>
+        public float FormRx, FormRz;
+
         // ── 탄환 (보이는 것만 — 피해는 이미 들어갔다) ─────────────────────────────
         public int BulletCount;
         public readonly float[] BX = new float[BulletCap];
@@ -177,6 +192,7 @@ namespace CrowdFire.Core
             // 1.25² (피치 0.55) 도 헬멧이 맞닿았다 — 이 모델은 머리가 크다. 피치 0.7 (1.6²)
             const float PerPerson = 0.19f * 1.6f * 1.6f;
             float r = (float)System.Math.Sqrt(n * PerPerson / 3.14159265f);
+            FormRx = r * 0.78f; FormRz = r * 1.55f;
             float lim = roadWidth * 0.5f - 0.3f;
             const float Golden = 2.39996323f;
 
@@ -316,7 +332,7 @@ namespace CrowdFire.Core
                     EZ[i] = z0 + (float)rng.NextDouble() * 6f;
                 }
                 EHp[i] = EMaxHp[i] = UnitStats.Zombie.hp * 3f;
-                EState[i] = 0; EDieT[i] = 0f; eAtkT[i] = 0f; EHurt[i] = 0f;
+                EState[i] = 0; EDieT[i] = 0f; eAtkT[i] = 0f; EHurt[i] = 0f; EAttack[i] = 0f;
 
                 pending[0].left = left - 1;
                 if (pending[0].left <= 0)
@@ -345,13 +361,24 @@ namespace CrowdFire.Core
                     // 닿은 적은 **전부** 때린다 — 전선 폭 제한이 없다. 둘러싸이면 빨리 녹는다
                     EState[i] = 1;
                     eAtkT[i] += dt;
+                    EAttack[i] = e.interval > 0f ? eAtkT[i] / e.interval : 0f;
                     if (eAtkT[i] >= e.interval)
                     {
                         eAtkT[i] -= e.interval;
                         float kill = e.damage / a.hp;
                         if (kill > allies) kill = allies;
+                        float before = allies;
                         allies -= kill;
                         LostThisTick += kill; AlliesLost += kill;
+                        int hk = AllyHitSerial++ & (HitRing - 1);
+                        AllyHitX[hk] = EX[i]; AllyHitZ[hk] = EZ[i];
+                        // 화면에 보이는 수(올림)가 줄어든 만큼 — 그 한 명 한 명이 **이 좀비 앞에서** 죽었다
+                        int crossed = (int)(before + 0.999f) - (int)(allies + 0.999f);
+                        for (int c = 0; c < crossed; c++)
+                        {
+                            int dk = AllyDeathSerial++ & (HitRing - 1);
+                            AllyDeathX[dk] = EX[i]; AllyDeathZ[dk] = EZ[i];
+                        }
                     }
                 }
                 else
@@ -360,7 +387,7 @@ namespace CrowdFire.Core
                     // 적이 **뒤에 남아 영원히 멀어졌다** (측정: 최근접 −117 m). 뒤에 남은 적은
                     // 표적도 아니고 죽지도 않아서, 화면에서는 *지나쳐 버린 것*으로 보이고
                     // 판정에서는 *아직 안 끝난 전투*로 남는다
-                    EState[i] = 0;
+                    EState[i] = 0; EAttack[i] = 0f;
                     EZ[i] += (dz > 0f ? -1f : 1f) * e.speed * dt;
                     float dx = allyX - EX[i];
                     float step = e.speed * 0.4f * dt;
@@ -517,6 +544,7 @@ namespace CrowdFire.Core
             {
                 EX[i] = EX[last]; EZ[i] = EZ[last]; EHp[i] = EHp[last]; EMaxHp[i] = EMaxHp[last];
                 EState[i] = EState[last]; EDieT[i] = EDieT[last]; eAtkT[i] = eAtkT[last]; EHurt[i] = EHurt[last];
+                EAttack[i] = EAttack[last];
             }
             for (int c = 0; c < candCount; c++)
             {

@@ -57,7 +57,7 @@ namespace CrowdFire.Tests
                     // **반응은 움직임이다** — 정지 사진 한 장으로는 비틀거림·반동·쏟아짐이 안 보인다.
                     // 두 자리(첫 통 · 큰 교전)에서 **실시간 속도로** 연속 12 장을 찍어 필름으로 묶는다
                     // (`tools/film.py`)
-                    if (next == 1 || next == 4)
+                    if (next == 1 || next == 4 || next == 5)
                     {
                         float keep = Time.timeScale;
                         Time.timeScale = 1f;
@@ -93,6 +93,61 @@ namespace CrowdFire.Tests
             }
             Time.timeScale = prev;
             Assert.Greater(play.Sim.BarrelGained, 0, "통을 하나도 못 깼다 — 그러면 찍을 것이 없다");
+        }
+
+        /// <summary>
+        /// **지는 판을 찍는다.** 큰 통을 고르는 운전은 앞의 적을 닿기 전에 다 쏴 버려서 충돌 연출
+        /// (물림 · 움찔 · 끌려 넘어짐 · `-N`)이 화면에 거의 안 나온다 (2026-10-20 burst5 필름).
+        /// 일부러 **작은 통만** 골라 소대를 작게 두고 큰 웨이브를 맞게 한다
+        /// </summary>
+        [UnityTest]
+        public IEnumerator Films_A_Losing_Clash()
+        {
+            var play = GameBoot.Go("1-1");
+            Assert.IsNotNull(play.Sim, "판을 못 띄웠다 — " + play.Error);
+            Directory.CreateDirectory(Dir);
+            float prev = Time.timeScale;
+            Time.timeScale = 30f;
+            float[] marks = { 246f, 254f };
+            int next = 0, guard = 0;
+            float lost0 = 0f;
+            while (play.Sim != null && next < marks.Length && guard++ < 200000
+                   && play.Sim.State != SimState.Lost && play.Sim.State != SimState.Won)
+            {
+                play.TargetX = SmallestBarrelLane(play.Sim) * play.Sim.RoadWidth * 0.25f;
+                yield return null;
+                if (play.Sim.Z < marks[next]) continue;
+                lost0 = play.Sim.AlliesLost;
+                Time.timeScale = 1f;
+                for (int f = 0; f < 16; f++)
+                {
+                    for (int w = 0; w < 3; w++) { play.TargetX = SmallestBarrelLane(play.Sim) * play.Sim.RoadWidth * 0.25f; yield return null; }
+                    Shot("loss" + next + "_" + f.ToString("00"), play);
+                }
+                Debug.Log($"[CR-TEST] 지는 판 z {play.Sim.Z:F0} · 병력 {play.Sim.Units} · 이 구간에 잃은 수 {play.Sim.AlliesLost - lost0:F1}"
+                        + $" · 문 횟수 {play.Sim.Battle.AllyHitSerial} · 죽은 기록 {play.Sim.Battle.AllyDeathSerial}");
+                Time.timeScale = 30f;
+                next++;
+            }
+            Time.timeScale = prev;
+            // 2026-10-20 측정: 1-1 은 어느 운전으로도 복도에서 좀비가 소대에 **닿지 않는다** (문 횟수 0).
+            // 연출 결함이 아니라 수치의 성질이라 실패로 두지 않는다 — 판정 불가로 남긴다
+            if (play.Sim.Battle.AllyDeathSerial == 0)
+                Assert.Inconclusive("충돌이 한 번도 없었다 — 이 판은 좀비가 소대에 닿지 않는다");
+        }
+
+        static int SmallestBarrelLane(Sim sim)
+        {
+            var b = sim.Battle;
+            int lane = -1; float best = float.MaxValue;
+            for (int i = 0; i < b.BarrelCount; i++)
+            {
+                if (b.RHp[i] <= 0f || b.RZ[i] < sim.Z) continue;
+                if (b.RGives[i] >= best) continue;
+                best = b.RGives[i];
+                lane = b.RX[i] < 0f ? -1 : +1;
+            }
+            return lane;
         }
 
         /// <summary>그 순간 가장 큰 통이 있는 쪽. 사람이 하는 선택을 흉내 낸 것뿐이다</summary>
