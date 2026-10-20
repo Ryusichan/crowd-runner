@@ -85,6 +85,27 @@ namespace CrowdFire.Core
         public readonly float[] EHurt = new float[EnemyCap];
         readonly float[] eAtkT = new float[EnemyCap];
 
+        // ── 좀비 군단 (2026-10-20) ─────────────────────────────────────────────
+        // 오너: *"우리가 좀비야. 적은 인간이고 인간이 총을 쏘는데 우린 그걸 뚫고 가는 거지. +40 등을 먹으면서,
+        // 데미지를 입더라도 뚫으면서 가고, 가까이 가면 (실제 공격이 아니고) 인간들이 쓰러지고 그 수만큼
+        // 좀비 수가 늘어나는 구조."* 그래서 쏘는 쪽이 뒤집혔다: **인간이 곧은 총알로 군단을 쏘고**, 군단은
+        // 안 쏜다. 군단 가장자리에 닿은 인간은 **감염되어 쓰러지고** 군단이 한 명 는다.
+        /// <summary>참이면 위 규칙. 거짓이면 예전(군단이 쏘는) 규칙 — 되돌릴 때만 쓴다</summary>
+        public static bool HumansShoot = true;
+        /// <summary>인간 소총 — 사거리 · 발사 간격 · 한 발 피해(좀비 HP 기준)</summary>
+        // **좀비는 세 발에 쓰러진다** (오너 2026-10-20) — 한 발 피해 = 좀비 HP(10)의 1/3
+        public const float GunRange = 14f, GunInterval = 0.9f, GunDamage = 10f / 3f;
+        /// <summary>쏜 순간 인간 총구가 번쩍이는 시간</summary>
+        public readonly float[] EFlash = new float[EnemyCap];
+        /// <summary>감염시킨 인간 수 (= 늘어난 좀비)</summary>
+        public int Converted;
+        /// <summary>대열 중심 x (길 안으로 옮긴 뒤) — 좀비퀸이 여기 선다</summary>
+        public float FormCX;
+
+        const int ABinCap = 96;
+        readonly int[] abins = new int[BinCount * ABinCap];
+        readonly int[] abinN = new int[BinCount];
+
         // ── 충돌 기록 (2026-10-20) ─────────────────────────────────────────────
         // 오너: *"인원충돌로 우리쪽 인원 줄어드는 효과등도 좀더 디테일하게."* 손실은 수치로만 깎여
         // **어디서 누가 죽었는지** 가 없었다. 화면이 그 자리를 그리도록 남긴다 — 규칙은 그대로다
@@ -192,11 +213,21 @@ namespace CrowdFire.Core
             // 됐다 (`docs/shots`). 라스트워는 병사 하나하나가 읽힌다 — 피치 0.55 m. 109 명이면 반지름 3.2 m 로
             // 9 m 길에 들어간다
             // 1.25² (피치 0.55) 도 헬멧이 맞닿았다 — 이 모델은 머리가 크다. 피치 0.7 (1.6²)
-            const float PerPerson = 0.19f * 1.6f * 1.6f;
+            // 좀비 군단은 **뭉친다** (오너 2026-10-20: *"군단이 너무 넓다, 더 밀집해도 된다"*). 피치 0.7 → 0.5 m.
+            // 인간이 곧게만 쏘므로 좁은 군단일수록 차지하는 줄이 적어 **비켜서 덜 맞는다**
+            const float PerPerson = 0.19f * 1.15f * 1.15f;
             float r = (float)System.Math.Sqrt(n * PerPerson / 3.14159265f);
             FormRx = r * 0.78f; FormRz = r * 1.55f;
             float lim = roadWidth * 0.5f - 0.3f;
             const float Golden = 2.39996323f;
+            // **대열은 통째로 길 안에 든다** (오너 2026-10-20 사진: 오른쪽으로 끌면 둥근 무리가 연석에
+            // 눌린 벽이 됐다). 전에는 병사 하나하나를 길 끝에서 잘라 그 자리에 쌓였다. 이제 중심을
+            // 옮기고, 그래도 넓으면 가로만 눌러 **모양을 지킨다**
+            float sx = 1f, halfW = r * 0.78f;
+            if (halfW > lim) { sx = lim / halfW; halfW = lim; }
+            if (cx > lim - halfW) cx = lim - halfW;
+            if (cx < -lim + halfW) cx = -lim + halfW;
+            FormCX = cx;
 
             for (int i = 0; i < n; i++)
             {
@@ -205,9 +236,7 @@ namespace CrowdFire.Core
                 // **길을 따라 길쭉한 타원.** 원반이면 300 명이 길 폭(9 m)에 눌려 헬멧이 맞닿은 돔이
                 // 된다 (z234 사진). 라스트워 소대는 앞뒤로 긴 대열이다 — 폭 0.78 배, 길이 1.55 배
                 const float ElongX = 0.78f, ElongZ = 1.55f;
-                float x = cx + (float)System.Math.Cos(a) * rad * ElongX;
-                if (x < -lim) x = -lim;
-                if (x > lim) x = lim;
+                float x = cx + (float)System.Math.Cos(a) * rad * ElongX * sx;
                 AX[i] = x;
                 AZ[i] = cz + (float)System.Math.Sin(a) * rad * ElongZ;
                 // **새로 들어온 병사는 발사 시점을 흩어 둔다.** 전부 0 이면 600 발이 한 프레임에
@@ -282,6 +311,24 @@ namespace CrowdFire.Core
 
             PruneBarrels(allyZ);
             Stream(dt, allyZ);
+            if (HumansShoot)
+            {
+                AllyBins();
+                StepHumans(dt, ref allies, allyZ, allyX, a);
+                StepBullets(dt);
+                // 좀비는 **몸으로 민다** — 닿는 즉시 감염이라 오래 막히지 않는다. 앞에 겹친 인간이 많으면
+                // 조금 무거워질 뿐이다 (예전 80 % 감속은 군단이 쏘며 서 있던 시절의 것)
+                int nearH = 0;
+                for (int i = 0; i < EnemyCount; i++)
+                {
+                    if (EState[i] == 2 || EZ[i] - allyZ >= PressureRange || EZ[i] < allyZ) continue;
+                    float pu = (EX[i] - FormCX) / (FormRx > 0.6f ? FormRx : 0.6f);
+                    if (pu > -1.15f && pu < 1.15f) nearH++;
+                }
+                float capH = allies * 0.5f + 4f;
+                float ph = nearH / capH; if (ph > 1f) ph = 1f;
+                return 1f - 0.3f * ph;
+            }
             StepEnemies(dt, ref allies, allyZ, allyX, a, e);
             Candidates(allyZ);
             FirePerSoldier(dt, a);
@@ -339,7 +386,7 @@ namespace CrowdFire.Core
                     EZ[i] = z0 + Hash01(hs + 1) * 6f;
                 }
                 EHp[i] = EMaxHp[i] = UnitStats.Zombie.hp * 3f;
-                EState[i] = 0; EDieT[i] = 0f; eAtkT[i] = 0f; EHurt[i] = 0f; EAttack[i] = 0f;
+                EState[i] = 0; EDieT[i] = 0f; eAtkT[i] = (Hash01(hs + 2) * GunInterval); EHurt[i] = 0f; EAttack[i] = 0f; EFlash[i] = 0f;
 
                 pending[0].left = left - 1;
                 if (pending[0].left <= 0)
@@ -347,6 +394,93 @@ namespace CrowdFire.Core
                     for (int k = 1; k < pendingCount; k++) pending[k - 1] = pending[k];
                     pendingCount--;
                 }
+            }
+        }
+
+        /// <summary>좀비를 x 칸에 나눠 둔다 — 인간마다 자기 줄의 맨 앞 좀비만 찾으면 된다</summary>
+        void AllyBins()
+        {
+            for (int k = 0; k < BinCount; k++) abinN[k] = 0;
+            for (int i = 0; i < AllyCount; i++)
+            {
+                int k = Bin(AX[i]);
+                if (abinN[k] < ABinCap) abins[k * ABinCap + abinN[k]++] = i;
+            }
+        }
+
+        /// <summary>그 인간 **바로 앞 줄**(−z 쪽)에서 가장 가까운 좀비. 없으면 −1</summary>
+        int ZombieInLane(float x, float z)
+        {
+            int best = -1; float bz = float.MinValue;
+            int k0 = Bin(x);
+            for (int k = k0 - 1; k <= k0 + 1; k++)
+            {
+                if (k < 0 || k >= BinCount) continue;
+                for (int q = 0; q < abinN[k]; q++)
+                {
+                    int j = abins[k * ABinCap + q];
+                    float dz = z - AZ[j];
+                    if (dz <= 0f || dz > GunRange) continue;
+                    float dx = AX[j] - x;
+                    if (dx > LaneHalf || dx < -LaneHalf) continue;
+                    if (AZ[j] > bz) { bz = AZ[j]; best = j; }
+                }
+            }
+            return best;
+        }
+
+        void StepHumans(float dt, ref float allies, float allyZ, float allyX, UnitStats a)
+        {
+            for (int i = EnemyCount - 1; i >= 0; i--)
+            {
+                if (EFlash[i] > 0f) EFlash[i] -= dt;
+                if (EState[i] == 2)
+                {
+                    EDieT[i] += dt;
+                    if (EDieT[i] >= DeathTime) Remove(i);
+                    continue;
+                }
+                float dz = EZ[i] - allyZ;
+                float u = (EX[i] - FormCX) / (FormRx > 0.6f ? FormRx : 0.6f);
+                float edge = u > -1f && u < 1f ? FormRz * (float)System.Math.Sqrt(1f - u * u) : 0f;
+                float gap = (dz >= 0f ? dz : -dz) - edge;
+                bool overlaps = u > -1.15f && u < 1.15f;
+                if (overlaps && gap <= Contact)
+                {
+                    // **감염.** 닿은 인간은 쓰러지고 군단이 한 명 는다 — 공격 동작은 없다 (오너 지시)
+                    EState[i] = 2; EDieT[i] = 0f;
+                    allies += 1f; Converted++;
+                    KilledThisTick++; EnemiesKilled += 1f;
+                    int dk = DeathSerial++ & (DeathRing - 1);
+                    DeadX[dk] = EX[i]; DeadZ[dk] = EZ[i];
+                    continue;
+                }
+                if (dz < -8f) { Remove(i); Passed++; continue; }
+
+                // **쏜다.** 자기 앞 줄에 좀비가 사거리 안에 있으면 그 맨 앞을 곧게 쏜다
+                if (dz <= 0f) continue;
+                eAtkT[i] += dt;
+                if (eAtkT[i] < GunInterval) continue;
+                int j = ZombieInLane(EX[i], EZ[i]);
+                if (j < 0) { eAtkT[i] = GunInterval; continue; }   // 겨눌 것이 없으면 장전한 채 기다린다
+                eAtkT[i] -= GunInterval;
+                EFlash[i] = FlashTime;
+                ShotsThisTick++; HitsThisTick++;
+                float kill = GunDamage / a.hp;
+                if (kill > allies) kill = allies;
+                float before = allies;
+                allies -= kill;
+                LostThisTick += kill; AlliesLost += kill;
+                int hk = AllyHitSerial++ & (HitRing - 1);
+                AllyHitX[hk] = AX[j]; AllyHitZ[hk] = AZ[j];
+                int crossed = (int)(before + 0.999f) - (int)(allies + 0.999f);
+                for (int c = 0; c < crossed; c++)
+                {
+                    int ak = AllyDeathSerial++ & (HitRing - 1);
+                    AllyDeathX[ak] = EX[i]; AllyDeathZ[ak] = EZ[i];
+                }
+                if (HitCount < HitCap) { HitX[HitCount] = AX[j]; HitZ[HitCount] = AZ[j]; HitCount++; }
+                Tracer(dt, EX[i], EZ[i] - 0.6f, EX[i], AZ[j]);
             }
         }
 
@@ -559,12 +693,13 @@ namespace CrowdFire.Core
             if (tracerAccum < 1f || BulletCount >= BulletCap) return;
             tracerAccum -= 1f;
 
-            // 곧게 앞으로 — 표적까지의 **z 거리**만큼 날아간다
-            float len = tz - sz;
+            // 곧게 — 표적까지의 **z 거리**만큼. 인간의 총알은 −z(군단 쪽)로 간다
+            float len = tz - sz, dirZ = len >= 0f ? 1f : -1f;
+            if (len < 0f) len = -len;
             if (len < 1e-3f) return;
             int b = BulletCount++;
             BX[b] = sx; BZ[b] = sz;
-            BDX[b] = 0f; BDZ[b] = 1f;
+            BDX[b] = 0f; BDZ[b] = dirZ;
             bLife[b] = 0f; bRange[b] = len;
         }
 
@@ -623,7 +758,7 @@ namespace CrowdFire.Core
             {
                 EX[i] = EX[last]; EZ[i] = EZ[last]; EHp[i] = EHp[last]; EMaxHp[i] = EMaxHp[last];
                 EState[i] = EState[last]; EDieT[i] = EDieT[last]; eAtkT[i] = eAtkT[last]; EHurt[i] = EHurt[last];
-                EAttack[i] = EAttack[last];
+                EAttack[i] = EAttack[last]; EFlash[i] = EFlash[last];
             }
             for (int c = 0; c < candCount; c++)
             {

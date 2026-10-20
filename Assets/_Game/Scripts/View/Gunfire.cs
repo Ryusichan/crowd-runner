@@ -45,6 +45,20 @@ namespace CrowdFire.View
         public int LastTracers { get; private set; }
         public int LastMuzzles { get; private set; }
 
+        Mesh bulletMesh;
+        /// <summary>
+        /// **총알 모양** (오너 2026-10-20: *"네모 모양이라 너무 심플해 — 총알처럼"*). 상자를 늘인 막대 대신
+        /// 양 끝이 둥근 캡슐 — 날아가는 탄두로 읽힌다. 내장 메시라 자산이 없다
+        /// </summary>
+        Mesh BulletMesh()
+        {
+            if (bulletMesh != null) return bulletMesh;
+            var tmp = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            bulletMesh = tmp.GetComponent<MeshFilter>().sharedMesh;
+            Object.Destroy(tmp);
+            return bulletMesh;
+        }
+
         public void Init()
         {
             var tmp = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -93,15 +107,17 @@ namespace CrowdFire.View
                 if (dir.sqrMagnitude < 1e-6f) dir = Vector3.forward;
                 // 2026-10-18 라스트워 레퍼런스: 예광탄은 **가늘고 길다**. 0.07 굵기는 멀리서 막대로
                 // 보였고, 진짜 군인 모델이 들어오면서 총구 높이도 1.05 → 1.22 (소총은 가슴 높이)
+                // 캡슐은 Y 축이 길다 — 앞(진행 방향)으로 눕힌다
                 tracers[i] = Matrix4x4.TRS(
                     new Vector3(b.BX[i], 1.0f, b.BZ[i]),
-                    Quaternion.LookRotation(dir, Vector3.up),
+                    Quaternion.LookRotation(dir, Vector3.up) * Quaternion.Euler(90f, 0f, 0f),
                     // 1.45 m 막대가 **총이 날아가는 것처럼** 보였다 (오너). 레퍼런스의 탄은 작은 섬광이다
                     // 0.05 × 0.42 는 너무 작아 안 보였다 (오너). 굵고 밝은 탄 — 막대가 아니라 **총알**로 읽히는 길이
-                    new Vector3(0.2f, 0.2f, 0.8f));
+                    // 캡슐 기본 높이가 2 라 Y 0.38 → 길이 0.76 m, 굵기 0.2 m. 양 끝이 둥글어 **탄두**로 읽힌다
+                    new Vector3(0.2f, 0.38f, 0.2f));
             }
             LastTracers = n;
-            if (n > 0) Graphics.RenderMeshInstanced(rpTracer, mesh, 0, tracers, n);
+            if (n > 0) Graphics.RenderMeshInstanced(rpTracer, BulletMesh(), 0, tracers, n);
 
             // ── 총구 화염 ─────────────────────────────────────────────────────────
             // **쏜 병사 자리에서 터진다.** 전에는 발사율로 개수만 맞춰 아무 데나 뿌렸는데,
@@ -109,6 +125,16 @@ namespace CrowdFire.View
             // `AFlash` 를 켜 주므로(`Battle.FirePerSoldier`) 여기서는 그것만 읽는다 —
             // 화면에 보이는 불 하나가 **실제로 일어난 발사 판정 하나**다
             int m = 0;
+            // 2026-10-20 좀비 군단: **쏘는 쪽은 인간이다** — 화염은 인간 총구(−z 쪽)에서 난다
+            if (Battle.HumansShoot)
+                for (int i = 0; i < b.EnemyCount && m < MuzzleCap; i++)
+                {
+                    if (b.EFlash[i] <= 0f || b.EState[i] == 2) continue;
+                    float kq = b.EFlash[i] / Battle.FlashTime;
+                    float sq = 0.18f + kq * 0.3f;
+                    muzzles[m++] = Matrix4x4.TRS(new Vector3(b.EX[i], 1.0f, b.EZ[i] - 1.0f),
+                        Quaternion.Euler(0f, 45f * (i & 1), 0f), new Vector3(sq * 1.5f, sq * 0.35f, sq * 1.5f));
+                }
             for (int i = 0; i < b.AllyCount && m < MuzzleCap; i++)
             {
                 if (b.AFlash[i] <= 0f) continue;

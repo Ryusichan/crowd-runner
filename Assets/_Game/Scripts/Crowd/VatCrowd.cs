@@ -93,6 +93,26 @@ namespace CrowdFire.Crowd
 
         /// <summary>참이면 개체마다 자세가 멈춘다 — 쓰러진 몸용</summary>
         public bool FreezePose;
+
+        /// <summary>
+        /// **움직임을 멈춘 머티리얼로 그린다** (`standin_vat{suffix}_down`, 클립 속도 0). 쓰러진 몸 전용.
+        /// 개체별 위상으로 멈추는 `FreezePose` 는 이 경로에서 값이 안 넘어가 효과가 없었다
+        /// </summary>
+        public void UseStill()
+        {
+            var m = Resources.Load<Material>("M0/standin_vat" + suffix + "_down");
+            if (m == null) { Debug.LogWarning("[CR] 멈춘 머티리얼이 없다: standin_vat" + suffix + "_down — 쓰러진 몸이 계속 움직인다"); return; }
+            mat = m;
+            var keep = rp.worldBounds;
+            rp = new RenderParams(m)
+            {
+                worldBounds = keep,
+                shadowCastingMode = ShadowCastingMode.Off,
+                receiveShadows = false,
+                lightProbeUsage = LightProbeUsage.Off,
+                reflectionProbeUsage = ReflectionProbeUsage.Off,
+            };
+        }
         float clipSpeed = 1f;
 
         public void Sync(CrowdField f)

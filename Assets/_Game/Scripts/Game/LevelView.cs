@@ -39,7 +39,8 @@ namespace CrowdFire.View
         // 손가락을 움직여도 총이 따라오는 게 안 보인다 · 군단이 커지는 순간이 숫자로만 온다 ·
         // 질 때 소대가 줄어드는 게 안 보인다. 아래가 그 넷을 그린다. **로직은 한 줄도 안 바꾼다** —
         // `Battle` 이 남기는 기록(조준점 · 사망 자리 · 깨진 통)을 읽기만 한다.
-        VatCrowd corpseView, allyDownView;
+        VatCrowd corpseView, allyDownView, dyingView;
+        CrowdField dying;
         CrowdField corpses, allyDowns;
         // 시체도 정점을 먹는다 — 300 이면 그것만으로 군단 하나 값이었다
         const int CorpseCap = 60, AllyDownCap = 40;
@@ -60,6 +61,10 @@ namespace CrowdFire.View
         // 대열 **바깥 번호부터** 눕혔다 — 좀비가 문 자리와 상관없이. 이제 `Battle` 이 남기는
         // *문 자리* · *죽은 자리* 를 읽어 그 앞에서 움찔하고, 그 앞에서 끌려 넘어진다
         int seenAllyHit, seenAllyDeath;
+        const int ConvCap = 256;
+        readonly float[] convX = new float[ConvCap], convZ = new float[ConvCap];
+        int convHead, convTail;
+        float gainFloatAcc, gainFloatT; Vector3 gainFloatAt;
         const int RecentHits = 64;
         readonly float[] hitX = new float[RecentHits], hitZ = new float[RecentHits], hitT = new float[RecentHits];
         int hitHead;
@@ -122,7 +127,7 @@ namespace CrowdFire.View
         float spreadNow = -1f;
         BlobShadows shadows;
         Camera cam;
-        float camK;   // 병력에 따른 카메라 거리 배율 (1 = 20 명 기준)
+        float camK, camX;   // 병력에 따른 카메라 거리 배율 (1 = 20 명 기준)
         float wallHp0;
 
         void Awake()
@@ -133,15 +138,20 @@ namespace CrowdFire.View
             // 2026-10-18: 회색 캡슐 대역(`_lo`) 대신 **파란 군인(+소총)** 과 **좀비** —
             // `Editor/CrowdBake` 가 굽는다. 오너: *"라스트워처럼."* 구운 것이 없으면 `VatCrowd`
             // 가 에러를 찍고 안 그리므로, 조용히 대역으로 떨어지지 않는다 (그게 맞다)
-            allyView = new VatCrowd("_soldier");
-            foeView = new VatCrowd("_zombie", foe: true);
+            // 2026-10-20 **우리가 좀비, 적은 총 든 인간** (오너). 군단 = 좀비 모델, 적 = 사격 자세의 군인
+            allyView = new VatCrowd(Battle.HumansShoot ? "_zombie" : "_soldier");
+            foeView = new VatCrowd(Battle.HumansShoot ? "_human" : "_zombie", foe: true);
             allyView.Init(renderCap); foeView.Init(renderCap);
             allyView.SetActive(true); foeView.SetActive(true);
+            if (Battle.HumansShoot) BuildQueen();
             // 쓰러진 몸 — 같은 모델을 **포즈를 얼려** 눕힌다 (`VatCrowd.FreezePose`)
-            corpseView = new VatCrowd("_zombie", foe: true); corpseView.Init(CorpseCap);
-            corpseView.SetActive(true); corpseView.FreezePose = true;
-            allyDownView = new VatCrowd("_soldier"); allyDownView.Init(AllyDownCap);
-            allyDownView.SetActive(true); allyDownView.FreezePose = true;
+            corpseView = new VatCrowd(Battle.HumansShoot ? "_human" : "_zombie", foe: true); corpseView.Init(CorpseCap);
+            corpseView.SetActive(true); corpseView.FreezePose = true; corpseView.UseStill();
+            dyingView = new VatCrowd(Battle.HumansShoot ? "_human" : "_zombie", foe: true); dyingView.Init(renderCap);
+            dyingView.SetActive(true); dyingView.UseStill();
+            dying = new CrowdField(renderCap, 99);
+            allyDownView = new VatCrowd(Battle.HumansShoot ? "_zombie" : "_soldier"); allyDownView.Init(AllyDownCap);
+            allyDownView.SetActive(true); allyDownView.FreezePose = true; allyDownView.UseStill();
             corpses = new CrowdField(CorpseCap, 31337); allyDowns = new CrowdField(AllyDownCap, 4242);
             prevAX = new float[renderCap]; prevAZ = new float[renderCap]; allyYaw = new float[renderCap];
             spawnT = new float[renderCap]; spawnX = new float[renderCap]; spawnZ = new float[renderCap];
@@ -392,6 +402,7 @@ namespace CrowdFire.View
 
             ReadEvents(sim);
             SyncAllies(sim);
+            TickQueen(sim);
             allyView.Sync(allies); allyView.Draw();
             TickDowns(sim);
             allyDownView.Sync(allyDowns); allyDownView.Draw();
@@ -525,7 +536,11 @@ namespace CrowdFire.View
             camK = camK <= 0f ? wantK : Mathf.Lerp(camK, wantK, 1f - Mathf.Exp(-Time.deltaTime * 2.5f));
             float ck = camK + camKick;
             var shake = lossHeat > 0.02f ? Random.insideUnitSphere * Mathf.Min(0.22f, lossHeat * 0.5f) : Vector3.zero;
-            cam.transform.position = new Vector3(0f, 28.0f * ck, sim.Z - 17.0f * ck) + shake;
+            // 좌우로 **반쯤** 따라간다 — 가장자리로 간 소대가 화면 끝에 숨지 않게 (2026-10-20).
+            // 다 따라가면 길이 흔들려 어디로 가는지가 안 보인다. 뒤로 20.5 m — 소대가 화면 58 % 높이,
+            // 아래 병력 숫자와 안 겹친다
+            camX = Mathf.Lerp(camX, sim.X * 0.5f, 1f - Mathf.Exp(-Time.deltaTime * 4f));
+            cam.transform.position = new Vector3(camX, 28.0f * ck, sim.Z - 20.5f * ck) + shake;
         }
 
         /// <summary>
@@ -566,14 +581,14 @@ namespace CrowdFire.View
             rt.anchorMin = new Vector2(0.5f, 0f);
             rt.anchorMax = new Vector2(0.5f, 0f);
             rt.pivot = new Vector2(0.5f, 0f);
-            rt.anchoredPosition = new Vector2(0f, 110f);
+            rt.anchoredPosition = new Vector2(0f, 36f);
             rt.sizeDelta = new Vector2(600f, 190f);
 
             countUi = go.AddComponent<UnityEngine.UI.Text>();
             countUi.font = Resources.Load<Font>("Fonts/Jua-Regular")
                         ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             if (countUi.font == null) Debug.LogError("[CR] 글꼴을 못 찾았다 — 병력 수가 안 나온다");
-            countUi.fontSize = 150;
+            countUi.fontSize = 112;
             countUi.alignment = TextAnchor.LowerCenter;
             countUi.color = Color.white;
             countUi.raycastTarget = false;   // 손가락은 이 아래 길까지 닿아야 한다
@@ -589,7 +604,7 @@ namespace CrowdFire.View
             var bgRt = bgGo.AddComponent<RectTransform>();
             bgRt.anchorMin = bgRt.anchorMax = new Vector2(0.5f, 0f);
             bgRt.pivot = new Vector2(0.5f, 0f);
-            bgRt.anchoredPosition = new Vector2(0f, 300f);
+            bgRt.anchoredPosition = new Vector2(0f, 176f);
             bgRt.sizeDelta = new Vector2(420f, 22f);
             var bg = bgGo.AddComponent<UnityEngine.UI.Image>();
             bg.color = new Color(0.05f, 0.04f, 0.08f, 0.75f); bg.raycastTarget = false;
@@ -811,9 +826,24 @@ namespace CrowdFire.View
                 {
                     float stagger = Mathf.Min(0.4f, (i - prevAllyN) * 0.006f);
                     spawnT[i] = SpawnDur + stagger;
+                    if (convTail < convHead)
+                    {
+                        // 감염된 자리에서 일어난다
+                        spawnX[i] = convX[convTail % ConvCap]; spawnZ[i] = convZ[convTail % ConvCap]; convTail++;
+                        spawnT[i] = SpawnDur;
+                        continue;
+                    }
                     spawnX[i] = ox + Mathf.Sin(i * 2.399f) * 0.6f;
                     spawnZ[i] = oz + Mathf.Cos(i * 2.399f) * 0.4f;
                 }
+            }
+            if (convHead - convTail > ConvCap) convTail = convHead - ConvCap;
+            // 감염 숫자는 모아서 — 0.3 초마다 초록 +N
+            gainFloatT -= Time.deltaTime;
+            if (gainFloatAcc > 0f && gainFloatT <= 0f)
+            {
+                Floater("+" + Mathf.RoundToInt(gainFloatAcc), gainFloatAt, new Color(0.55f, 1f, 0.45f));
+                gainFloatAcc = 0f; gainFloatT = 0.3f;
             }
             // **잃은 병사는 그 자리에 쓰러진다.** 바깥 고리(번호가 큰 쪽)부터 빠지므로 지난 프레임의
             // 그 자리에 눕힌다 — 소대가 *깎여 나가는* 것이 보여야 질 때 긴장이 생긴다
@@ -861,8 +891,15 @@ namespace CrowdFire.View
             float steer = Mathf.Clamp(vx * 2.2f, -16f, 16f);
             float ky = 1f - Mathf.Exp(-dt * 10f);
 
+            float qx = b.FormCX, qz = sim.Z;
             for (int i = 0; i < n; i++)
             {
+                // 퀸이 선 자리의 좀비는 그리지 않는다 — 2 배 몸집과 겹친다
+                if (queen != null && spawnT[i] <= 0f)
+                {
+                    float qdx = b.AX[i] - qx, qdz = b.AZ[i] - qz;
+                    if (qdx * qdx + qdz * qdz < 0.8f * 0.8f) { prevAX[i] = b.AX[i]; prevAZ[i] = b.AZ[i]; continue; }
+                }
                 int k = allies.Count;
                 allies.Add(1, 0, 0f, 1f);
                 float x = b.AX[i], z = b.AZ[i], lift = 0f;
@@ -917,6 +954,12 @@ namespace CrowdFire.View
             {
                 int r = seenDeath & (Battle.DeathRing - 1);
                 PushCorpse(b.DeadX[r], b.DeadZ[r]);
+                // 감염된 인간이 쓰러진 자리 — 그 수만큼 늘어난 좀비가 **거기서 일어나** 군단으로 간다
+                if (Battle.HumansShoot)
+                {
+                    convX[convHead % ConvCap] = b.DeadX[r]; convZ[convHead % ConvCap] = b.DeadZ[r]; convHead++;
+                    gainFloatAcc += 1f; gainFloatAt = new Vector3(b.DeadX[r], 2.4f, b.DeadZ[r]);
+                }
             }
 
             if (b.AllyHitSerial < seenAllyHit) seenAllyHit = 0;
@@ -990,8 +1033,18 @@ namespace CrowdFire.View
             PushAllyDown(x, z, Mathf.Clamp(yaw, -80f, 80f));
             int k = (allyDownHead - 1) % AllyDownCap;
             float dx = px - x, dz = pz - z, d = Mathf.Max(0.01f, Mathf.Sqrt(dx * dx + dz * dz));
-            allyDownVX[k] = dx / d * 0.7f; allyDownVZ[k] = dz / d * 0.7f;
-            allyDownSign[k] = -1f;
+            if (Battle.HumansShoot)
+            {
+                // 총에 맞은 좀비 — 쏜 인간 **반대쪽으로** 밀리며 뒤로 넘어간다
+                allyDownVX[k] = -dx / d * 0.5f; allyDownVZ[k] = -dz / d * 0.5f;
+                allyDownSign[k] = 1f;
+                allyDowns.Yaw[k] = 0f;
+            }
+            else
+            {
+                allyDownVX[k] = dx / d * 0.7f; allyDownVZ[k] = dz / d * 0.7f;
+                allyDownSign[k] = -1f;
+            }
             Burst(new Vector3(x, 1.0f, z), 4);
         }
 
@@ -1074,6 +1127,61 @@ namespace CrowdFire.View
             }
         }
 
+        // ── 좀비퀸 (2026-10-20) ─────────────────────────────────────────────────
+        // 오너: *"최초에 디자인해 놓은 좀비퀸을 가운데로 배치하고 일반 좀비보다 크기 2 배."*
+        // 좀비퀸 저장소의 원본(`Owner/Queen/ZombieQueen.fbx` + 텍스처)을 그대로 쓴다. 한 명뿐이라 VAT 로
+        // 깎지 않고 애니메이터로 달린다. 키는 첫 프레임에 **재서** 일반 좀비(1.85 m)의 두 배로 맞춘다
+        Transform queen; SkinnedMeshRenderer queenSmr; bool queenSized;
+        const float QueenHeight = 3.7f;
+
+        void BuildQueen()
+        {
+            var prefab = Resources.Load<GameObject>("Queen/ZombieQueen");
+            if (prefab == null) { Debug.LogWarning("[CR] 좀비퀸 모델이 없다 (Resources/Queen/ZombieQueen)"); return; }
+            var go = Instantiate(prefab, transform);
+            go.name = "ZombieQueen";
+            var an = go.GetComponentInChildren<Animator>();
+            if (an == null) an = go.AddComponent<Animator>();
+            an.runtimeAnimatorController = Resources.Load<RuntimeAnimatorController>("Queen/QueenRun");
+            an.applyRootMotion = false;
+            an.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            if (an.runtimeAnimatorController == null) Debug.LogWarning("[CR] 퀸 달리기 컨트롤러가 없다 — 서 있기만 한다");
+            var tex = Resources.Load<Texture2D>("Queen/queen_basecolor");
+            var sh = Shader.Find("Legacy Shaders/Diffuse") ?? Shader.Find("Standard");
+            var mat = new Material(sh) { mainTexture = tex, color = Color.white };
+            foreach (var r in go.GetComponentsInChildren<Renderer>())
+            {
+                var ms = new Material[r.sharedMaterials.Length];
+                for (int i = 0; i < ms.Length; i++) ms[i] = mat;
+                r.sharedMaterials = ms;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            queenSmr = go.GetComponentInChildren<SkinnedMeshRenderer>();
+            if (queenSmr != null) queenSmr.updateWhenOffscreen = true;
+            queen = go.transform;
+        }
+
+        void TickQueen(Sim sim)
+        {
+            if (queen == null) return;
+            if (!queenSized && queenSmr != null)
+            {
+                float h = queenSmr.bounds.size.y;
+                if (h > 0.05f)
+                {
+                    queen.localScale *= QueenHeight / h;
+                    queenSized = true;
+                    Debug.Log("[CR] 좀비퀸 키 " + h.ToString("F2") + " m → " + QueenHeight + " m");
+                }
+            }
+            bool alive = sim.Units > 0;
+            if (queen.gameObject.activeSelf != alive) queen.gameObject.SetActive(alive);
+            queen.position = new Vector3(sim.Battle.FormCX, 0f, sim.Z);
+            // 끄는 쪽으로 살짝 몸을 튼다 — 군단과 같이
+            float vx = sim.X - prevSimX;
+            queen.rotation = Quaternion.Euler(0f, Mathf.Clamp(vx * 90f, -15f, 15f), 0f);
+        }
+
         /// <summary>떠오르는 숫자 — 통이 깨진 자리에서 `+30` 이 튀어 오른다</summary>
         void Floater(string text, Vector3 at, Color c)
         {
@@ -1117,13 +1225,29 @@ namespace CrowdFire.View
         {
             var b = sim.Battle;
             foes.Clear();
+            dying.Clear();
             int cap = renderCap;
             for (int i = 0; i < b.EnemyCount && foes.Count < cap; i++)
             {
+                if (b.EState[i] == 2)
+                {
+                    // **넘어지는 몸은 다리가 멈춘다** — 달리는 군중 머티리얼로 그리면 넘어가면서도 뛰었다
+                    if (dying.Count < dying.Cap)
+                    {
+                        int dk = dying.Count; dying.Add(1, 1, 0f, 1f);
+                        float t0 = Mathf.Clamp01(b.EDieT[i] / Battle.DeathTime);
+                        float e0 = t0 * t0 * (3f - 2f * t0);
+                        dying.X[dk] = b.EX[i]; dying.Z[dk] = b.EZ[i] + 0.7f * e0;
+                        dying.Lean[dk] = 90f * e0; dying.Lift[dk] = 0.15f * e0;
+                        dying.Yaw[dk] = HashYaw(b.EX[i], b.EZ[i]); dying.Scale[dk] = 1f;
+                        dying.Phase[dk] = 0f;
+                    }
+                    continue;
+                }
                 int k = foes.Count;
                 foes.Add(1, 1, 0f, 1f);
                 float fx = b.EX[i], fz = b.EZ[i], lean = 0f, yaw = 0f, sc = 1f, lift = 0f;
-                if (b.EState[i] == 2)
+                if (false)
                 {
                     // **넘어간다.** 전에는 군중에서 빼고 올리브 상자를 눕혔다 — 맞았는지가 안 읽혔다.
                     // 발을 축으로 뒤로 젖히며 맞은 힘에 0.7 m 밀린다. 끝나면 `corpses` 가 이어받는다
@@ -1165,6 +1289,7 @@ namespace CrowdFire.View
                 foes.Phase[k] = ph - Mathf.Floor(ph);
             }
             foeView.Sync(foes); foeView.Draw();
+            dyingView.Sync(dying); dyingView.Draw();
         }
 
         /// <summary>

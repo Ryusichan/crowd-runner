@@ -1,0 +1,2 @@
+Zombie Queen — owner-generated model (Tripo AI, 2026-09-17), converted by ArtSource/Queen/tools (decimate 30k, 1K textures, Humanoid-named Generic rig, UACP CC0 clips retargeted).
+License: owner-generated content; Tripo terms apply (commercial use per plan — see docs/THIRD_PARTY_ASSETS.md CH1_CHAR_020). Clips derived from Quaternius Ultimate Animated Character Pack (CC0 1.0).

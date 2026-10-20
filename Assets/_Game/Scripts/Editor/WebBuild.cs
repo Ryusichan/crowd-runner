@@ -68,6 +68,8 @@ namespace CrowdFire.EditorTools
             // 진짜 캐릭터 (파란 군인 + 좀비) — Resources/M0 는 추적하지 않으므로 빌드가 굽는다
             CrowdBake.Soldier();
             CrowdBake.Zombie();
+            CrowdBake.Human();
+            CrowdBake.Queen();
             AssetDatabase.SaveAssets();
             AssertEverythingLoadedByNameExists();
             EnsureScene();

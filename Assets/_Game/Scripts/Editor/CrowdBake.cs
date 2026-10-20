@@ -34,6 +34,8 @@ namespace CrowdFire.EditorTools
         {
             Soldier();
             Zombie();
+            Human();
+            Queen();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }
@@ -52,6 +54,36 @@ namespace CrowdFire.EditorTools
                  // 손 뼈 Y 로 0.28 m 밀어 개머리판은 손에, 총구는 앞에
                  new Vector3(0f, 0.28f, 0f), Quaternion.identity, 1.0f,
                  new Color(0.46f, 0.76f, 0.86f), 1.80f);
+        }
+
+        /// <summary>
+        /// **적이 된 인간** (2026-10-20 좀비 군단 전환). 군인 모델에 소총, 자세는 `Shoot_OneHanded` —
+        /// 서서 겨눈다. 달리는 클립이면 제자리에서 뛰는 것처럼 보인다
+        /// </summary>
+        public static void Human()
+        {
+            var clip = FindClip(Root + "/Characters/BaseCharacter.fbx", "Shoot_OneHanded");
+            Bake("_human",
+                 Root + "/Characters/BlueSoldier_Male.fbx", clip,
+                 Root + "/Weapons/Rifle.fbx", "Fist.R",
+                 new Vector3(0f, 0.28f, 0f), Quaternion.identity, 1.0f,
+                 new Color(0.46f, 0.76f, 0.86f), 1.80f);
+        }
+
+        /// <summary>
+        /// **좀비퀸** — 오너가 처음 디자인한 모델(좀비퀸 저장소 `Owner/Queen`)을 그대로 쓴다. 군중처럼 굽지
+        /// 않고 한 명만 애니메이터로 달린다 — 텍스처가 있고 하나뿐이라 VAT 로 깎을 이유가 없다.
+        /// 여기서는 달리기 컨트롤러만 만든다 (`Resources/Queen/QueenRun.controller`)
+        /// </summary>
+        public static void Queen()
+        {
+            const string Q = "Assets/_Game/Resources/Queen";
+            var clip = FindClip(Q + "/ZombieQueen.fbx", "Run");
+            if (clip == null) return;
+            var path = Q + "/QueenRun.controller";
+            if (AssetDatabase.LoadAssetAtPath<Object>(path) != null) AssetDatabase.DeleteAsset(path);
+            UnityEditor.Animations.AnimatorController.CreateAnimatorControllerAtPathWithClip(path, clip);
+            Debug.Log("[CR] 퀸 컨트롤러: " + path + " (" + clip.name + " " + clip.length.ToString("F2") + "s)");
         }
 
         public static void Zombie()
@@ -348,6 +380,12 @@ namespace CrowdFire.EditorTools
             // 정점색이 있으니 팀 틴트는 **살짝만** (흰색에 가깝게) — 모델의 색이 주인이다
             MakeMat(sh, Out + "/standin_vat" + suffix + ".mat", tex, n, clip, Color.Lerp(Color.white, teamTint, 0.25f));
             MakeMat(sh, Out + "/standin_vat" + suffix + "_foe.mat", tex, n, clip, Color.Lerp(Color.white, teamTint, 0.25f));
+            // **쓰러진 몸용 — 클립 속도 0.** 개체마다 위상을 넘겨 포즈를 멈추려 했는데 이 렌더 경로는
+            // 개체별 값을 셰이더에 안 넘긴다(적 색이 안 먹던 것과 같은 이유). 그래서 누운 몸이 계속 달리며
+            // **꿈틀거렸다** (오너 2026-10-20). 머티리얼째 멈추는 것이 확실하다
+            MakeMat(sh, Out + "/standin_vat" + suffix + "_down.mat", tex, n, clip, Color.Lerp(Color.white, teamTint, 0.25f));
+            var down = AssetDatabase.LoadAssetAtPath<Material>(Out + "/standin_vat" + suffix + "_down.mat");
+            if (down != null) { down.SetFloat("_ClipSpeed", 0f); EditorUtility.SetDirty(down); }
             Debug.Log($"[CR] baked VAT{suffix}: body={nBody} weapon={nWeapon} frames={Frames} tex={n}x{Frames} clip={clip.name} {clip.length:F2}s");
         }
 

@@ -1,52 +1,24 @@
-# 1-1 — **대규모 총격전 프로토타입** (오너 2026-10-12 지시 1~7, 레퍼런스 3 장)
+# 1-1 — **우리가 좀비 군단이다** (오너 2026-10-20)
 #
-# 손가락은 좌우로만 움직인다. 군단은 알아서 쏜다. 고르는 것은 **무엇을 쏘느냐**다.
-#  · 통(`barrel`) — 숫자를 쏴서 깬다. 통 앞에 선 병사는 그동안 적을 안 막는다
-#  · 게이트(`gate`) — 걸어서 지나가면 공짜로 들어온다 (지시 7: 유지한다)
-#  · 적(`enemies`) — 끊임없이 밀려든다 (지시 2)
-#
-# **큰 통은 화력이 돼야 제때 깨진다.** 사거리 18 m 를 지나는 동안만 쏠 수 있으므로,
-# 욕심이 곧 위험이다 — 못 깨면 그 자리의 작은 통도 같이 놓친다.
+# 적은 총 든 인간이다. 인간은 **곧게만** 쏘고, 우리는 안 쏜다. 군단 가장자리에 닿은 인간은 감염되어
+# 쓰러지고 그 수만큼 군단이 는다. 좌우로 움직여 게이트를 먹고, 인간 무리를 골라 들이받고,
+# 총알이 오는 줄은 비켜 간다. 살아서 결승선에 닿으면 돌파다.
 chapter 1
 index 1
 name Choryang Alley
-teaches 숫자는 쏴서 깬다 · 큰 통은 화력이 돼야 깨진다 · 쏘는 동안 적이 붙는다
-
+teaches 닿으면 감염된다 · 총알은 곧게만 온다 — 비켜서 덜 맞는다 · +40 을 먹고 방어선을 뚫는다
 units 20
-road 9
-speed 6.5
-length 290
-rating 1 43 90
+road 13
+speed 6.0
+length 270
+rating 32 106 190
 
-# ① 아직 20 명이다. 큰 쪽(30)은 못 깬다 — 작은 쪽이 맞다
-barrel 50 gives 8 lane L
-barrel 50 gives 30 lane R
-
-# 2026-10-20 곧은 총알 · 지나가는 적으로 규칙이 바뀌어 ×0.6, 최종 1000 으로 다시 쟀다 (살아서 끝에 닿으면 돌파이므로 방어선이 두꺼워야 관문이다).
-# 적은 끊이지 않고, **군단이 자라는 만큼 같이 커진다.** 한 번 잰 것이 있다: 군단은 적이
-# 세 배까지는 아무 일도 없고 **5~6 배에서 무너진다.** 그래서 수가 군단을 따라 올라간다 —
-# 안 그러면 뒤로 갈수록 적이 장식이 된다 (2026-10-12 측정: 전투 손실이 전 경로 0 이었다)
-enemy 80 count 42
-enemy 112 count 66
-enemy 144 count 102
-enemy 176 count 144
-enemy 208 count 252
-enemy 240 count 348
-
-# ② 큰 쪽이 **왼쪽으로 바뀐다** — 한쪽만 붙들고 있으면 안 된다
-barrel 110 gives 45 lane L
-barrel 110 gives 14 lane R
-
-gate 145 | L add 18 | R sub 8
-
-# ③
-barrel 175 gives 22 lane L
-barrel 175 gives 70 lane R
-
-gate 210 | R add 26 | L sub 10
-
-# ④ 마지막 통 — 여기서 번 것이 대군을 넘는 힘이다
-barrel 236 gives 110 lane L
-barrel 236 gives 30 lane R
-
-enemy 262 count 1000 final
+gate 40 | L add 40 | R sub 10
+enemy 70 count 30
+enemy 100 count 45
+gate 120 | R mul 2 | L add 15
+enemy 150 count 70
+gate 175 | L add 40 | R sub 15
+enemy 200 count 100
+gate 215 | R add 60 | L sub 20
+enemy 240 count 240 final
