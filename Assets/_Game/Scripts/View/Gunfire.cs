@@ -98,7 +98,7 @@ namespace CrowdFire.View
                     Quaternion.LookRotation(dir, Vector3.up),
                     // 1.45 m 막대가 **총이 날아가는 것처럼** 보였다 (오너). 레퍼런스의 탄은 작은 섬광이다
                     // 0.05 × 0.42 는 너무 작아 안 보였다 (오너). 굵고 밝은 탄 — 막대가 아니라 **총알**로 읽히는 길이
-                    new Vector3(0.13f, 0.13f, 0.62f));
+                    new Vector3(0.2f, 0.2f, 0.8f));
             }
             LastTracers = n;
             if (n > 0) Graphics.RenderMeshInstanced(rpTracer, mesh, 0, tracers, n);

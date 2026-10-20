@@ -177,9 +177,10 @@ namespace CrowdFire.View
             // 2026-10-20 오너 레퍼런스(탑워 광고 화면): *"화면 구도가 너무 가깝다."* 카메라가 **높고
             // 가파르게** 내려다보고, 내 소대는 화면 **아래 1/3** 에 작게, 위 2/3 는 몰려오는 적과 길이다.
             // 45° · 16 m 높이 · 11 m 뒤 → 소대가 화면 70 % 높이, 화면 위 끝이 소대 앞 약 33 m
-            cam.transform.rotation = Quaternion.Euler(45f, 0f, 0f);
+            // 16 m 에서도 가까웠다 — 세로 화면의 가로 시야각이 29° 뿐이라 거리가 두 배여야 레퍼런스 크기다
+            cam.transform.rotation = Quaternion.Euler(50f, 0f, 0f);
             cam.fieldOfView = 50f;
-            cam.farClipPlane = 300f;
+            cam.farClipPlane = 400f;
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.74f, 0.80f, 0.86f);
             // **안개.** 멀리가 하늘색으로 녹아야 길이 지평선으로 사라진다 — 없으면 끝이 칼로 자른 듯 끊긴다
@@ -523,7 +524,7 @@ namespace CrowdFire.View
             camK = camK <= 0f ? wantK : Mathf.Lerp(camK, wantK, 1f - Mathf.Exp(-Time.deltaTime * 2.5f));
             float ck = camK + camKick;
             var shake = lossHeat > 0.02f ? Random.insideUnitSphere * Mathf.Min(0.22f, lossHeat * 0.5f) : Vector3.zero;
-            cam.transform.position = new Vector3(0f, 16.0f * ck, sim.Z - 11.2f * ck) + shake;
+            cam.transform.position = new Vector3(0f, 28.0f * ck, sim.Z - 17.0f * ck) + shake;
         }
 
         /// <summary>
